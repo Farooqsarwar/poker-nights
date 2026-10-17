@@ -92,7 +92,6 @@ class _ToolScaffold extends StatelessWidget {
   final String blurb;
   final Widget child;
 
-
   @override
   Widget build(BuildContext context) {
     // A real Scaffold, like every other public screen. AppPage is a
@@ -101,89 +100,89 @@ class _ToolScaffold extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: AppPage(
-      // Public route: no ScreenShell, so no top bar owns the status-bar
-      // inset. Without this the first row renders under the notch.
-      topInset: true,
-      maxWidth: 640,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: AppSpacing.md),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Transform.translate(
-              offset: const Offset(-4, 0),
-              child: AppBackButton(
-                onTap: () => context.go(RoutePaths.tools),
-                tooltip: 'All tools',
+        // Public route: no ScreenShell, so no top bar owns the status-bar
+        // inset. Without this the first row renders under the notch.
+        topInset: true,
+        maxWidth: 640,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: AppSpacing.md),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Transform.translate(
+                offset: const Offset(-4, 0),
+                child: AppBackButton(
+                  onTap: () => context.go(RoutePaths.tools),
+                  tooltip: 'All tools',
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: AppTypography.display(
-                        size: 26,
-                        weight: FontWeight.w700,
-                        height: 1.15,
-                        letterSpacing: -0.6,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      blurb,
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          child,
-          const SizedBox(height: AppSpacing.xxl),
-          // The soft prompt. One line, after the answer.
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
+            const SizedBox(height: AppSpacing.md),
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Running a whole poker night?',
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTypography.display(
+                          size: 26,
+                          weight: FontWeight.w700,
+                          height: 1.15,
+                          letterSpacing: -0.6,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        blurb,
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  'Poker Night handles invites, check-in, the clock, rebuys '
-                  'and payouts. Free for one table.',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => context.go(RoutePaths.landing),
-                  child: const Text('Take a look'),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: AppSpacing.xxl),
-        ],
-      ),
+            const SizedBox(height: AppSpacing.xl),
+            child,
+            const SizedBox(height: AppSpacing.xxl),
+            // The soft prompt. One line, after the answer.
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Running a whole poker night?',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    'Poker Night handles invites, check-in, the clock, rebuys '
+                    'and payouts. Free for one table.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppButton(
+                    size: AppButtonSize.sm,
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => context.go(RoutePaths.landing),
+                    child: const Text('Take a look'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+          ],
+        ),
       ),
     );
   }
@@ -200,7 +199,8 @@ class ToolsScreen extends StatelessWidget {
     const tools = <({String title, String blurb, String path, IconData icon})>[
       (
         title: 'Blind Structure Generator',
-        blurb: 'A full blind schedule built around your chips and how long '
+        blurb:
+            'A full blind schedule built around your chips and how long '
             'you want to play.',
         path: RoutePaths.toolBlinds,
         icon: Icons.format_list_numbered_rounded,
@@ -234,140 +234,144 @@ class ToolsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: AppPage(
-      // Public route — see _ToolScaffold.
-      topInset: true,
-      maxWidth: 640,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: AppSpacing.xl),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: AppTag('Free · no login', tone: AppTagTone.primary),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Poker tools',
-            style: AppTypography.display(
-              size: 28,
-              weight: FontWeight.w700,
-              height: 1.15,
-              letterSpacing: -0.6,
+        // Public route — see _ToolScaffold.
+        topInset: true,
+        maxWidth: 640,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: AppSpacing.xl),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: AppTag('Free · no login', tone: AppTagTone.primary),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Free, no account needed.',
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Poker tools',
+              style: AppTypography.display(
+                size: 28,
+                weight: FontWeight.w700,
+                height: 1.15,
+                letterSpacing: -0.6,
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          LayoutBuilder(
-            builder: (context, c) {
-              // Two columns from ~320px of content; a single column below.
-              final cols = c.maxWidth >= 300 ? 2 : 1;
-              final w = (c.maxWidth - AppSpacing.md * (cols - 1)) / cols;
-              return Wrap(
-                spacing: AppSpacing.md,
-                runSpacing: AppSpacing.md,
-                children: [
-                  for (final t in tools)
-                    SizedBox(
-                      width: w,
-                      child: AppCard(
-                        onTap: () => context.go(t.path),
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        child: Semantics(
-                          button: true,
-                          label: t.title,
-                          child: SizedBox(
-                            // Room for a two-line title and a three-line
-                            // blurb on a phone; wide cards need less.
-                            height: w < 240 ? 152 : 124,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                IconTile(
-                                  icon: t.icon,
-                                  size: 36,
-                                  tone: IconTileTone.soft,
-                                ),
-                                const SizedBox(height: AppSpacing.md),
-                                Text(
-                                  t.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.bodySm.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.25,
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Free, no account needed.',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            LayoutBuilder(
+              builder: (context, c) {
+                // Two columns from ~320px of content; a single column below.
+                final cols = c.maxWidth >= 300 ? 2 : 1;
+                final w = (c.maxWidth - AppSpacing.md * (cols - 1)) / cols;
+                return Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.md,
+                  children: [
+                    for (final t in tools)
+                      SizedBox(
+                        width: w,
+                        child: AppCard(
+                          onTap: () => context.go(t.path),
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          child: Semantics(
+                            button: true,
+                            label: t.title,
+                            child: SizedBox(
+                              // Room for a two-line title and a three-line
+                              // blurb on a phone; wide cards need less.
+                              height: w < 240 ? 152 : 124,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  IconTile(
+                                    icon: t.icon,
+                                    size: 36,
+                                    tone: IconTileTone.soft,
                                   ),
-                                ),
-                                const SizedBox(height: AppSpacing.xxs),
-                                Expanded(
-                                  child: Text(
-                                    t.blurb,
-                                    overflow: TextOverflow.fade,
-                                    style: AppTypography.bodyXs.copyWith(
-                                      color: AppColors.mutedForeground,
-                                      height: 1.35,
+                                  const SizedBox(height: AppSpacing.md),
+                                  Text(
+                                    t.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.bodySm.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.25,
                                     ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: AppSpacing.xxs),
+                                  Expanded(
+                                    child: Text(
+                                      t.blurb,
+                                      overflow: TextOverflow.fade,
+                                      style: AppTypography.bodyXs.copyWith(
+                                        color: AppColors.mutedForeground,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppCard(
+              onTap: () => context.go(quick.path),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Semantics(
+                button: true,
+                label: quick.title,
+                child: Row(
+                  children: [
+                    IconTile(
+                      icon: quick.icon,
+                      size: 36,
+                      tone: IconTileTone.soft,
                     ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppCard(
-            onTap: () => context.go(quick.path),
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Semantics(
-              button: true,
-              label: quick.title,
-              child: Row(
-                children: [
-                  IconTile(icon: quick.icon, size: 36, tone: IconTileTone.soft),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          quick.title,
-                          style: AppTypography.bodySm.copyWith(
-                            fontWeight: FontWeight.w700,
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            quick.title,
+                            style: AppTypography.bodySm.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: AppSpacing.xxs),
-                        Text(
-                          quick.blurb,
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
+                          const SizedBox(height: AppSpacing.xxs),
+                          Text(
+                            quick.blurb,
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: AppColors.mutedForeground,
-                  ),
-                ],
+                    Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: AppColors.mutedForeground,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xxl),
-        ],
-      ),
+            const SizedBox(height: AppSpacing.xxl),
+          ],
+        ),
       ),
     );
   }
@@ -411,7 +415,8 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
     super.initState();
     _c = StructureBuilderController(
       mode: BuilderMode.tool,
-      chipSet: widget.chipBankOverride ??
+      chipSet:
+          widget.chipBankOverride ??
           kToolChipSets[_chipSetName] ??
           kToolChipSet,
       // §F1.14: no chip case, so the engine runs against a never-binding bank.
@@ -510,7 +515,8 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
   Widget build(BuildContext context) {
     return _ToolScaffold(
       title: 'Blind Structure Generator',
-      blurb: 'Set up the night, check the starting stack, then fine-tune any '
+      blurb:
+          'Set up the night, check the starting stack, then fine-tune any '
           'level. Nothing is saved.',
       child: StructureBuilder(
         controller: _c,
@@ -644,11 +650,11 @@ class _ToolPayoutsScreenState extends State<ToolPayoutsScreen> {
   }
 
   String _ordinal(int n) => switch (n) {
-        1 => '1st',
-        2 => '2nd',
-        3 => '3rd',
-        _ => '${n}th',
-      };
+    1 => '1st',
+    2 => '2nd',
+    3 => '3rd',
+    _ => '${n}th',
+  };
 
   /// Hands the recommended split over as plain text a host can paste into the
   /// group chat. The tool is standalone (no account), so copy is the honest
@@ -703,7 +709,8 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
       // here is whoever is left at the table.
       players: _stacks.length < _places ? _places : _stacks.length,
       organizerPct: 0,
-      buyIn: 1, // Doesn't matter here since we aren't enforcing cash unit rounding strictly here? Wait, calculator shouldn't round wildly. Let's pass 1 to disable heavy rounding.
+      buyIn:
+          1, // Doesn't matter here since we aren't enforcing cash unit rounding strictly here? Wait, calculator shouldn't round wildly. Let's pass 1 to disable heavy rounding.
       forcePaidPlaces: _places,
     ).prizes;
     if (prizes.isEmpty) return;
@@ -722,21 +729,52 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
 
     return _ToolScaffold(
       title: 'ICM Calculator',
-      blurb: 'Chips are not money. A big stack is worth less than its chip '
+      blurb:
+          'Chips are not money. A big stack is worth less than its chip '
           'share, a short stack more — this is the difference.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Players remaining',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Semantics(
+                label: 'Players remaining: ${_stacks.length}',
+                excludeSemantics: true,
+                child: Text(
+                  '${_stacks.length}',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.mutedForeground,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
           Text(
-            'Chip stacks',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            'Each stack',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           for (var i = 0; i < _stacks.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: _StepperRow(
-                label: Text('Player ${i + 1}', style: AppTypography.bodyXs),
+                label: Text(
+                  'Player ${i + 1} stack',
+                  style: AppTypography.bodyXs,
+                ),
                 stepper: CountStepper(
                   value: _stacks[i],
                   min: 0,
@@ -775,11 +813,9 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
                   onPressed: _stacks.length <= 2
                       ? null
                       : () => setState(
-                            () => _stacks = _stacks.sublist(
-                              0,
-                              _stacks.length - 1,
-                            ),
-                          ),
+                          () =>
+                              _stacks = _stacks.sublist(0, _stacks.length - 1),
+                        ),
                   child: const Text('Remove'),
                 ),
               ),
@@ -796,7 +832,13 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: _StepperRow(
                 label: Text(
-                  '${i + 1}${i == 0 ? 'st' : i == 1 ? 'nd' : i == 2 ? 'rd' : 'th'}',
+                  '${i + 1}${i == 0
+                      ? 'st'
+                      : i == 1
+                      ? 'nd'
+                      : i == 2
+                      ? 'rd'
+                      : 'th'}',
                   style: AppTypography.bodyXs,
                 ),
                 stepper: CountStepper(
@@ -811,7 +853,7 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
             ),
           const SizedBox(height: AppSpacing.sm),
           _StepperRow(
-            label: Text('Pool', style: AppTypography.bodyXs),
+            label: Text('Total pool', style: AppTypography.bodyXs),
             stepper: CountStepper(
               value: _pool,
               min: 0,
@@ -829,10 +871,7 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
                   value: _places,
                   items: [
                     for (var i = 1; i <= 5; i++)
-                      DropdownMenuItem<int>(
-                        value: i,
-                        child: Text('$i paid'),
-                      ),
+                      DropdownMenuItem<int>(value: i, child: Text('$i paid')),
                   ],
                   onChanged: (v) => setState(() => _places = v ?? _places),
                 ),
@@ -887,7 +926,9 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
                 for (var i = 0; i < _stacks.length; i++)
                   Builder(
                     builder: (context) {
-                      final share = chips == 0 ? null : pool * _stacks[i] / chips;
+                      final share = chips == 0
+                          ? null
+                          : pool * _stacks[i] / chips;
                       // The whole point of the tool, in one number: what the
                       // chip count over- or under-states your stack by. A big
                       // stack reads negative, a short stack positive.
@@ -926,15 +967,15 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
                                 diff == null
                                     ? '—'
                                     : '${diff >= 0 ? '+' : '−'}'
-                                        '${diff.abs().toStringAsFixed(2)}',
+                                          '${diff.abs().toStringAsFixed(2)}',
                                 textAlign: TextAlign.right,
                                 style: AppTypography.monoXs.copyWith(
                                   fontWeight: FontWeight.w700,
                                   color: diff == null || diff.abs() < 0.005
                                       ? AppColors.mutedForeground
                                       : diff > 0
-                                          ? AppColors.successText
-                                          : AppColors.destructiveText,
+                                      ? AppColors.successText
+                                      : AppColors.destructiveText,
                                 ),
                               ),
                             ),
@@ -1023,9 +1064,7 @@ class _StatCard extends StatelessWidget {
         children: [
           Text(
             value,
-            style: AppTypography.monoSm.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            style: AppTypography.monoSm.copyWith(fontWeight: FontWeight.w700),
           ),
           Text(
             label,
@@ -1067,7 +1106,11 @@ class _Field extends StatelessWidget {
 /// line above a full-width stepper instead of trying to squeeze all three
 /// into one row that cannot get any narrower.
 class _StepperRow extends StatelessWidget {
-  const _StepperRow({required this.label, required this.stepper, this.trailing});
+  const _StepperRow({
+    required this.label,
+    required this.stepper,
+    this.trailing,
+  });
 
   final Widget label;
   final Widget stepper;
@@ -1240,7 +1283,8 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
         players: _players,
         durationHours: _hours.toDouble(),
         buyIn: 20,
-        chipSet: widget.chipBankOverride ??
+        chipSet:
+            widget.chipBankOverride ??
             TournamentEngine.neverBindingBank(kToolChipSet, players: _players),
         rebuys: true,
         rebuysCloseLevel: 6,
@@ -1415,16 +1459,16 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (!started) ...[
-_Field(
-            label: 'Entries',
-            child: CountStepper(
-              value: _players,
-              min: 2,
-              max: 100,
-              semanticLabel: 'Entries',
-              onChanged: (v) => setState(() => _players = v),
+            _Field(
+              label: 'Entries',
+              child: CountStepper(
+                value: _players,
+                min: 2,
+                max: 100,
+                semanticLabel: 'Entries',
+                onChanged: (v) => setState(() => _players = v),
+              ),
             ),
-          ),
             const SizedBox(height: AppSpacing.md),
             _Field(
               label: 'Hours',
@@ -1450,7 +1494,9 @@ _Field(
                 players: _players,
                 onReduceField: (_blocked!.maxPlayersSupported ?? 0) >= 2
                     ? () {
-                        setState(() => _players = _blocked!.maxPlayersSupported!);
+                        setState(
+                          () => _players = _blocked!.maxPlayersSupported!,
+                        );
                         _build();
                       }
                     : null,
@@ -1507,7 +1553,7 @@ _Field(
                     _levelsUntilBreak == 1
                         ? 'Break after this level'
                         : 'Break in ${_levelsUntilBreak! - 1} more '
-                            'level${_levelsUntilBreak! - 1 == 1 ? '' : 's'}',
+                              'level${_levelsUntilBreak! - 1 == 1 ? '' : 's'}',
                     style: AppTypography.bodyXs.copyWith(
                       color: AppColors.mutedForeground,
                     ),
@@ -1524,10 +1570,7 @@ _Field(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
-                _StatCard(
-                  label: 'Time left',
-                  value: _coarse(_remainingTotal),
-                ),
+                _StatCard(label: 'Time left', value: _coarse(_remainingTotal)),
                 if (_untilBreak != null)
                   _StatCard(
                     label: 'Next break',
@@ -1737,9 +1780,10 @@ class _ToolQuickBlindScreenState extends State<ToolQuickBlindScreen> {
     final chips = kToolChipSets[_chipSetName] ?? kToolChipSet;
     final targetBB = _stack / TournamentEngine.targetHeadsUpAverageBB;
     final bb = TournamentEngine.snapToPracticalBlind(targetBB, chips);
-    
+
     int minChip = 1;
-    final values = chips.map((c) => c.value).where((v) => v > 0).toList()..sort();
+    final values = chips.map((c) => c.value).where((v) => v > 0).toList()
+      ..sort();
     if (values.isNotEmpty) minChip = values.first;
 
     int sb = bb ~/ 2;
@@ -1810,4 +1854,3 @@ class _ToolQuickBlindScreenState extends State<ToolQuickBlindScreen> {
     );
   }
 }
-

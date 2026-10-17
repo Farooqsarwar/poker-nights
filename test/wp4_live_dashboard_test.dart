@@ -209,7 +209,6 @@ void main() {
     addTearDown(tester.view.reset);
 
     final app = _provider(_game(level: 2, addOn: true));
-    addTearDown(app.dispose);
     final router = GoRouter(routes: [
       GoRoute(
         path: '/',
@@ -224,7 +223,6 @@ void main() {
         builder: (_, _) => const Scaffold(body: AdminDashboardScreen()),
       ),
     ]);
-    addTearDown(router.dispose);
     await tester.pumpWidget(ChangeNotifierProvider<AppProvider>.value(
       value: app,
       child: MaterialApp.router(routerConfig: router),
@@ -277,6 +275,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(app.currentGame!.settlementConfirmed, isTrue);
     expect(app.currentGame!.payoutTableRevealed, isTrue);
+
+    await _unmount(tester, app, router);
   });
 
   test('a quick game can add a walk-in after the clock starts', () {

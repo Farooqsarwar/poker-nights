@@ -4,6 +4,12 @@ import 'package:google_fonts/google_fonts.dart';
 import '../app/colors.dart';
 import '../constants/app_constants.dart';
 
+/// One palette-aware source of truth for every PNT logo render and precache.
+String brandLogoAssetPath([String? paletteId]) {
+  final id = paletteId ?? AppColors.currentPalette.id;
+  return 'assets/logo_${id.replaceAll('-', '_')}.png';
+}
+
 class PokerNightLogo extends StatelessWidget {
   final double size;
   final Color? color;
@@ -25,10 +31,8 @@ class PokerNightLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Theme.of(context);
-    final logoPath =
-        'assets/logo_${AppColors.currentPalette.id.replaceAll("-", "_")}.png';
     return Image.asset(
-      logoPath,
+      brandLogoAssetPath(),
       width: size,
       height: size,
       color: color,
@@ -64,10 +68,7 @@ class PokerNightBrand extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        PokerNightLogo(
-          size: logoSize,
-          color: iconColor,
-        ),
+        PokerNightLogo(size: logoSize, color: iconColor),
         const SizedBox(width: AppSpacing.sm),
         Flexible(
           child: Text.rich(

@@ -6,6 +6,7 @@ import '../constants/app_constants.dart';
 import '../models/live_game.dart';
 import '../utils/automations_service.dart';
 import '../utils/formatters.dart';
+import '../utils/voice_service.dart';
 import 'app_timer.dart';
 import 'brand_lockup.dart';
 
@@ -35,7 +36,10 @@ class TournamentTimerCard extends StatelessWidget {
     final isPaused = game.status == LiveGameStatus.paused;
     final activeCount = game.activePlayers.length;
     final totalCount = game.players.length;
-    final avgStack = Formatters.averageStack(game.totalChipsInPlay, activeCount);
+    final avgStack = Formatters.averageStack(
+      game.totalChipsInPlay,
+      activeCount,
+    );
 
     // Calculate total elapsed time across completed levels + current level elapsed
     int totalElapsedSeconds = 0;
@@ -53,8 +57,8 @@ class TournamentTimerCard extends StatelessWidget {
         border: Border.all(color: AppColors.borderSubtle, width: 1),
         boxShadow: [
           BoxShadow(
-            color: (!isPaused && !isBreak) 
-                ? AppColors.primary.withValues(alpha: 0.15) 
+            color: (!isPaused && !isBreak)
+                ? AppColors.primary.withValues(alpha: 0.15)
                 : AppColors.shadowSoft,
             blurRadius: 24,
             offset: Offset(0, 4),
@@ -67,25 +71,27 @@ class TournamentTimerCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header: Logo + Status
-          Row(
-            children: [
-              const PokerNightLogo(size: 16),
-              const SizedBox(width: 8),
-              Text(
-                isBreak
-                    ? 'BREAK'
-                    : isPaused
-                        ? 'PAUSED'
-                        : 'RUNNING',
-                style: TextStyle(
-                  color: AppColors.primaryText,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 2.0,
-                  height: 1,
+          RepaintBoundary(
+            child: Row(
+              children: [
+                const PokerNightLogo(size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  isBreak
+                      ? 'BREAK'
+                      : isPaused
+                      ? 'PAUSED'
+                      : 'RUNNING',
+                  style: TextStyle(
+                    color: AppColors.primaryText,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2.0,
+                    height: 1,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           Divider(height: 1, color: AppColors.borderSubtle),
@@ -95,18 +101,21 @@ class TournamentTimerCard extends StatelessWidget {
           Center(
             child: Semantics(
               liveRegion: true,
+              excludeSemantics: true,
               // Same words as the voice, and it only changes with the level --
               // never with the second (Addendum 2 #2).
               label: isBreak
                   ? 'Break'
-                  : Formatters.levelSpoken(
-                      game.currentLevel,
-                      level?.sb ?? 0,
-                      level?.bb ?? 0,
-                      level?.ante,
+                  : VoiceService.levelChangeMessage(
+                      level: game.currentLevel,
+                      sb: level?.sb ?? 0,
+                      bb: level?.bb ?? 0,
+                      ante: level?.ante,
+                      durationMins: level?.durationMins ?? 0,
                     ),
-              child: _PulseWhenLevelChanges(
+              child: LevelEventPulse(
                 level: game.currentLevel,
+                pulseKey: 'level-label-pulse',
                 child: Text(
                   isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
                   style: TextStyle(
@@ -127,38 +136,22 @@ class TournamentTimerCard extends StatelessWidget {
           LiveTimerBuilder(
             game: game,
             builder: (context, remaining) {
-              final formatted = Formatters.time(remaining);
-              final colonIndex = formatted.lastIndexOf(':');
-              final minutesPart = colonIndex >= 0 ? formatted.substring(0, colonIndex + 1) : formatted;
-              final secondsPart = colonIndex >= 0 ? formatted.substring(colonIndex + 1) : '';
               final urgency = AutomationsService.isCountdownUrgency(remaining);
 
               return Semantics(
                 liveRegion: urgency,
                 label: urgency ? '$remaining' : null,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.center,
-                  child: RichText(
-                    text: TextSpan(
-                      style: TextStyle(
-                        fontFamily: AppTypography.monoFamily,
-                        fontSize: urgency ? 96 : 82,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -2,
-                        height: 1.0,
-                      ),
-                      children: [
-                        TextSpan(
-                          text: minutesPart,
-                          style: TextStyle(color: AppColors.foreground),
-                        ),
-                        TextSpan(
-                          text: secondsPart,
-                          style: TextStyle(color: AppColors.primary),
-                        ),
-                      ],
-                    ),
+                child: SizedBox(
+                  // The previous one-piece clock naturally scaled to roughly
+                  // this height on compact dashboards. Keep that footprint so
+                  // the host controls remain visible at 844 px.
+                  height: urgency ? 82 : 64,
+                  child: AnimatedTimerDigits(
+                    secondsRemaining: remaining,
+                    size: urgency ? 96 : 82,
+                    minutesColor: AppColors.foreground,
+                    secondsColor: AppColors.primary,
+                    glow: urgency,
                   ),
                 ),
               );
@@ -167,32 +160,37 @@ class TournamentTimerCard extends StatelessWidget {
           const SizedBox(height: 16),
 
           // Blinds Trio: SB (white), ANTE (coral), BB (white)
-          _PulseWhenLevelChanges(
-            level: game.currentLevel,
-            child: Row(
-              children: [
-                Expanded(
-                  child: _BlindColumn(
-                    label: 'SB',
-                    value: level == null ? '—' : Formatters.chips(level.sb),
-                    highlighted: false,
+          RepaintBoundary(
+            child: LevelEventPulse(
+              level: game.currentLevel,
+              pulseKey: 'blinds-pulse',
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _BlindColumn(
+                      label: 'SB',
+                      value: level == null ? '—' : Formatters.chips(level.sb),
+                      highlighted: false,
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: _BlindColumn(
-                    label: 'ANTE',
-                    value: level?.ante == null ? '—' : Formatters.chips(level!.ante!),
-                    highlighted: true,
+                  Expanded(
+                    child: _BlindColumn(
+                      label: 'ANTE',
+                      value: level?.ante == null
+                          ? '—'
+                          : Formatters.chips(level!.ante!),
+                      highlighted: true,
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: _BlindColumn(
-                    label: 'BB',
-                    value: level == null ? '—' : Formatters.chips(level.bb),
-                    highlighted: false,
+                  Expanded(
+                    child: _BlindColumn(
+                      label: 'BB',
+                      value: level == null ? '—' : Formatters.chips(level.bb),
+                      highlighted: false,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -233,7 +231,10 @@ class TournamentTimerCard extends StatelessWidget {
             LiveTimerBuilder(
               game: game,
               builder: (context, remaining) {
-                final currentElapsed = (levelDurationSeconds - remaining).clamp(0, levelDurationSeconds);
+                final currentElapsed = (levelDurationSeconds - remaining).clamp(
+                  0,
+                  levelDurationSeconds,
+                );
                 final totalSeconds = totalElapsedSeconds + currentElapsed;
 
                 return Row(
@@ -244,14 +245,22 @@ class TournamentTimerCard extends StatelessWidget {
                         value: Formatters.time(totalSeconds),
                       ),
                     ),
-                    Container(width: 1, height: 32, color: AppColors.borderSubtle),
+                    Container(
+                      width: 1,
+                      height: 32,
+                      color: AppColors.borderSubtle,
+                    ),
                     Expanded(
                       child: _SubStatItem(
                         label: 'AVG STACK',
                         value: Formatters.chips(avgStack),
                       ),
                     ),
-                    Container(width: 1, height: 32, color: AppColors.borderSubtle),
+                    Container(
+                      width: 1,
+                      height: 32,
+                      color: AppColors.borderSubtle,
+                    ),
                     Expanded(
                       child: _SubStatItem(
                         label: 'PLAYERS',
@@ -312,7 +321,9 @@ class _BlindColumn extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: highlighted ? AppColors.primaryText : AppColors.mutedForeground,
+            color: highlighted
+                ? AppColors.primaryText
+                : AppColors.mutedForeground,
             fontSize: 12,
             fontWeight: FontWeight.w600,
             letterSpacing: 1.0,
@@ -337,11 +348,7 @@ class _BlindColumn extends StatelessWidget {
 }
 
 class _SubStatItem extends StatelessWidget {
-  const _SubStatItem({
-    required this.label,
-    this.value,
-    this.customValue,
-  });
+  const _SubStatItem({required this.label, this.value, this.customValue});
 
   final String label;
   final String? value;
@@ -379,83 +386,6 @@ class _SubStatItem extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-
-class _PulseWhenLevelChanges extends StatefulWidget {
-  final int level;
-  final Widget child;
-  const _PulseWhenLevelChanges({required this.level, required this.child});
-
-  @override
-  __PulseWhenLevelChangesState createState() => __PulseWhenLevelChangesState();
-}
-
-class __PulseWhenLevelChangesState extends State<_PulseWhenLevelChanges> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
-    _animation = TweenSequence([
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.5), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: 1.5, end: 1.0), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.5), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: 1.5, end: 1.0), weight: 1),
-    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  }
-
-  @override
-  void didUpdateWidget(_PulseWhenLevelChanges oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.level != oldWidget.level && oldWidget.level > 0) {
-      // A2-3: two 300 ms pulses; with reduce-motion the pulse becomes an
-      // outline that stays for 3 seconds instead.
-      final reduceMotion = MediaQuery.of(context).disableAnimations;
-      _controller.duration = reduceMotion
-          ? const Duration(seconds: 3)
-          : const Duration(milliseconds: 600);
-      _controller.forward(from: 0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Check reduce motion
-    final reduceMotion = MediaQuery.of(context).disableAnimations;
-    
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        if (reduceMotion) {
-           return Container(
-             decoration: BoxDecoration(
-               border: Border.all(
-                 color: _controller.isAnimating
-                     ? AppColors.destructiveText
-                     : Colors.transparent,
-                 width: 2,
-               ),
-             ),
-             child: child,
-           );
-        }
-        return Transform.scale(
-          scale: _animation.value,
-          child: child,
-        );
-      },
-      child: widget.child,
     );
   }
 }

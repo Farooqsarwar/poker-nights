@@ -334,7 +334,14 @@ class AppProvider extends ChangeNotifier {
 
   /// Plays a test speech announcement for the Sound & Voice settings.
   Future<void> testVoice() async {
-    await VoiceService.instance.speak('Level 1. Blinds 25 and 50.');
+    await VoiceService.instance.speak(
+      VoiceService.levelChangeMessage(
+        level: 1,
+        sb: 25,
+        bb: 50,
+        durationMins: 15,
+      ),
+    );
   }
 
   /// Resolves the effective Premium tier.
@@ -1206,6 +1213,18 @@ class AppProvider extends ChangeNotifier {
     if (!_disposed) {
       notifyListeners();
     }
+  }
+
+  @visibleForTesting
+  void setGroupsForTesting(List<Group> groups, {String? currentGroupId}) {
+    _groups = List<Group>.of(groups);
+    final selectedId = currentGroupId ?? groups.firstOrNull?.id;
+    _currentGroupId = selectedId;
+    _currentGroup =
+        groups.where((group) => group.id == selectedId).firstOrNull ??
+        AppProvider._kEmptyGroup;
+    _bundleLoaded = selectedId != null;
+    if (!_disposed) notifyListeners();
   }
 
   @visibleForTesting

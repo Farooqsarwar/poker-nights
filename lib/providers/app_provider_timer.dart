@@ -38,11 +38,14 @@ extension AppProviderTimer on AppProvider {
       final next = game.currentLevel < game.structure.levels.length
           ? game.structure.levels[game.currentLevel]
           : null;
-      final blinds = next == null
-          ? ''
-          : ' Next level: blinds ${next.sb} and ${next.bb}'
-              '${next.ante != null ? ', ante ${next.ante}' : ''}.';
-      addAnnouncement('One minute remaining in level $level.$blinds', true);
+      addAnnouncement(
+        VoiceService.oneMinuteMessage(
+          nextSb: next?.sb,
+          nextBb: next?.bb,
+          nextAnte: next?.ante,
+        ),
+        true,
+      );
     }
 
     // Section 17's audible countdown. Spoken one number per second so it
@@ -99,13 +102,17 @@ extension AppProviderTimer on AppProvider {
           _evaluateSpeedRecommendation();
           return;
         }
-        final isLastLevel = _currentGame!.currentLevel >= _currentGame!.structure.levels.length;
+        final isLastLevel =
+            _currentGame!.currentLevel >= _currentGame!.structure.levels.length;
         if (isLastLevel) {
           _currentGame = _currentGame!.copyWith(
             secondsRemaining: 0,
             timerRunning: false,
           );
-          addAnnouncement('Tournament has reached the end of the structure.', true);
+          addAnnouncement(
+            'Tournament has reached the end of the structure.',
+            true,
+          );
           _syncGroupGame();
           if (!_disposed) notifyListeners();
         } else {
@@ -224,7 +231,8 @@ extension AppProviderTimer on AppProvider {
     // nowhere, so the estimate understated by up to a full level — enough on
     // its own to tip a fresh event into a false "Slow Down".
     remainingLevelsMins +=
-        game.currentSecondsRemaining().clamp(0, currentDurationMins * 60) / 60.0;
+        game.currentSecondsRemaining().clamp(0, currentDurationMins * 60) /
+        60.0;
 
     final targetMins = game.settings.durationHours * 60;
     final actualRemaining = game.activePlayers.length;
@@ -320,7 +328,10 @@ extension AppProviderTimer on AppProvider {
   }
 
   void startTimer({List<String> noShowIds = const []}) {
-    if (_currentGame == null || (!isAdmin && !isCoAdmin && !canOperateTheClock)) return;
+    if (_currentGame == null ||
+        (!isAdmin && !isCoAdmin && !canOperateTheClock)) {
+      return;
+    }
     _startTick();
     _forceClaimEditor();
 
@@ -446,7 +457,9 @@ extension AppProviderTimer on AppProvider {
     _currentGame = _currentGame!.copyWith(
       timerRunning: false,
       status: LiveGameStatus.paused,
-      secondsRemaining: _currentGame!.currentSecondsRemaining(_serverTimeOffset ?? Duration.zero),
+      secondsRemaining: _currentGame!.currentSecondsRemaining(
+        _serverTimeOffset ?? Duration.zero,
+      ),
       levelEndTime: null,
       clearLevelEndTime: true,
     );
@@ -457,7 +470,7 @@ extension AppProviderTimer on AppProvider {
   void resumeTimer() {
     if (_currentGame == null || (!isAdmin && !canOperateTheClock)) return;
     _forceClaimEditor();
-    if (_currentGame?.status == LiveGameStatus.completed || 
+    if (_currentGame?.status == LiveGameStatus.completed ||
         _currentGame?.status == LiveGameStatus.cancelled) {
       return;
     }
@@ -479,7 +492,8 @@ extension AppProviderTimer on AppProvider {
   /// stays open ("Add-on window (overtime)") until step 2 is finished, so a
   /// slow settlement never silently forfeits anybody's add-on.
   GameSettings _settingsAfterLeavingBreak(LiveGame game) {
-    final stillOpen = game.status == LiveGameStatus.rebuypause &&
+    final stillOpen =
+        game.status == LiveGameStatus.rebuypause &&
         game.settings.addOn &&
         !game.settlementConfirmed &&
         !game.addOnWindowClosed;
@@ -509,8 +523,7 @@ extension AppProviderTimer on AppProvider {
         seconds: duration,
       ),
     );
-    final name =
-        game.players.where((p) => p.id == playerId).firstOrNull?.name;
+    final name = game.players.where((p) => p.id == playerId).firstOrNull?.name;
     addAnnouncement(
       '${name ?? 'Player'} is on the clock — $duration seconds.',
       true,
@@ -559,8 +572,10 @@ extension AppProviderTimer on AppProvider {
   }
 
   void nextLevel({String? idempotencyKey}) {
-    final (rev, idemKey) =
-        _claimIdempotency(idempotencyKey ?? '', action: 'nextLevel');
+    final (rev, idemKey) = _claimIdempotency(
+      idempotencyKey ?? '',
+      action: 'nextLevel',
+    );
     if (rev == null) return; // replayed action — already applied
     final next = _currentGame!.currentLevel + 1;
     _pushUndo();
@@ -579,8 +594,9 @@ extension AppProviderTimer on AppProvider {
     // then advances into the next level. Without this the breaks were
     // configured, stored and counted in the duration but never actually
     // happened.
-    final scheduled =
-        _currentGame!.structure.breakAfter(_currentGame!.currentLevel);
+    final scheduled = _currentGame!.structure.breakAfter(
+      _currentGame!.currentLevel,
+    );
     if (scheduled != null &&
         _currentGame!.status != LiveGameStatus.onBreak &&
         next <= _currentGame!.structure.levels.length) {
@@ -588,18 +604,13 @@ extension AppProviderTimer on AppProvider {
         status: LiveGameStatus.onBreak,
         timerRunning: true,
         secondsRemaining: scheduled.durationMins * 60,
-        levelEndTime: _serverNow.add(
-          Duration(minutes: scheduled.durationMins),
-        ),
+        levelEndTime: _serverNow.add(Duration(minutes: scheduled.durationMins)),
         speedRecommendation: null,
         clearSpeedRecommendation: true,
         revision: rev,
         lastIdempotencyKey: idemKey,
       );
-      addAnnouncement(
-        'Break — ${scheduled.durationMins} minutes.',
-        true,
-      );
+      addAnnouncement('Break — ${scheduled.durationMins} minutes.', true);
       addAuditRecord(
         'break_start',
         'Scheduled break after level ${_currentGame!.currentLevel} '
@@ -618,7 +629,8 @@ extension AppProviderTimer on AppProvider {
         _currentGame!.settings.rebuys &&
         wasBelowRebuyClose &&
         nowAtOrAboveRebuyClose;
-    if (_currentGame!.settings.rebuys && next == _currentGame!.settings.rebuysCloseLevel) {
+    if (_currentGame!.settings.rebuys &&
+        next == _currentGame!.settings.rebuysCloseLevel) {
       final rebKey = '${_currentGame!.id}-rebuysClosing-$next';
       if (!_hasFiredReminder(rebKey)) {
         _sentReminderKeys.add(rebKey);
@@ -651,10 +663,7 @@ extension AppProviderTimer on AppProvider {
         revision: rev,
         lastIdempotencyKey: idemKey,
       );
-      addAnnouncement(
-        'Rebuys are now closed. Add-ons are available.',
-        true,
-      );
+      addAnnouncement('Rebuys are now closed. Add-ons are available.', true);
       pushNotification(
         AppNotification(
           id: 'n-${DateTime.now().millisecondsSinceEpoch}',
@@ -733,12 +742,14 @@ extension AppProviderTimer on AppProvider {
         revision: rev,
         lastIdempotencyKey: idemKey,
       );
-      // Section 17's exact shape: "Start of level N — blinds X — duration Y
-      // minutes."
       addAnnouncement(
-        'Start of level $next — blinds ${extLevel.sb} / ${extLevel.bb}'
-        '${extLevel.ante != null ? ", ante ${extLevel.ante}" : ""}'
-        ' — ${extLevel.durationMins} minutes.',
+        VoiceService.levelChangeMessage(
+          level: next,
+          sb: extLevel.sb,
+          bb: extLevel.bb,
+          ante: extLevel.ante,
+          durationMins: extLevel.durationMins,
+        ),
         true,
       );
     }
@@ -764,7 +775,7 @@ extension AppProviderTimer on AppProvider {
     addAuditRecord(
       'structure_extend',
       'Approved extension level ${proposed.level}: '
-      '${proposed.sb}/${proposed.bb} for ${proposed.durationMins} minutes.',
+          '${proposed.sb}/${proposed.bb} for ${proposed.durationMins} minutes.',
     );
     nextLevel(idempotencyKey: 'extend-${proposed.level}');
     return true;
@@ -781,8 +792,10 @@ extension AppProviderTimer on AppProvider {
   /// Rewinds to the previous level (spec §12 "Previous" control). The clock
   /// resets to the full previous-level duration and the game resumes running.
   void previousLevel({String? idempotencyKey}) {
-    final (rev, idemKey) =
-        _claimIdempotency(idempotencyKey ?? '', action: 'previousLevel');
+    final (rev, idemKey) = _claimIdempotency(
+      idempotencyKey ?? '',
+      action: 'previousLevel',
+    );
     if (rev == null) return; // replayed action — already applied
     final prev = _currentGame!.currentLevel - 1;
     if (prev < 1) return;
@@ -819,8 +832,10 @@ extension AppProviderTimer on AppProvider {
         game.status != LiveGameStatus.rebuypause) {
       return;
     }
-    final (rev, idemKey) =
-        _claimIdempotency(idempotencyKey ?? '', action: 'restartLevel');
+    final (rev, idemKey) = _claimIdempotency(
+      idempotencyKey ?? '',
+      action: 'restartLevel',
+    );
     if (rev == null) return; // replayed action — already applied
     _pushUndo();
     _levelAnnouncementMarks.clear();
@@ -851,10 +866,7 @@ extension AppProviderTimer on AppProvider {
   /// 2. "RSVP deadline" (at rsvpDeadline)
   /// 3. "rebuys closing" (when rebuysClosingArmed is active)
   void _checkScheduledReminders() {
-    final candidateGames = <LiveGame>[
-      ?_currentGame,
-      ..._currentGroup.games,
-    ];
+    final candidateGames = <LiveGame>[?_currentGame, ..._currentGroup.games];
     final seenGameIds = <String>{};
 
     for (final game in candidateGames) {
@@ -875,7 +887,8 @@ extension AppProviderTimer on AppProvider {
                 AppNotification(
                   id: 'remind-30-${game.id}-${DateTime.now().millisecondsSinceEpoch}',
                   title: 'Starts in 30 min',
-                  body: '${game.settings.name} starts in 30 min — check in to keep your seat.',
+                  body:
+                      '${game.settings.name} starts in 30 min — check in to keep your seat.',
                   type: NotificationType.game,
                   link: '/check-in',
                   read: false,
@@ -891,7 +904,10 @@ extension AppProviderTimer on AppProvider {
         if (deadline != null) {
           final diff = deadline.difference(_serverNow);
           if (diff.inSeconds <= 0 &&
-              _serverNow.isBefore(game.settings.scheduledStart ?? _serverNow.add(const Duration(days: 1)))) {
+              _serverNow.isBefore(
+                game.settings.scheduledStart ??
+                    _serverNow.add(const Duration(days: 1)),
+              )) {
             final key = '${game.id}-rsvp';
             if (!_hasFiredReminder(key)) {
               _sentReminderKeys.add(key);
@@ -920,7 +936,8 @@ extension AppProviderTimer on AppProvider {
             AppNotification(
               id: 'remind-rebuys-${game.id}-${game.currentLevel}-${DateTime.now().millisecondsSinceEpoch}',
               title: 'Rebuys closing',
-              body: 'Rebuys close after Level ${game.settings.rebuysCloseLevel}.',
+              body:
+                  'Rebuys close after Level ${game.settings.rebuysCloseLevel}.',
               type: NotificationType.game,
               link: '/player-live',
               read: false,

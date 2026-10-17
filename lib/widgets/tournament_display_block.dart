@@ -1,4 +1,5 @@
 import 'app_timer.dart';
+import 'brand_lockup.dart';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +11,7 @@ import '../models/live_game.dart';
 import '../models/tournament.dart';
 import '../responsive/responsive.dart';
 import '../utils/formatters.dart';
+import '../utils/voice_service.dart';
 import '../constants/app_constants.dart';
 
 /// Responsive tournament display.
@@ -116,15 +118,15 @@ TextStyle _numberStyle({
 
 class _GameValues {
   _GameValues(this.game, Duration offset)
-      : level = game.currentLevelData,
-        next = game.nextLevelData,
-        isBreak = game.status == LiveGameStatus.rebuypause,
-        active = game.activePlayers.length,
-        total = game.activePlayers.length + game.eliminatedPlayers.length,
-        average = Formatters.averageStack(
-          game.totalChipsInPlay,
-          game.activePlayers.length,
-        ) {
+    : level = game.currentLevelData,
+      next = game.nextLevelData,
+      isBreak = game.status == LiveGameStatus.rebuypause,
+      active = game.activePlayers.length,
+      total = game.activePlayers.length + game.eliminatedPlayers.length,
+      average = Formatters.averageStack(
+        game.totalChipsInPlay,
+        game.activePlayers.length,
+      ) {
     for (int i = 0; i < game.currentLevel - 1; i++) {
       if (i < game.structure.levels.length) {
         totalSeconds += game.structure.levels[i].durationMins * 60;
@@ -139,8 +141,8 @@ class _GameValues {
     progress = level == null
         ? 0
         : ((levelSeconds - game.currentSecondsRemaining(offset)) / levelSeconds)
-        .clamp(0.0, 1.0)
-        .toDouble();
+              .clamp(0.0, 1.0)
+              .toDouble();
   }
 
   final LiveGame game;
@@ -232,15 +234,34 @@ class _WideLayout extends StatelessWidget {
                     children: [
                       // Drastically reduced vertical spacing to maximize timer space
                       SizedBox(height: (showStatusChip ? 12 : 4) * s),
-                      Text(
-                        data.isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
-                        textAlign: TextAlign.center,
-                        style: AppTypography.mono(
-                          size: 40 * s,
-                          weight: FontWeight.w400,
-                          color: TournamentDisplayBlock._red,
-                          letterSpacing: 5 * s,
-                          height: 1,
+                      Semantics(
+                        liveRegion: true,
+                        excludeSemantics: true,
+                        label: data.isBreak
+                            ? 'Break'
+                            : VoiceService.levelChangeMessage(
+                                level: game.currentLevel,
+                                sb: data.level?.sb ?? 0,
+                                bb: data.level?.bb ?? 0,
+                                ante: data.level?.ante,
+                                durationMins: data.level?.durationMins ?? 0,
+                              ),
+                        child: LevelEventPulse(
+                          level: game.currentLevel,
+                          pulseKey: 'level-label-pulse',
+                          child: Text(
+                            data.isBreak
+                                ? 'BREAK'
+                                : 'LEVEL ${game.currentLevel}',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.mono(
+                              size: 40 * s,
+                              weight: FontWeight.w400,
+                              color: TournamentDisplayBlock._red,
+                              letterSpacing: 5 * s,
+                              height: 1,
+                            ),
+                          ),
                         ),
                       ),
                       SizedBox(height: 8 * s), // Reduced from 16
@@ -258,40 +279,46 @@ class _WideLayout extends StatelessWidget {
                         ),
                       ),
                       SizedBox(height: 8 * s), // Reduced from 16
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _BlindValue(
-                              label: 'SB',
-                              value: data.level == null
-                                  ? '—'
-                                  : Formatters.chips(data.level!.sb),
-                              labelSize: 27 * s,
-                              valueSize: 57 * s,
-                            ),
+                      RepaintBoundary(
+                        child: LevelEventPulse(
+                          level: game.currentLevel,
+                          pulseKey: 'blinds-pulse',
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _BlindValue(
+                                  label: 'SB',
+                                  value: data.level == null
+                                      ? '—'
+                                      : Formatters.chips(data.level!.sb),
+                                  labelSize: 27 * s,
+                                  valueSize: 57 * s,
+                                ),
+                              ),
+                              Expanded(
+                                child: _BlindValue(
+                                  label: 'ANTE',
+                                  value: data.level?.ante == null
+                                      ? '—'
+                                      : Formatters.chips(data.level!.ante!),
+                                  highlighted: true,
+                                  labelSize: 27 * s,
+                                  valueSize: 57 * s,
+                                ),
+                              ),
+                              Expanded(
+                                child: _BlindValue(
+                                  label: 'BB',
+                                  value: data.level == null
+                                      ? '—'
+                                      : Formatters.chips(data.level!.bb),
+                                  labelSize: 27 * s,
+                                  valueSize: 57 * s,
+                                ),
+                              ),
+                            ],
                           ),
-                          Expanded(
-                            child: _BlindValue(
-                              label: 'ANTE',
-                              value: data.level?.ante == null
-                                  ? '—'
-                                  : Formatters.chips(data.level!.ante!),
-                              highlighted: true,
-                              labelSize: 27 * s,
-                              valueSize: 57 * s,
-                            ),
-                          ),
-                          Expanded(
-                            child: _BlindValue(
-                              label: 'BB',
-                              value: data.level == null
-                                  ? '—'
-                                  : Formatters.chips(data.level!.bb),
-                              labelSize: 27 * s,
-                              valueSize: 57 * s,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                       SizedBox(height: 16 * s), // Reduced from 24
                     ],
@@ -304,7 +331,9 @@ class _WideLayout extends StatelessWidget {
                     game: game,
                     builder: (context, remaining) {
                       final duration = data.level?.durationMins ?? 1;
-                      final progress = (duration * 60) > 0 ? 1.0 - (remaining / (duration * 60)) : 0.0;
+                      final progress = (duration * 60) > 0
+                          ? 1.0 - (remaining / (duration * 60))
+                          : 0.0;
                       return _ProgressBar(
                         value: progress.clamp(0.0, 1.0),
                         height: 14 * s,
@@ -396,47 +425,16 @@ class _PlainNumberTimer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final value = Formatters.time(secondsRemaining);
-    final colon = value.lastIndexOf(':');
-    final left = colon < 0 ? value : value.substring(0, colon + 1);
-    final right = colon < 0 ? '' : value.substring(colon + 1);
-
-    final style = AppTypography.mono(
-      size: fontSize,
-      weight: FontWeight.w400,
-      color: danger ? TournamentDisplayBlock._red : AppColors.foreground,
-      letterSpacing: -fontSize * .035,
-      height: 1.1, // <-- FIX: Increased slightly so native bounding box is generous
-    );
-
     return Center(
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.center,
-        // <-- FIX: Added padding *inside* the FittedBox. This ensures the text
-        // bounding box used for scaling includes extra safe space at the top/bottom
-        // so ascenders are never chopped off by the FittedBox constraints.
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20.0),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 160),
-            child: RichText(
-              key: ValueKey(value),
-              maxLines: 1,
-              softWrap: false,
-              text: TextSpan(
-                style: style,
-                children: [
-                  TextSpan(text: left),
-                  TextSpan(
-                    text: right,
-                    style: style.copyWith(color: TournamentDisplayBlock._red),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+      child: AnimatedTimerDigits(
+        secondsRemaining: secondsRemaining,
+        size: fontSize,
+        minutesColor: danger
+            ? TournamentDisplayBlock._red
+            : AppColors.foreground,
+        secondsColor: TournamentDisplayBlock._red,
+        glow: danger,
+        verticalPadding: 20,
       ),
     );
   }
@@ -459,7 +457,9 @@ class _BlindValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = highlighted ? TournamentDisplayBlock._red : AppColors.foreground;
+    final color = highlighted
+        ? TournamentDisplayBlock._red
+        : AppColors.foreground;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -582,18 +582,18 @@ class _StatValue extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: redSlash && slash >= 0
                 ? Text.rich(
-              TextSpan(
-                style: valueStyle,
-                children: [
-                  TextSpan(text: value.substring(0, slash)),
-                  TextSpan(
-                    text: '/',
-                    style: TextStyle(color: TournamentDisplayBlock._red),
-                  ),
-                  TextSpan(text: value.substring(slash + 1)),
-                ],
-              ),
-            )
+                    TextSpan(
+                      style: valueStyle,
+                      children: [
+                        TextSpan(text: value.substring(0, slash)),
+                        TextSpan(
+                          text: '/',
+                          style: TextStyle(color: TournamentDisplayBlock._red),
+                        ),
+                        TextSpan(text: value.substring(slash + 1)),
+                      ],
+                    ),
+                  )
                 : Text(value, maxLines: 1, style: valueStyle),
           ),
         ],
@@ -633,7 +633,10 @@ class _NextLevelValue extends StatelessWidget {
         if (next == null)
           Text(
             'END',
-            style: AppTypography.mono(size: 28 * scale, color: AppColors.foreground),
+            style: AppTypography.mono(
+              size: 28 * scale,
+              color: AppColors.foreground,
+            ),
           )
         else
           FittedBox(
@@ -847,13 +850,30 @@ class _CompactLayout extends StatelessWidget {
               const _HorizontalLine(),
               const SizedBox(height: 18),
             ],
-            Text(
-              data.isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
-              textAlign: TextAlign.center,
-              style: AppTypography.mono(
-                size: 17,
-                color: TournamentDisplayBlock._red,
-                letterSpacing: 3,
+            Semantics(
+              liveRegion: true,
+              excludeSemantics: true,
+              label: data.isBreak
+                  ? 'Break'
+                  : VoiceService.levelChangeMessage(
+                      level: game.currentLevel,
+                      sb: data.level?.sb ?? 0,
+                      bb: data.level?.bb ?? 0,
+                      ante: data.level?.ante,
+                      durationMins: data.level?.durationMins ?? 0,
+                    ),
+              child: LevelEventPulse(
+                level: game.currentLevel,
+                pulseKey: 'level-label-pulse',
+                child: Text(
+                  data.isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.mono(
+                    size: 17,
+                    color: TournamentDisplayBlock._red,
+                    letterSpacing: 3,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -869,51 +889,56 @@ class _CompactLayout extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: _BlindValue(
-                    label: 'SB',
-                    value: data.level == null
-                        ? '—'
-                        : Formatters.chips(data.level!.sb),
-                    labelSize: 11,
-                    valueSize: 23,
-                  ),
+            RepaintBoundary(
+              child: LevelEventPulse(
+                level: game.currentLevel,
+                pulseKey: 'blinds-pulse',
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _BlindValue(
+                        label: 'SB',
+                        value: data.level == null
+                            ? '—'
+                            : Formatters.chips(data.level!.sb),
+                        labelSize: 11,
+                        valueSize: 23,
+                      ),
+                    ),
+                    Expanded(
+                      child: _BlindValue(
+                        label: 'ANTE',
+                        value: data.level?.ante == null
+                            ? '—'
+                            : Formatters.chips(data.level!.ante!),
+                        highlighted: true,
+                        labelSize: 11,
+                        valueSize: 23,
+                      ),
+                    ),
+                    Expanded(
+                      child: _BlindValue(
+                        label: 'BB',
+                        value: data.level == null
+                            ? '—'
+                            : Formatters.chips(data.level!.bb),
+                        labelSize: 11,
+                        valueSize: 23,
+                      ),
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: _BlindValue(
-                    label: 'ANTE',
-                    value: data.level?.ante == null
-                        ? '—'
-                        : Formatters.chips(data.level!.ante!),
-                    highlighted: true,
-                    labelSize: 11,
-                    valueSize: 23,
-                  ),
-                ),
-                Expanded(
-                  child: _BlindValue(
-                    label: 'BB',
-                    value: data.level == null
-                        ? '—'
-                        : Formatters.chips(data.level!.bb),
-                    labelSize: 11,
-                    valueSize: 23,
-                  ),
-                ),
-              ],
+              ),
             ),
             const SizedBox(height: 22),
             LiveTimerBuilder(
               game: game,
               builder: (context, remaining) {
                 final duration = data.level?.durationMins ?? 1;
-                final progress = (duration * 60) > 0 ? 1.0 - (remaining / (duration * 60)) : 0.0;
-                return _ProgressBar(
-                  value: progress.clamp(0.0, 1.0),
-                  height: 5,
-                );
+                final progress = (duration * 60) > 0
+                    ? 1.0 - (remaining / (duration * 60))
+                    : 0.0;
+                return _ProgressBar(value: progress.clamp(0.0, 1.0), height: 5);
               },
             ),
             const SizedBox(height: 18),
@@ -957,23 +982,22 @@ class _CompactLayout extends StatelessWidget {
                   return Wrap(
                     children: [
                       for (
-                      int i = 0;
-                      i < game.structure.prizes.length && i < 4;
-                      i++
+                        int i = 0;
+                        i < game.structure.prizes.length && i < 4;
+                        i++
                       )
                         SizedBox(
                           width: narrow
                               ? constraints.maxWidth
                               : constraints.maxWidth / 2,
                           child: ConstrainedBox(
-                            constraints:
-                                const BoxConstraints(minHeight: 70),
+                            constraints: const BoxConstraints(minHeight: 70),
                             child: _PayoutValue(
                               label: const ['1ST', '2ND', '3RD', '4TH'][i],
                               value: showPayoutAmounts
                                   ? Formatters.chips(
-                                game.structure.prizes[i].amount,
-                              )
+                                      game.structure.prizes[i].amount,
+                                    )
                                   : '—',
                               scale: .55,
                             ),
@@ -1049,18 +1073,18 @@ class _CompactStat extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: redSlash && slash >= 0
                 ? Text.rich(
-              TextSpan(
-                style: style,
-                children: [
-                  TextSpan(text: value.substring(0, slash)),
-                  TextSpan(
-                    text: '/',
-                    style: TextStyle(color: TournamentDisplayBlock._red),
-                  ),
-                  TextSpan(text: value.substring(slash + 1)),
-                ],
-              ),
-            )
+                    TextSpan(
+                      style: style,
+                      children: [
+                        TextSpan(text: value.substring(0, slash)),
+                        TextSpan(
+                          text: '/',
+                          style: TextStyle(color: TournamentDisplayBlock._red),
+                        ),
+                        TextSpan(text: value.substring(slash + 1)),
+                      ],
+                    ),
+                  )
                 : Text(value, style: style),
           ),
         ],
@@ -1138,12 +1162,13 @@ class _StatusSpade extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logoPath = 'assets/logo_${AppColors.currentPalette.id.replaceAll("-", "_")}.png';
-    return Image.asset(
-      logoPath,
+    return SizedBox(
       width: width,
       height: height,
-      fit: BoxFit.contain,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: PokerNightLogo(size: height < width ? height : width),
+      ),
     );
   }
 }

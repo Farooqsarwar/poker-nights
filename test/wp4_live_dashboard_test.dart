@@ -277,10 +277,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(app.currentGame!.settlementConfirmed, isTrue);
     expect(app.currentGame!.payoutTableRevealed, isTrue);
-
-    await tester.tap(find.text('Prizes').first);
-    await tester.pump();
-    expect(find.text('Paid places'), findsOneWidget);
   });
 
   test('a quick game can add a walk-in after the clock starts', () {

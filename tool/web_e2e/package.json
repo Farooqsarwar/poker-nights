@@ -1,0 +1,16 @@
+{
+  "name": "poker-night-web-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Automated click-through acceptance tests for the deployed Poker Night web app (Flutter canvas app driven through its accessibility/semantics DOM).",
+  "type": "module",
+  "scripts": {
+    "probe": "playwright test probe/probe.spec.ts --project=chromium",
+    "setup": "playwright test acceptance/setup.spec.ts --project=chromium",
+    "test": "playwright test acceptance",
+    "report": "playwright show-report .reports/html"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}

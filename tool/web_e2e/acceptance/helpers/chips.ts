@@ -123,3 +123,37 @@ export async function expectChipSetSummary(page: Page, name: string, chips: Chip
   const text = await appText(page);
   if (!text.includes(name)) throw new Error(`chip set "${name}" not in list`);
 }
+
+/**
+ * Sets an inline CountStepper (the ICM calculator's "Prize pool" and
+ * "Player N stack" rows, the chip editor's quantity rows) to a new value.
+ *
+ * Targeted by the number currently shown: those rows put the same words in a
+ * plain label text node AND in the stepper's semantics label, so tapping by
+ * name can hit the dead label — but the number itself is a proper role=button
+ * node (probed) and tapping it opens the "Enter number" dialog.
+ */
+export async function setCountStepper(
+  page: Page,
+  currentValue: string | number,
+  value: string | number,
+): Promise<void> {
+  await tap(page, String(currentValue), { exact: true });
+  await expectText(page, 'Enter number', 20_000);
+  await page.waitForTimeout(400); // dialog settle + autofocus
+
+  // While a Flutter modal is up, background inputs leave the semantics tree,
+  // so the dialog's field is the only input.
+  const field = page.locator('input, textarea').last();
+  await field.evaluate((el) => (el as HTMLElement).focus()).catch(() => {});
+  await page.waitForTimeout(120);
+  await page.keyboard.press('Control+A');
+  await page.keyboard.insertText(String(value));
+  await page.waitForTimeout(250);
+  const got = (await field.inputValue({ timeout: 3_000 }).catch(() => '')).trim();
+  if (got !== String(value)) {
+    throw new Error(`stepper ${currentValue}→${value}: field shows "${got}" after typing`);
+  }
+  await tap(page, 'Apply');
+  await page.waitForTimeout(300);
+}

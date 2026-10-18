@@ -1,5 +1,6 @@
 import { test } from '@playwright/test';
 import { appText, expectText, goto, launchApp, screenshot, tap } from './helpers/flutter';
+import { setCountStepper } from './helpers/chips';
 
 /**
  * m4 — the public tools, from the acceptance document:
@@ -15,8 +16,14 @@ test('m4: blind generator hands its structure to the clock; ICM equities add up'
   try {
     const { page } = app;
 
-    // 1. Tools index → the generator.
-    await goto(page, '/tools');
+    // 1. Tools index → the generator. Navigate IN-APP (Home → More → Tools):
+    //    deep-linking /tools while signed in races the splash's redirect back
+    //    to Home, and either side can win.
+    await goto(page, '/home');
+    await expectText(page, 'Welcome back', 30_000);
+    await tap(page, 'More');
+    await page.waitForTimeout(900);
+    await tap(page, 'Tools', { exact: false });
     await expectText(page, 'Blind Structure Generator', 30_000);
     await tap(page, 'Blind Structure Generator', { exact: false });
     await expectText(page, 'Next: starting stack', 30_000);
@@ -31,31 +38,40 @@ test('m4: blind generator hands its structure to the clock; ICM equities add up'
     await expectText(page, 'minute levels', 20_000);
     await screenshot(page, 'm4-generator-structure');
 
-    // 3. "Use these blinds" → the clock handoff dialog.
+    // 3. "Use these blinds" → the handoff dialog. "No" stays on the generator
+    //    with the structure intact.
+    await tap(page, 'Use these blinds');
+    await expectText(page, 'Use this structure in the tournament clock?', 15_000);
+    await tap(page, 'No', { exact: true });
+    await expectText(page, 'Use these blinds', 15_000);
+    console.log('m4: No keeps the structure on the generator');
+
+    // 4. Confirm again and say Yes — the clock opens with the same levels.
     await tap(page, 'Use these blinds');
     await expectText(page, 'Use this structure in the tournament clock?', 15_000);
     await tap(page, 'Yes', { exact: true });
-
-    // The clock opens on its own route with the generated levels.
     await expectText(page, 'Time left', 30_000);
     await expectText(page, 'Level', 15_000);
     await screenshot(page, 'm4-clock');
     console.log('m4: generator handed the structure to the clock');
 
-    // 4. ICM calculator: three players by default; the equity column must add
-    //    up to the prize pool (50 + 30 + 20 = 100).
-    await goto(page, '/tools/icm');
-    await expectText(page, 'ICM Calculator', 30_000);
-    await expectText(page, 'Players remaining: 3', 15_000);
+    // 5. ICM calculator, default scenario: stacks 5,000 / 3,000 / 2,000 with
+    //    50 / 30 / 20 prizes — standard Malmuth-Harville equities are
+    //    38.39 / 32.75 / 28.86 (they add up to the 100 pool); the chip-share
+    //    column shows 50.00 for the biggest stack and the difference 11.61.
+    //
+    //    Navigate IN-APP (clock → "All tools" → the ICM card): a deep link to
+    //    /tools/icm can lose the boot-timing race against the splash and land
+    //    on Home again for a signed-in session.
+    await tap(page, 'All tools', { exact: false });
+    await expectText(page, 'Blind Structure Generator', 20_000);
+    await tap(page, 'ICM Calculator', { exact: false });
+    await expectText(page, 'Players remaining: 3', 30_000);
     await screenshot(page, 'm4-icm');
 
     const decimals = (await appText(page)).match(/\b\d{1,4}\.\d{2}\b/g) ?? [];
     const figures = [...new Set(decimals)].map(Number);
     console.log(`m4: ICM figures seen: ${figures.join(', ')}`);
-    // Default scenario: stacks 5,000 / 3,000 / 2,000 with 50 / 30 / 20 prizes.
-    // Standard Malmuth-Harville equities are 38.39 / 32.75 / 28.86 (they add
-    // up to the 100 pool); the chip-share column shows 50.00 for the biggest
-    // stack and the difference column 11.61.
     const expected: Array<[string, number]> = [
       ['equity of the 5,000 stack', 38.39],
       ['equity of the 3,000 stack', 32.75],
@@ -69,6 +85,41 @@ test('m4: blind generator hands its structure to the clock; ICM equities add up'
       }
     }
     console.log('m4: ICM equities 38.39 / 32.75 / 28.86 confirmed');
+
+    // 6. The document's scenario: Total pool 500, stacks 8,000 / 5,000 /
+    //    2,000, the 3-place split 250 / 150 / 100 → about
+    //    197.44 / 171.61 / 130.95.
+    //
+    //    The prizes are typed by hand: "Fill prizes from pool" on this build
+    //    collapses a 3-player field to winner-takes-all (the tournament engine
+    //    refuses to pay half the field: places = max(1, players ~/ 2 - 1)),
+    //    so the doc's 3-place split cannot come from that button. Entered by
+    //    hand, the ICM maths matches the doc exactly (see probe-icm-fill for
+    //    the fill-button evidence).
+    await setCountStepper(page, '100', 500); // Total pool
+    await setCountStepper(page, '5000', 8000); // Player 1 stack
+    await setCountStepper(page, '3000', 5000); // Player 2 stack
+    await setCountStepper(page, '50', 250); // 1st
+    await setCountStepper(page, '30', 150); // 2nd
+    await setCountStepper(page, '20', 100); // 3rd
+    const docFigures = [...new Set((await appText(page)).match(/\b\d{1,4}\.\d{2}\b/g) ?? [])].map(Number);
+    console.log(`m4: doc-scenario figures: ${docFigures.join(', ')}`);
+    const docExpected: Array<[string, number]> = [
+      ['8,000-stack equity', 197.44],
+      ['5,000-stack equity', 171.61],
+      ['2,000-stack equity', 130.95],
+    ];
+    for (const [label, want] of docExpected) {
+      if (!docFigures.some((n) => Math.abs(n - want) <= 0.05)) {
+        throw new Error(`m4: ${label} (≈${want}) not on screen; saw ${docFigures.join(', ')}`);
+      }
+    }
+    console.log('m4: ICM doc scenario 197.44 / 171.61 / 130.95 confirmed');
+
+    // 7. Adding a stack row raises Players remaining to 4.
+    await tap(page, 'Add player');
+    await expectText(page, 'Players remaining: 4', 15_000);
+    await screenshot(page, 'm4-icm-doc-scenario');
   } finally {
     await app.close();
   }

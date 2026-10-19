@@ -50,8 +50,14 @@ export async function launchApp(profile: string, opts: LaunchOptions = {}): Prom
   const userDataDir = path.join(AUTH_DIR, profile);
   fs.mkdirSync(userDataDir, { recursive: true });
 
+  const isHeaded =
+    opts.headless === false ||
+    process.env.HEADED === 'true' ||
+    process.argv.includes('--headed');
+
   const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: opts.headless ?? true,
+    headless: !isHeaded,
+    slowMo: process.env.SLOWMO ? parseInt(process.env.SLOWMO, 10) : undefined,
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 1,
     permissions: [],
@@ -60,6 +66,32 @@ export async function launchApp(profile: string, opts: LaunchOptions = {}): Prom
 
   const page = context.pages()[0] ?? (await context.newPage());
   page.setDefaultTimeout(30_000);
+
+  if (isHeaded) {
+    await page.addInitScript(() => {
+      window.addEventListener('click', (e) => {
+        const dot = document.createElement('div');
+        dot.style.position = 'fixed';
+        dot.style.left = `${e.clientX - 16}px`;
+        dot.style.top = `${e.clientY - 16}px`;
+        dot.style.width = '32px';
+        dot.style.height = '32px';
+        dot.style.borderRadius = '50%';
+        dot.style.backgroundColor = 'rgba(255, 0, 50, 0.65)';
+        dot.style.border = '2px solid white';
+        dot.style.boxShadow = '0 0 12px rgba(255, 0, 0, 0.9)';
+        dot.style.pointerEvents = 'none';
+        dot.style.zIndex = '9999999';
+        dot.style.transition = 'all 0.35s ease-out';
+        document.body.appendChild(dot);
+        requestAnimationFrame(() => {
+          dot.style.transform = 'scale(2.2)';
+          dot.style.opacity = '0';
+        });
+        setTimeout(() => dot.remove(), 400);
+      }, true);
+    });
+  }
 
   await page.goto(opts.url ?? '/', { waitUntil: 'domcontentloaded' });
   await enableSemantics(page);
@@ -308,6 +340,29 @@ export async function tap(
   }
   const cx = rect.x + rect.width * bias;
   const cy = rect.y + rect.height / 2;
+
+  await page.evaluate(({ x, y }) => {
+    const dot = document.createElement('div');
+    dot.style.position = 'fixed';
+    dot.style.left = `${x - 16}px`;
+    dot.style.top = `${y - 16}px`;
+    dot.style.width = '32px';
+    dot.style.height = '32px';
+    dot.style.borderRadius = '50%';
+    dot.style.backgroundColor = 'rgba(255, 30, 60, 0.7)';
+    dot.style.border = '2px solid white';
+    dot.style.boxShadow = '0 0 14px rgba(255, 0, 0, 1)';
+    dot.style.pointerEvents = 'none';
+    dot.style.zIndex = '9999999';
+    dot.style.transition = 'all 0.35s ease-out';
+    document.body.appendChild(dot);
+    requestAnimationFrame(() => {
+      dot.style.transform = 'scale(2.4)';
+      dot.style.opacity = '0';
+    });
+    setTimeout(() => dot.remove(), 400);
+  }, { x: cx, y: cy }).catch(() => {});
+
   if (bias !== 0.5) {
     // Merged semantics nodes (e.g. a toggle row) are wider than the control
     // itself; xBias clicks nearer the real widget inside the node.

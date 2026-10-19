@@ -1,6 +1,8 @@
 import { test } from '@playwright/test';
-import { appText, expectText, goto, launchApp, screenshot, tap } from './helpers/flutter';
+import { appText, expectText, goto, hasText, launchApp, readTextMatch, screenshot, scrollUntilVisible, tap } from './helpers/flutter';
 import { setCountStepper } from './helpers/chips';
+import { readLevels } from './helpers/builder';
+import { typeInto } from './helpers/auth';
 
 /**
  * m4 — the public tools, from the acceptance document:
@@ -37,6 +39,37 @@ test('m4: blind generator hands its structure to the clock; ICM equities add up'
     await tap(page, 'Approve stack');
     await expectText(page, 'minute levels', 20_000);
     await screenshot(page, 'm4-generator-structure');
+
+    // 2b. The document's step 2 — edit one level and recalculate around it,
+    //     then confirm. The generator embeds the app's structure builder, so
+    //     the same controls should be here; if this build hides them the log
+    //     records that and the handoff below still runs.
+    const genLadderBefore = await readLevels(page);
+    if (await scrollUntilVisible(page, 'Edit level')) {
+      const last = genLadderBefore[genLadderBefore.length - 1];
+      const newBB = Math.max(Math.round((last.bb * 1.5) / 25) * 25, last.bb + 25);
+      await tap(page, `Edit level ${last.n}`, { exact: true });
+      await expectText(page, 'Save', 10_000);
+      await typeInto(page, 'BB', String(newBB));
+      await tap(page, 'Save', { exact: true });
+      await page.waitForTimeout(700);
+      console.log(
+        `m4 step 2: level ${last.n} edited ${last.sb}/${last.bb} → ${last.sb}/${newBB}; pinned=${await hasText(page, 'Pinned')}`,
+      );
+      if (await hasText(page, 'Recalculate around this')) {
+        await tap(page, 'Recalculate around this', { exact: true });
+        await page.waitForTimeout(900);
+      } else {
+        console.log('m4 FINDING step 2: no "Recalculate around this" control after the edit');
+      }
+      const genLadderAfter = await readLevels(page);
+      console.log(
+        `m4 step 2: ladder after the recalculation\n${genLadderAfter.map((l) => `  L${l.n}: ${l.sb}/${l.bb}`).join('\n')}`,
+      );
+      await screenshot(page, 'm4-generator-edited');
+    } else {
+      console.log('m4 FINDING step 2: the free generator does not expose level editing');
+    }
 
     // 3. "Use these blinds" → the handoff dialog. "No" stays on the generator
     //    with the structure intact.

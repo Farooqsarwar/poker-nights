@@ -125,9 +125,9 @@ interface Candidate extends Rect {
  * matches yet. Positive-area elements always win over zero-size ones so a
  * hidden duplicate node can never shadow the real target.
  */
-async function locate(page: Page, text: string, role?: string, contains = false): Promise<Candidate | null> {
+async function locate(page: Page, text: string, role?: string, contains = false, nth = 0): Promise<Candidate | null> {
   return await page.evaluate(
-    ({ text, role, contains }) => {
+    ({ text, role, contains, nth }) => {
       const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
       const wanted = norm(text);
 
@@ -166,7 +166,8 @@ async function locate(page: Page, text: string, role?: string, contains = false)
       const visible = matches.filter((m) => m.width > 0 && m.height > 0);
       const pool = visible.length > 0 ? visible : matches;
       pool.sort((a, b) => a.width * a.height - b.width * b.height);
-      const best = pool[0];
+      const best = pool[nth];
+      if (!best) return null;
       for (const m of matches) {
         if (m.target === best.target) continue;
         const el = document.querySelector(`[data-e2e-id="${m.target}"]`);
@@ -174,7 +175,7 @@ async function locate(page: Page, text: string, role?: string, contains = false)
       }
       return best;
     },
-    { text, role, contains },
+    { text, role, contains, nth },
   );
 }
 
@@ -192,10 +193,10 @@ function inViewport(r: Rect, viewport: { width: number; height: number }): boole
  * (the fixed nav items themselves) are accepted in place once two wheels in
  * a row leave them where they are.
  */
-async function scrollUntilVisible(
+export async function scrollUntilVisible(
   page: Page,
   text: string,
-  opts: { role?: string; contains?: boolean } = {},
+  opts: { role?: string; contains?: boolean; nth?: number } = {},
 ): Promise<Candidate | null> {
   const viewport = page.viewportSize() ?? { width: 390, height: 844 };
   const TOP_MARGIN = 110; // app bar
@@ -205,7 +206,7 @@ async function scrollUntilVisible(
   let stable = 0;
 
   for (let attempt = 0; attempt < 40; attempt++) {
-    const rect = await locate(page, text, opts.role, opts.contains);
+    const rect = await locate(page, text, opts.role, opts.contains, opts.nth ?? 0);
     if (debug) {
       console.log(
         `[scroll] "${text}" attempt=${attempt} ` +
@@ -267,14 +268,19 @@ async function wheel(page: Page, delta: number): Promise<void> {
 }
 
 /** Taps the element whose text matches exactly (or contains, when exact=false). */
-export async function tap(page: Page, text: string, opts: { role?: string; exact?: boolean; timeout?: number } = {}): Promise<void> {
+export async function tap(
+  page: Page,
+  text: string,
+  opts: { role?: string; exact?: boolean; timeout?: number; nth?: number; xBias?: number } = {},
+): Promise<void> {
   const timeout = opts.timeout ?? 30_000;
   const contains = opts.exact === false;
+  const bias = opts.xBias ?? 0.5;
   const start = Date.now();
 
   let rect: Candidate | null = null;
   while (Date.now() - start < timeout) {
-    rect = await scrollUntilVisible(page, text, { role: opts.role, contains });
+    rect = await scrollUntilVisible(page, text, { role: opts.role, contains, nth: opts.nth });
     if (rect) break;
     await page.waitForTimeout(200);
   }
@@ -300,13 +306,22 @@ export async function tap(page: Page, text: string, opts: { role?: string; exact
       `[tap] "${text}" -> @${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}x${Math.round(rect.height)} target=${rect.target}`,
     );
   }
-  try {
-    await locator.click({ force: true, timeout: 4_000 });
-  } catch {
-    if (debug) {
-      console.log(`[tap] locator click failed; mouse.click at ${Math.round(rect.x + rect.width / 2)},${Math.round(rect.y + rect.height / 2)}`);
+  const cx = rect.x + rect.width * bias;
+  const cy = rect.y + rect.height / 2;
+  if (bias !== 0.5) {
+    // Merged semantics nodes (e.g. a toggle row) are wider than the control
+    // itself; xBias clicks nearer the real widget inside the node.
+    if (debug) console.log(`[tap] biased click at ${Math.round(cx)},${Math.round(cy)}`);
+    await page.mouse.click(cx, cy);
+  } else {
+    try {
+      await locator.click({ force: true, timeout: 4_000 });
+    } catch {
+      if (debug) {
+        console.log(`[tap] locator click failed; mouse.click at ${Math.round(cx)},${Math.round(cy)}`);
+      }
+      await page.mouse.click(cx, cy);
     }
-    await page.mouse.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
   }
   await page.waitForTimeout(250); // let Flutter process the tap and repaint
 }
@@ -362,6 +377,40 @@ export async function appText(page: Page): Promise<string> {
     }
     return parts.join('\n');
   });
+}
+
+/** Reads the first semantics node whose aria-label matches `pattern`. */
+export async function readNodeLabel(page: Page, pattern: RegExp): Promise<string | null> {
+  return await page.evaluate(({ source }) => {
+    const norm = (s: string | null) => (s ?? '').replace(/\s+/g, ' ').trim();
+    const re = new RegExp(source);
+    for (const el of Array.from(document.querySelectorAll('flt-semantics'))) {
+      const l = norm(el.getAttribute('aria-label'));
+      if (re.test(l)) return l;
+    }
+    return null;
+  }, { source: pattern.source });
+}
+
+/**
+ * Reads the first snippet matching `pattern` anywhere in the tree — text or
+ * aria-label. Some rows (e.g. the bonus estimate) merge their text into a
+ * label rather than exposing it as innerText, so both are scanned.
+ */
+export async function readTextMatch(page: Page, pattern: RegExp): Promise<string | null> {
+  return await page.evaluate(({ source }) => {
+    const norm = (s: string | null) => (s ?? '').replace(/\s+/g, ' ').trim();
+    const re = new RegExp(source);
+    for (const el of Array.from(document.querySelectorAll('flt-semantics'))) {
+      const t = norm((el as HTMLElement).innerText);
+      const inText = t.match(re);
+      if (inText) return inText[0];
+      const l = norm(el.getAttribute('aria-label'));
+      const inLabel = l.match(re);
+      if (inLabel) return inLabel[0];
+    }
+    return null;
+  }, { source: pattern.source });
 }
 
 export async function screenshot(page: Page, label: string): Promise<string> {

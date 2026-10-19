@@ -63,7 +63,7 @@ export async function typeInto(
   page: Page,
   labelOrPlaceholder: string,
   value: string,
-  opts: { nth?: number; fallbackNth?: number } = {},
+  opts: { nth?: number; fallbackNth?: number; lenient?: boolean } = {},
 ): Promise<void> {
   const selector =
     `input[aria-label="${labelOrPlaceholder}"], textarea[aria-label="${labelOrPlaceholder}"], ` +
@@ -114,6 +114,17 @@ export async function typeInto(
   await page.waitForTimeout(150);
   const got = (await input.inputValue({ timeout: 3_000 }).catch(() => '')).trim();
   if (got !== value.trim()) {
+    if (opts.lenient) {
+      // Some Flutter fields draw the text on canvas and clear the a11y proxy
+      // input the moment the framework takes the value (probed on the
+      // player-name fields: the field visibly holds the text while its proxy
+      // reads empty). Lenient callers verify the value where the app shows it
+      // instead of trusting the proxy.
+      console.log(
+        `typeInto (lenient): proxy for "${labelOrPlaceholder}" reads "${got}" after typing "${value}"`,
+      );
+      return;
+    }
     throw new Error(`typeInto: field "${labelOrPlaceholder}" shows "${got}" after typing "${value}"`);
   }
 }

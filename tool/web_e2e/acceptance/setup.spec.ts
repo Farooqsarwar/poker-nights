@@ -1,5 +1,5 @@
 import { test, type Page } from '@playwright/test';
-import { appText, expectText, goto, hasText, launchApp, screenshot, tap } from './helpers/flutter';
+import { appText, expectText, goto, hasText, launchApp, screenshot, scrollUntilVisible, tap } from './helpers/flutter';
 import { ensureAccount, loadState, resetProfileDir, saveState, typeInto, type AccountId } from './helpers/auth';
 import { ensureChipSet, HOME_25, SMALL_BOX } from './helpers/chips';
 import { openSettings } from './helpers/nav';
@@ -133,6 +133,40 @@ test('setup: A has the document chip sets, Home 25 default, currency None', asyn
     // Settings → Currency → None. The button's semantics node merges the
     // label and its child text ("No currency symbol None"), so match loosely.
     await tap(page, 'No currency symbol', { exact: false });
+
+    // Setup item 6 — "sound on in the app": the "Sound effects & chimes"
+    // switch must be ON. The device volume itself is outside the automation's
+    // reach, so only the in-app half is machine-checked.
+    await scrollUntilVisible(page, 'Sound effects');
+    const sound = await page.evaluate(() => {
+      const norm = (s: string | null) => (s ?? '').replace(/\s+/g, ' ').trim();
+      let row: { top: number; height: number; left: number } | null = null;
+      for (const el of Array.from(document.querySelectorAll('flt-semantics'))) {
+        if (!norm((el as HTMLElement).innerText).startsWith('Sound effects')) continue;
+        const r = (el as HTMLElement).getBoundingClientRect();
+        row = { top: r.top, height: r.height, left: r.left };
+        break;
+      }
+      if (!row || (row as { top: number }).top > 900) return null;
+      for (const el of Array.from(document.querySelectorAll('flt-semantics[role="switch"]'))) {
+        const r = (el as HTMLElement).getBoundingClientRect();
+        const cy = r.top + r.height / 2;
+        if (Math.abs(cy - (row.top + row.height / 2)) < 48 && r.left > row.left + 100) {
+          const ac = el.getAttribute('aria-checked');
+          return { checked: ac === null ? null : ac === 'true', x: r.left + r.width / 2, y: cy };
+        }
+      }
+      return null;
+    });
+    if (sound && sound.checked === false) {
+      await page.mouse.click(sound.x, sound.y);
+      await page.waitForTimeout(700);
+      console.log('Setup item 6: "Sound effects & chimes" turned on');
+    } else if (sound) {
+      console.log(`Setup item 6: "Sound effects & chimes" already on (checked=${sound.checked})`);
+    } else {
+      console.log('Setup FINDING item 6: the "Sound effects & chimes" switch was not found');
+    }
 
     console.log('Chip sets ready: Home 25 (default), Small box; currency None');
     await screenshot(page, 'setup-a-chip-sets');

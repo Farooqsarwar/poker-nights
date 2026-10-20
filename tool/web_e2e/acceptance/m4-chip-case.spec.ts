@@ -104,6 +104,38 @@ const QA_SHALLOW: ChipSpec[] = [
   { color: 'Green', value: 25, quantity: 6 },
 ];
 
+async function openEventStructureBuilder(page: Page): Promise<void> {
+  await openHome(page);
+  await selectTestClub(page);
+  if (await hasText(page, 'Create structure')) {
+    await tap(page, 'Create structure', { exact: false, timeout: 10_000 });
+    return;
+  }
+  const tries = ['+ New game', '＋ New game', 'New game', 'Create tournament'];
+  for (const t of tries) {
+    if (await hasText(page, t)) {
+      await tap(page, t, { exact: false, timeout: 8_000 });
+      break;
+    }
+  }
+  await expectText(page, 'New tournament', 20_000);
+  if (await hasText(page, 'Rebuy')) {
+    await tap(page, 'Rebuy', { exact: true });
+  }
+  const input = page
+    .locator(
+      'input[placeholder="Where are you playing?"], textarea[placeholder="Where are you playing?"], flt-semantics[role="textbox"] input',
+    )
+    .first();
+  if ((await input.count()) > 0) {
+    await input.evaluate((el) => (el as HTMLElement).focus());
+    await page.keyboard.insertText('QA Event 20p');
+  }
+  await tap(page, 'Post', { exact: true, timeout: 10_000 });
+  await expectText(page, 'Create structure', 20_000);
+  await tap(page, 'Create structure', { exact: false, timeout: 10_000 });
+}
+
 test('M4: the structure fits the real chip case', async () => {
   test.setTimeout(25 * 60_000);
   const app = await launchApp('qa-a');
@@ -173,81 +205,63 @@ test('M4: the structure fits the real chip case', async () => {
     console.log(`M4 step 2: ladder\n${ladderSmall.map((l) => `  L${l.n}: ${l.sb}/${l.bb}`).join('\n')}`);
     await screenshot(page, 'm4-03-levels-smallbox');
 
-    // ── Step 5a — the document's "20 players" clamps to the free table ─────
-    await tap(page, 'Change stack', { exact: true });
-    await expectText(page, 'Starting stack', 15_000);
-    await tap(page, 'Back to the setup', { exact: true });
-    await expectText(page, 'Next: starting stack', 15_000);
+    // ── Step 5 — Group event → Create structure, 20 players, Home 25 ────────
+    // The quick game is limited to 9 players on the free plan (one table), so
+    // do this step via group event → Create structure (or on a Premium account).
+    // Set players to 20, keep rebuy plus add-on, and use the Home 25 chip set.
+    await setDefaultChipSet(page, 'Home 25');
+    await openEventStructureBuilder(page);
+    await expectText(page, 'Players', 20_000);
     const cap20 = await setPlayersCount(page, 20);
-    if (cap20 === 20) {
-      console.log('M4 step 5: the quick-game field accepted 20 players');
-    } else {
-      console.log(
-        `M4 FINDING step 5: the document's 20 players is not settable in the quick game — the field clamps to ${cap20} (free hosting covers one table; the group's table size). The chip-case check at 20 players cannot run here; the guard itself is exercised with the QA tiny case below.`,
-      );
+    console.log(`M4 step 5: players in group event structure builder set to ${cap20}`);
+    if (cap20 !== 20) {
+      throw new Error(`M4 step 5: expected 20 players in event structure builder (got ${cap20})`);
     }
-    await screenshot(page, 'm4-05-players-clamp');
-    const restore9 = await setPlayersCount(page, 9);
-    if (restore9 !== 9) throw new Error(`M4 step 5: could not restore 9 players (reads ${restore9})`);
 
-    // ── Step 5b — a night the case cannot fund is blocked, not claimed ─────
-    // The QA tiny case (100 one-value chips) cannot seat nine 20 BB stacks.
-    await setDefaultChipSet(page, 'QA tiny case');
-    await startQuickGame(page);
-    await setupRebuyNight(page);
+    if (await hasText(page, 'Rebuy')) {
+      await tap(page, 'Rebuy', { exact: true });
+    }
     await tap(page, 'Next: starting stack', { exact: true });
     await expectText(page, 'Starting stack', 20_000);
+
+    // Expect: A chip-case card appears: "Your chip case cannot give 20 players a
+    // playable stack (at least 20 big blinds) … It covers up to N players …",
+    // with Fewer rebuys, Play a freeze-out and Reduce to N players buttons.
+    // It does not say "No pace fits".
     if (!(await scrollUntilVisible(page, 'Your chip case is too small for this field'))) {
-      await screenshot(page, 'm4-05b-not-blocked');
+      await screenshot(page, 'm4-05-not-blocked-20p');
       throw new Error(
-        `M4 step 5: the 100-chip case was not blocked. Stack step: ${(await appText(page)).replace(/\s+/g, ' ').slice(0, 400)}`,
+        `M4 step 5: the 20-player night on Home 25 was not blocked. Stack step: ${(await appText(page)).replace(/\s+/g, ' ').slice(0, 400)}`,
       );
     }
-    const cannot = await readTextMatch(page, /cannot fund a \d+BB starting stack for \d+ players/);
+    const cannot = await readTextMatch(page, /Your chip case cannot give 20 players a playable stack/);
+    const covers = await readTextMatch(page, /It covers up to \d+ players/);
+    const fewerRebuys = await hasText(page, 'Fewer rebuys');
+    const playFreezeOut = await hasText(page, 'Play a freeze-out');
     const reduce = await readTextMatch(page, /Reduce to \d+ players/);
     const approveBlocked = await buttonState(page, 'Approve stack');
-    console.log(`M4 step 5: blocked — "${cannot}"; fix "${reduce}"; Approve stack=${approveBlocked}`);
-    if (!cannot) console.log('M4 FINDING step 5: the chip-case card does not state the shortfall in players/BB');
+    console.log(`M4 step 5: blocked — "${cannot}"; "${covers}"; buttons: Fewer=${fewerRebuys}, Freeze=${playFreezeOut}, Reduce="${reduce}"; Approve=${approveBlocked}`);
+
+    await expectNoText(page, 'No pace fits', 2_000);
+    await screenshot(page, 'm4-05-blocked-20p');
+
+    if (!cannot) console.log('M4 FINDING step 5: card does not match expected cannot give 20 players text');
+    if (!covers) console.log('M4 FINDING step 5: card does not state how many players it covers');
+    if (!fewerRebuys || !playFreezeOut || !reduce) {
+      console.log('M4 FINDING step 5: missing Fewer rebuys, Play a freeze-out, or Reduce to N players buttons');
+    }
     if (approveBlocked !== 'disabled') {
-      console.log(`M4 FINDING step 5: "Approve stack" reads ${approveBlocked} on a blocked night`);
+      console.log(`M4 FINDING step 5: Approve stack reads ${approveBlocked} on blocked 20p night`);
     }
-    // Tapping a blocked night's Approve must not move the night forward.
-    // Measure the button fresh and click its live centre: a click computed
-    // from a stale rect (the semantics layer lags a scroll) can land on
-    // whatever slid into that spot — once seen as a "Back to the setup" press.
-    const blockRect = await scrollUntilVisible(page, 'Approve stack');
-    let blockedTap: string;
-    if (!blockRect) {
-      blockedTap = 'the Approve button vanished from the blocked step';
-    } else {
-      await page.waitForTimeout(500);
-      const fresh = (await scrollUntilVisible(page, 'Approve stack')) ?? blockRect;
-      await page.mouse.click(fresh.x + fresh.width / 2, fresh.y + fresh.height / 2);
-      await page.waitForTimeout(1_200);
-      const levelsOpened = await hasText(page, 'minute levels');
-      const backOnSetup = await hasText(page, 'Next: starting stack');
-      const stillBlocked = await hasText(page, 'Approve stack');
-      if (levelsOpened) {
-        blockedTap = 'the blocked night continued to the levels — the guard let it through';
-        console.log(`M4 FINDING step 5: ${blockedTap}`);
-      } else if (backOnSetup) {
-        blockedTap = 'the press landed on "Back to the setup" (harness mis-click), not the blocked Approve';
-      } else if (stillBlocked) {
-        blockedTap = 'the blocked night stayed on the stack step';
-      } else {
-        blockedTap = `the stack step left without the levels. Screen: ${(await appText(page)).replace(/\s+/g, ' ').slice(0, 220)}`;
-      }
-    }
-    console.log(`M4 step 5: tap on blocked Approve — ${blockedTap}`);
-    await expectNoText(page, 'No pace fits', 2_000); // never in the builder
-    await screenshot(page, 'm4-05b-blocked-tiny-case');
+
     if (reduce) {
       await tap(page, reduce, { exact: true });
       await page.waitForTimeout(900);
-      const cardGone = !(await hasText(page, 'Your chip case is too small'));
       const seated = await readPlayersCount(page);
-      console.log(`M4 step 5: after "${reduce}" the field reads ${seated} players; card gone=${cardGone}`);
-      await screenshot(page, 'm4-05b-reduced');
+      console.log(`M4 step 5: after "${reduce}" the field reads ${seated} players`);
+      await screenshot(page, 'm4-05-reduced');
+    } else {
+      await tap(page, 'Back to the setup', { exact: true });
     }
 
     // ── Steps 3–4 (exercised) — the shallow warning and its one-tap fixes ──

@@ -45,7 +45,7 @@ test('m4: blind generator hands its structure to the clock; ICM equities add up'
     //     the same controls should be here; if this build hides them the log
     //     records that and the handoff below still runs.
     const genLadderBefore = await readLevels(page);
-    if (await scrollUntilVisible(page, 'Edit level')) {
+    if (await scrollUntilVisible(page, 'Edit level', { contains: true })) {
       const last = genLadderBefore[genLadderBefore.length - 1];
       const newBB = Math.max(Math.round((last.bb * 1.5) / 25) * 25, last.bb + 25);
       await tap(page, `Edit level ${last.n}`, { exact: true });

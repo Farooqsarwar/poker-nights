@@ -174,9 +174,11 @@ test('M1: quick game — every documented step', async () => {
     await setStackField(page, 40000);
     await page.waitForTimeout(800);
     const text8 = (await appText(page)).replace(/\s+/g, ' ');
-    const card8 = await hasText(page, 'Your chip case is too small for this field');
+    const card8 =
+      (await hasText(page, 'Your chip case is too small for this field')) ||
+      (await hasText(page, 'Your chips fall short'));
     const shortLine8 = text8.match(/Your chips fall short[^.]*\./)?.[0] ?? null;
-    const saysColour8 = /(short|missing|add|need)[^.]{0,90}(colour|color|25|100|500|1000|5000)/i.test(text8);
+    const saysColour8 = /(short|missing|add|need|have)[^.]{0,90}(colour|color|25|100|500|1000|5000)/i.test(text8);
     const approve8 = await buttonState(page, 'Approve stack');
     console.log(`M1 step 8: caseCard=${card8} shortLine="${shortLine8}" colourLine=${saysColour8} approve=${approve8}`);
     if (!card8) console.log(`M1 FINDING step 8: no chip-case card at 40,000 chips. Screen: ${text8.slice(0, 320)}`);

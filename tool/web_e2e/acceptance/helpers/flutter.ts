@@ -134,8 +134,18 @@ export async function enableSemantics(page: Page): Promise<void> {
  * In-app navigation (tap()) keeps the tree and must NOT use this.
  */
 export async function goto(page: Page, path: string): Promise<void> {
-  await page.goto(path, { waitUntil: 'domcontentloaded' });
-  await enableSemantics(page);
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await page.goto(path, { waitUntil: 'domcontentloaded' });
+      await enableSemantics(page);
+      return;
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 3) await page.waitForTimeout(1200 * attempt);
+    }
+  }
+  throw lastErr;
 }
 
 interface Rect {

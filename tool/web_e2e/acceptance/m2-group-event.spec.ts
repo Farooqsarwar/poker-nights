@@ -55,6 +55,21 @@ async function openNewGameForm(page: Page): Promise<void> {
  * and an "RSVP update" alert whose text also matches the word.
  */
 async function tapRsvpOn(page: Page, isoDate: string): Promise<void> {
+  // Scroll to the very top first so the latest card (at index 0) is not scrolled off-screen above
+  await page.mouse.move(195, 300);
+  for (let i = 0; i < 8; i++) {
+    await page.mouse.wheel(0, -800);
+    await page.waitForTimeout(100);
+  }
+  await page.waitForTimeout(500);
+
+  // Poll until the new card appears from Firestore
+  const start = Date.now();
+  while (Date.now() - start < 30_000) {
+    if (await hasText(page, isoDate)) break;
+    await page.waitForTimeout(1_000);
+  }
+
   await scrollUntilVisible(page, isoDate, { contains: true }).catch(() => null);
   await page.waitForTimeout(600);
 

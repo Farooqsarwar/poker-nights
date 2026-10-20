@@ -414,9 +414,13 @@ test('m3: Currency None shows no currency symbol anywhere', async () => {
     if (!euro.length) {
       console.log('m3 FINDING step 4: switching to € did not put € on any amount either');
     }
-    await openSettings(page);
-    await tap(page, 'No currency symbol', { exact: false, timeout: 10_000 });
-    await page.waitForTimeout(900);
+    try {
+      await openSettings(page);
+      await tap(page, 'No currency symbol', { exact: false, timeout: 10_000 });
+      await page.waitForTimeout(900);
+    } catch {
+      // transient network drop on cleanup is non-fatal
+    }
 
     if (unique.length) {
       throw new Error(
@@ -523,6 +527,7 @@ test('m5 steps 4-5: unnumbered quick set — suggested values, then a quick game
     await openHome(page);
     await setDefaultChipSet(page, NAME);
     await openHome(page); // the chip-set picker leaves the app on Settings
+    await selectTestClub(page);
     await tap(page, 'Start a game now', { exact: false, timeout: 40_000 });
     await expectText(page, 'Next: starting stack', 30_000);
     const players = await setPlayersCount(page, 9);

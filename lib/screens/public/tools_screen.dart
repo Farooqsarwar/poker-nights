@@ -12,6 +12,7 @@ import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
 import '../../models/tournament.dart';
 import '../../utils/clock_sequence.dart';
+import '../../utils/formatters.dart';
 import '../../utils/icm.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
@@ -589,7 +590,7 @@ class _ToolPayoutsScreenState extends State<ToolPayoutsScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Prize pool ${_players * _buyIn}',
+            'Prize pool ${Formatters.prize(_players * _buyIn)}',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -625,7 +626,7 @@ class _ToolPayoutsScreenState extends State<ToolPayoutsScreen> {
                           ),
                           const SizedBox(width: AppSpacing.md),
                           Text(
-                            '${o.prizes[i].amount}',
+                            Formatters.prize(o.prizes[i].amount),
                             style: AppTypography.monoXs.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
@@ -663,11 +664,13 @@ class _ToolPayoutsScreenState extends State<ToolPayoutsScreen> {
     final buf = StringBuffer()
       ..writeln('Payout structure — ${o.paidPlaces} places paid')
       ..writeln(
-        '$_players entries · $_buyIn buy-in · ${o.prizePool} prize pool',
+        '$_players entries · ${Formatters.prize(_buyIn)} buy-in · '
+            '${Formatters.prize(o.prizePool)} prize pool',
       );
     for (var i = 0; i < o.prizes.length; i++) {
       buf.writeln(
-        '${_ordinal(o.prizes[i].place)}  ${o.prizes[i].amount}  '
+        '${_ordinal(o.prizes[i].place)}  '
+        '${Formatters.prize(o.prizes[i].amount)}  '
         '(${o.percentages[i]}%)',
       );
     }

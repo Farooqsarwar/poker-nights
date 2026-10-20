@@ -768,10 +768,27 @@ extension AppProviderUserData on AppProvider {
       );
     }
     final idx = _savedChipSets.indexWhere((c) => c.id == id);
+    final previous = idx >= 0 ? _savedChipSets[idx] : null;
     if (idx >= 0) {
       _savedChipSets[idx] = (id: id, name: name, chips: chips);
     } else {
       _savedChipSets.add((id: id, name: name, chips: chips));
+    }
+    final updatedPresets = <TournamentPreset>[];
+    if (previous != null) {
+      for (var i = 0; i < _presets.length; i++) {
+        final preset = _presets[i];
+        if (preset.chipSetName != previous.name ||
+            !_sameChipSet(preset.chipSet, previous.chips)) {
+          continue;
+        }
+        final updated = preset.copyWith(
+          chipSetName: name,
+          chipSet: List.of(chips),
+        );
+        _presets[i] = updated;
+        updatedPresets.add(updated);
+      }
     }
     if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
@@ -781,6 +798,17 @@ extension AppProviderUserData on AppProvider {
             .saveChipSet(uid, id, name, chips)
             .catchError((Object e) => debugPrint('saveChipSet failed: $e')),
       );
+    }
+    if (_backendUp && uid != null) {
+      for (final preset in updatedPresets) {
+        unawaited(
+          _repo
+              .savePreset(uid, preset)
+              .catchError(
+                (Object e) => debugPrint('savePreset failed: $e'),
+              ),
+        );
+      }
     }
   }
 

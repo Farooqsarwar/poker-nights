@@ -771,7 +771,8 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
               _IntroLine(
                 icon: Icons.attach_money_outlined,
                 text:
-                    'Buy-in ${s.buyIn}${s.koEnabled ? ' + ${s.koAmount} KO' : ''}',
+                    'Buy-in ${Formatters.prize(s.buyIn)}'
+                    '${s.koEnabled ? ' + ${Formatters.prize(s.koAmount)} KO' : ''}',
               ),
               if (s.rebuys)
                 _IntroLine(

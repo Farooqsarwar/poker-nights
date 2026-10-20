@@ -969,6 +969,7 @@ class TournamentStructure {
     this.fits = true,
     this.paceOverByMins = 0,
     this.explain = const [],
+    this.chipSetAssumedValues = false,
   });
 
   /// The rebuy cutoff this structure was actually built around.
@@ -1099,6 +1100,10 @@ class TournamentStructure {
   /// §F1.1 `explain [{step, text, numbers}]` — why the engine chose what it
   /// chose. Feeds the "Why?" disclosures (§B4 rule 10, T138).
   final List<StructureExplanation> explain;
+
+  /// §F1.4 `meta.chipSetAssumedValues`: the physical chips had no printed
+  /// denominations, so the engine inferred a value ladder from their counts.
+  final bool chipSetAssumedValues;
 
   /// The explanation for one step, or null when the engine did not record one
   /// (every structure generated before this field existed).
@@ -1262,6 +1267,7 @@ class TournamentStructure {
     bool? fits,
     int? paceOverByMins,
     List<StructureExplanation>? explain,
+    bool? chipSetAssumedValues,
   }) {
     return TournamentStructure(
       startingStack: startingStack ?? this.startingStack,
@@ -1305,6 +1311,8 @@ class TournamentStructure {
       fits: fits ?? this.fits,
       paceOverByMins: paceOverByMins ?? this.paceOverByMins,
       explain: explain ?? this.explain,
+      chipSetAssumedValues:
+          chipSetAssumedValues ?? this.chipSetAssumedValues,
     );
   }
 }

@@ -198,6 +198,20 @@ class StructureFeasibilityCard extends StatelessWidget {
               color: AppColors.mutedForeground,
             ),
           ),
+          if (_blocked && structure.bankShortfall.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            for (final shortage in structure.bankShortfall)
+              Text(
+                'Short ${shortage.short}× ${shortage.colour} '
+                '(${shortage.value}) chips — have ${shortage.owned}, '
+                'need ${shortage.needed}.',
+                key: Key('bank-shortfall-${shortage.value}'),
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.destructiveText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
           const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: AppSpacing.sm,

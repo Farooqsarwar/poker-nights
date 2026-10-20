@@ -2310,7 +2310,7 @@ class _PremiumEventHeader extends StatelessWidget {
                             border: Border.all(color: AppColors.foreground.withValues(alpha: 0.2)),
                           ),
                           child: Text(
-                            '\$${settings.buyIn.toInt()} BUY-IN',
+                            '${Formatters.prize(settings.buyIn)} BUY-IN',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

@@ -745,7 +745,7 @@ class _WidePayouts extends StatelessWidget {
             child: _PayoutValue(
               label: const ['1ST', '2ND', '3RD', '4TH'][i],
               value: showPayoutAmounts
-                  ? Formatters.chips(game.structure.prizes[i].amount)
+                  ? Formatters.prize(game.structure.prizes[i].amount)
                   : '—',
               scale: scale,
             ),
@@ -995,7 +995,7 @@ class _CompactLayout extends StatelessWidget {
                             child: _PayoutValue(
                               label: const ['1ST', '2ND', '3RD', '4TH'][i],
                               value: showPayoutAmounts
-                                  ? Formatters.chips(
+                                  ? Formatters.prize(
                                       game.structure.prizes[i].amount,
                                     )
                                   : '—',

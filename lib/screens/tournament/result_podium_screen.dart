@@ -282,7 +282,7 @@ class ResultPodiumScreen extends StatelessWidget {
                       ),
                       if (myResult.prize != null && showAmounts)
                         Text(
-                          Formatters.chips(myResult.prize!.amount),
+                          Formatters.prize(myResult.prize!.amount),
                           style: AppTypography.monoXl.copyWith(
                             color: AppColors.primaryText,
                             fontWeight: FontWeight.w700,
@@ -423,7 +423,7 @@ class ResultPodiumScreen extends StatelessWidget {
                             const SizedBox(width: AppSpacing.md),
                             Text(
                               showAmounts && entry.value.prize != null
-                                  ? Formatters.chips(entry.value.prize!.amount)
+                                  ? Formatters.prize(entry.value.prize!.amount)
                                   : '—',
                               style: AppTypography.monoSm.copyWith(
                                 color: showAmounts && entry.value.prize != null
@@ -455,7 +455,7 @@ class ResultPodiumScreen extends StatelessWidget {
                 Expanded(
                   child: _StatCard(
                     label: 'Total pot',
-                    value: Formatters.chips(game.structure.prizePool),
+                    value: Formatters.prize(game.structure.prizePool),
                     valueColor: AppColors.primary,
                   ),
                 ),
@@ -754,7 +754,7 @@ class _PodiumSlot extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      Formatters.chips(result.prize!.amount),
+                      Formatters.prize(result.prize!.amount),
                       style: AppTypography.monoSm.copyWith(
                         color: AppColors.primaryText,
                         fontWeight: FontWeight.w600,

@@ -1003,9 +1003,7 @@ class _GroupStats extends StatelessWidget {
       (s, c) => s + c.totalBuyIns,
     );
     final totalVol = prizeVolume + cashVolume;
-    final volumeStr = totalVol >= 1000
-        ? '${(totalVol / 1000).round()}k'
-        : '\$$totalVol';
+    final volumeStr = Formatters.prize(totalVol);
 
     if (isGrid) {
       return Column(
@@ -1528,7 +1526,7 @@ class _GameRow extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${game.settings.date} ${game.settings.time} · Buy-in \$${game.settings.buyIn} · $going going',
+                        '${game.settings.date} ${game.settings.time} · Buy-in ${Formatters.prize(game.settings.buyIn)} · $going going',
                         style: TextStyle(
                           color: AppColors.mutedForeground,
                           fontSize: 12,

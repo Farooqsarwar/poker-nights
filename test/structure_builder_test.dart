@@ -295,8 +295,8 @@ void main() {
 
         await tapKey(t, 'builder-next');
         expect(find.text('Your chips fall short for this night.'), findsOneWidget);
-        expect(find.textContaining('Purple'), findsWidgets);
-        expect(find.textContaining(RegExp(r'Short \d+× Purple')), findsWidgets);
+        expect(find.textContaining('Yellow'), findsWidgets);
+        expect(find.textContaining(RegExp(r'Short \d+× Yellow')), findsWidgets);
         expect(
           t.widget<AppButton>(find.byKey(const Key('approve-stack'))).onPressed,
           isNull,
@@ -565,7 +565,7 @@ void main() {
 
   group('a blocked night cannot reach Confirm', () {
     final tiny = [
-      const ChipColor(color: 'Red', hex: 0xFFC0392B, value: 25, quantity: 8),
+      const ChipColor(color: 'Red', hex: 0xFFC0392B, value: 25, quantity: 500),
     ];
 
     test('Approve stack is refused and no level step is reachable', () {
@@ -578,8 +578,8 @@ void main() {
 
     testWidgets('the blocked card shows; Approve is disabled; no Confirm', (t) async {
       final c = _ctl(
-        chips: tiny,
-        players: 12,
+        chips: _homeSet,
+        players: 100,
         format: TournamentFormat.rebuy,
       );
       await t.binding.setSurfaceSize(const Size(800, 4800));
@@ -599,7 +599,7 @@ void main() {
       expect(find.byKey(const Key('stack-bank')), findsOneWidget);
       expect(
         find.textContaining(
-          'cannot give 12 players a playable stack (at least 20 big blinds)',
+          'cannot give 100 players a playable stack (at least 20 big blinds)',
         ),
         findsOneWidget,
       );

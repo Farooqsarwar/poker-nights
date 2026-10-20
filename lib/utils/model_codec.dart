@@ -259,6 +259,7 @@ Map<String, dynamic> tournamentStructureToMap(TournamentStructure s) => {
         'owned': b.owned,
       },
   ],
+  'chipSetAssumedValues': s.chipSetAssumedValues,
   'depthShortfallNote': s.depthShortfallNote,
   'maxPlayersSupported': s.maxPlayersSupported,
   // §F1.3 `meta.pace` / `meta.fits`.
@@ -326,6 +327,7 @@ TournamentStructure tournamentStructureFromMap(Map<String, dynamic> m) =>
             owned: (b['owned'] as num?)?.toInt() ?? 0,
           ),
       ],
+      chipSetAssumedValues: (m['chipSetAssumedValues'] as bool?) ?? false,
       depthShortfallNote: m['depthShortfallNote'] as String?,
       maxPlayersSupported: (m['maxPlayersSupported'] as num?)?.toInt(),
       pace: _paceModeFromName(m['pace'] as String?),

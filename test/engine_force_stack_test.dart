@@ -74,8 +74,8 @@ void main() {
     expect(s.bankOk, isFalse);
     expect(s.feasible, isFalse);
     expect(s.bankShortfall, isNotEmpty);
-    expect(s.bankShortfall.map((entry) => entry.colour), contains('Purple'));
-    expect(s.bankShortfall.firstWhere((entry) => entry.colour == 'Purple').short,
+    expect(s.bankShortfall.map((entry) => entry.colour), contains('Yellow'));
+    expect(s.bankShortfall.firstWhere((entry) => entry.colour == 'Yellow').short,
         greaterThan(0));
   });
 

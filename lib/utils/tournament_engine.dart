@@ -1747,12 +1747,53 @@ class TournamentEngine {
     return lo;
   }
 
+  static String _caseTooSmallNote({
+    required TournamentParams params,
+    required int? maxPlayersSupported,
+  }) {
+    final covers = maxPlayersSupported == null
+        ? ' It does not cover a playable field with these settings.'
+        : ' It covers up to $maxPlayersSupported players with rebuys and '
+            'add-ons.';
+    return 'Your chip case cannot give ${params.players} players a playable '
+        'stack (at least ${kMinPlayableDepthBB.round()} big blinds) with the '
+        'forecast rebuys and add-ons.$covers Add chips, expect fewer rebuys '
+        'or add-ons, or play a freeze-out.';
+  }
+
   static TournamentStructure generate(
     TournamentParams params, {
     /// Internal: the field-size probe in [_largestPlayableFieldSize] solves
     /// many smaller fields and must not recurse into another probe.
     bool findMaxPlayers = true,
   }) {
+    // §F1.4: an unnumbered set reaches the engine as zero-valued colours.
+    // Rank the largest piles first, assign the established recommendation
+    // ladder, and carry the fact to the output so the UI can say the values
+    // were inferred rather than printed on the chips.
+    if (params.chipSet.isNotEmpty &&
+        params.chipSet.every((chip) => chip.value <= 0)) {
+      final ranked = params.chipSet.asMap().entries.toList()
+        ..sort((a, b) {
+          final byCount = b.value.quantity.compareTo(a.value.quantity);
+          return byCount != 0 ? byCount : a.key.compareTo(b.key);
+        });
+      final recommended = recommendUnnumberedChipSet([
+        for (final entry in ranked) entry.value,
+      ]);
+      final byIndex = <int, ChipColor>{};
+      for (var i = 0; i < ranked.length; i++) {
+        byIndex[ranked[i].key] = recommended[i];
+      }
+      final solved = generate(
+        params.copyWith(
+          chipSet: [for (var i = 0; i < params.chipSet.length; i++) byIndex[i]!],
+        ),
+        findMaxPlayers: findMaxPlayers,
+      );
+      return solved.copyWith(chipSetAssumedValues: true);
+    }
+
     // §11.4. A shootout has no single structure, so this returns the one the
     // room actually sits down to: Stage A, the per-table Freeze Out. Callers
     // that need the final table as well ask [generateShootout] for both.
@@ -2376,14 +2417,10 @@ class TournamentEngine {
     if (f15Pick == null && f15Closest == null) {
       maxPlayersSupported =
           findMaxPlayers ? _largestPlayableFieldSize(params: params) : null;
-      depthShortfallNote = maxPlayersSupported != null && maxPlayersSupported > 0
-          ? 'This chip set cannot fund a ${kMinPlayableDepthBB.round()}BB '
-              'starting stack for ${params.players} players. It supports up '
-              'to $maxPlayersSupported players at that depth — add more '
-              'low-denomination chips to seat more.'
-          : 'This chip set cannot fund a ${kMinPlayableDepthBB.round()}BB '
-              'starting stack for any field size. Add more '
-              'low-denomination chips.';
+      depthShortfallNote = _caseTooSmallNote(
+        params: params,
+        maxPlayersSupported: maxPlayersSupported,
+      );
       warnings.add(depthShortfallNote);
     } else if (f15Pick == null && f15Closest != null) {
       // §F1.5 point 5: playable (≥ 20 BB) but the case cannot reach the style's
@@ -2417,7 +2454,23 @@ class TournamentEngine {
       stack = params.forceStack!;
       openingBB = openingFor(stack, minChip).bb;
       final sbHint = math.max(minChip, (openingBB / 2 / minChip).round() * minChip);
-      chipPlan = planFor(stack, params.players, sbHint);
+      final forcedPlan = solveChipPlanBounded(
+        stack: stack,
+        chipSet: params.chipSet,
+        draws: drawsForStack,
+        players: params.players,
+        addOnStack: params.addOn ? (params.addOnChips ?? stack) : 0,
+        bonusEach: (bonusPctForStack * stack).round(),
+        openingSB: sbHint,
+      );
+      // Use a bank-valid composition when one exists. If none can fund the
+      // forced amount, still build one exact per-player recipe from the whole
+      // case so bankFeasibility can multiply it by the field and report the
+      // binding colours. The old owned/players greedy plan was incomplete,
+      // which made an impossible forced stack look affordable.
+      chipPlan = forcedPlan == null
+          ? planFor(stack, 1, sbHint)
+          : planFromUsed(forcedPlan.used);
     } else if (f15Pick != null) {
       // §F1.5 (T4/T5): the chosen round, bank-fundable stack and its opening.
       stack = f15Pick.stack;
@@ -2990,6 +3043,12 @@ class TournamentEngine {
           '${s.owned}, a busy night needs ${s.needed}.',
         );
       }
+      maxPlayersSupported ??=
+          findMaxPlayers ? _largestPlayableFieldSize(params: params) : null;
+      depthShortfallNote = _caseTooSmallNote(
+        params: params,
+        maxPlayersSupported: maxPlayersSupported,
+      );
     }
 
     // The rebuy close, with what a fresh stack is worth there. The M floor

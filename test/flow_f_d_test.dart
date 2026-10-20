@@ -161,7 +161,7 @@ void main() {
     expect(find.text('ACHIEVEMENTS'), findsOneWidget);
     expect(find.text('FIRST WIN'), findsOneWidget);
     expect(find.text('3 IN A ROW'), findsOneWidget);
-    expect(find.text('\$1K NIGHT'), findsOneWidget);
+    expect(find.text('1K NIGHT'), findsOneWidget);
     expect(find.byType(SquircleIconButton), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());

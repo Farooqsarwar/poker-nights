@@ -16,10 +16,12 @@ import 'package:poker_night/screens/tournament/quick_start_screen.dart';
 import 'package:poker_night/services/payment_service.dart';
 import 'package:poker_night/services/recovery_service.dart';
 import 'package:poker_night/utils/model_codec.dart';
+import 'package:poker_night/utils/formatters.dart';
 import 'package:poker_night/utils/structure_builder_controller.dart';
 import 'package:poker_night/widgets/chip_set_editor.dart';
 import 'package:poker_night/widgets/count_stepper.dart';
 import 'package:poker_night/widgets/structure_builder.dart';
+import 'package:poker_night/widgets/save_game_preset_offer.dart';
 import 'package:provider/provider.dart';
 
 const _host = AppUser(
@@ -280,6 +282,31 @@ void main() {
       expect(app.savePreset(_preset('four')), isTrue);
     });
 
+    test('editing a referenced chip set refreshes the preset label and chips', () {
+      final app = _provider();
+      addTearDown(app.dispose);
+      app.saveChipSet('linked', 'Friday chips', _chips);
+      expect(
+        app.savePreset(
+          _preset('linked-preset').copyWith(
+            chipSetName: 'Friday chips',
+            chipSet: _chips,
+          ),
+        ),
+        isTrue,
+      );
+      const edited = [
+        ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 1, quantity: 120),
+        ChipColor(color: 'Red', hex: 0xFFC0392B, value: 5, quantity: 80),
+      ];
+
+      app.saveChipSet('linked', 'Friday chips updated', edited);
+
+      final preset = app.presetById('linked-preset')!;
+      expect(preset.chipSetName, 'Friday chips updated');
+      expect(preset.chipSet, edited);
+    });
+
     test('a complete preset seeds StructureBuilder without a second model', () {
       final preset = _preset(
         'builder',
@@ -374,5 +401,61 @@ void main() {
     expect(saved, isNotNull);
     expect(saved!.chipSet, _chips);
     expect(saved!.buyIn, controller.buyIn);
+  });
+
+  testWidgets('a fourth preset refusal offers See Premium', (tester) async {
+    final app = _provider();
+    addTearDown(app.dispose);
+    for (final id in ['one', 'two', 'three']) {
+      expect(app.savePreset(_preset(id)), isTrue);
+    }
+    await _mount(
+      tester,
+      Builder(
+        builder: (context) => TextButton(
+          onPressed: () => offerSaveGamePreset(context, app, _baseSettings()),
+          child: const Text('Open save'),
+        ),
+      ),
+      app: app,
+    );
+
+    await tester.tap(find.text('Open save'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'Fourth');
+    await tester.tap(find.text('Save preset'));
+    await tester.pump();
+
+    expect(find.text('Free accounts can save up to 3 presets.'), findsOneWidget);
+    expect(find.text('See Premium'), findsOneWidget);
+  });
+
+  testWidgets('event bonus estimate uses the engine proposed stack', (
+    tester,
+  ) async {
+    final app = _provider();
+    final settings = _baseSettings().copyWith(
+      earlyArrivalBonusEnabled: true,
+      earlyArrivalBonusPctOverride: 0.10,
+      clearForceStack: true,
+    );
+    final controller = StructureBuilderController.fromSettings(settings);
+    final expectedStack = controller.structure.startingStack;
+    controller.dispose();
+
+    await _mount(
+      tester,
+      CreateTournamentScreen(initialSettings: settings),
+      app: app,
+    );
+
+    expect(
+      find.textContaining(
+        '≈ ${expectedStack ~/ 10} chips at a ${Formatters.chips(expectedStack)} stack',
+      ),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    app.dispose();
   });
 }

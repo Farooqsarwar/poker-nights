@@ -267,6 +267,75 @@ void main() {
       expect(c.structure.startingStack, engine);
     });
 
+    testWidgets(
+      'Home 25 forced to 40,000 shows its colour shortfall and blocks approval',
+      (t) async {
+        const home25 = [
+          ChipColor(color: 'Red', hex: 0xFFC0392B, value: 25, quantity: 100),
+          ChipColor(color: 'Green', hex: 0xFF27AE60, value: 100, quantity: 100),
+          ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 500, quantity: 80),
+          ChipColor(color: 'Purple', hex: 0xFF8E44AD, value: 1000, quantity: 50),
+          ChipColor(color: 'Yellow', hex: 0xFFF1C40F, value: 5000, quantity: 30),
+        ];
+        final c = _ctl(chips: home25, players: 9)..setStack(40000);
+        await t.binding.setSurfaceSize(const Size(800, 4800));
+        await t.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: StructureBuilder(
+                  controller: c,
+                  confirmLabel: 'Go',
+                  onConfirm: (_) => fail('an underfunded stack cannot confirm'),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tapKey(t, 'builder-next');
+        expect(find.text('Your chips fall short for this night.'), findsOneWidget);
+        expect(find.textContaining('Purple'), findsWidgets);
+        expect(find.textContaining(RegExp(r'Short \d+× Purple')), findsWidgets);
+        expect(
+          t.widget<AppButton>(find.byKey(const Key('approve-stack'))).onPressed,
+          isNull,
+        );
+        await unmount(t);
+      },
+    );
+
+    testWidgets('unnumbered chips show the assumed-values note on the stack step', (
+      t,
+    ) async {
+      const unnumbered = [
+        ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 0, quantity: 150),
+        ChipColor(color: 'Red', hex: 0xFFC0392B, value: 0, quantity: 100),
+        ChipColor(color: 'Green', hex: 0xFF27AE60, value: 0, quantity: 80),
+        ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 0, quantity: 50),
+      ];
+      final c = _ctl(chips: unnumbered, players: 8);
+      await t.binding.setSurfaceSize(const Size(800, 4800));
+      await t.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: StructureBuilder(
+                controller: c,
+                confirmLabel: 'Go',
+                onConfirm: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tapKey(t, 'builder-next');
+      expect(find.byKey(const Key('stack-assumed-values')), findsOneWidget);
+      expect(find.textContaining('values were assumed'), findsOneWidget);
+      await unmount(t);
+    });
+
     test('the controller depth maps tournament types and the custom stepper', () {
       final c = _ctl();
       expect(c.depthBB, 100);
@@ -408,6 +477,30 @@ void main() {
       expect(round.levelPins, [LevelPin(level: 4, sb: bb ~/ 2, bb: bb, durationMins: l4.durationMins)]);
       app.dispose();
     });
+
+    testWidgets(
+      'free blind tool edits a row and recalculates before confirmation',
+      (t) async {
+        await mount(t, const ToolBlindsScreen());
+        await tapKey(t, 'builder-next');
+        await tapKey(t, 'approve-stack');
+
+        await tapKey(t, 'edit-level-2');
+        final oldBb = int.parse(
+          t.widget<TextField>(find.byKey(const Key('edit-bb-2'))).controller!.text,
+        );
+        await t.enterText(find.byKey(const Key('edit-bb-2')), '${oldBb * 2}');
+        await t.enterText(find.byKey(const Key('edit-sb-2')), '$oldBb');
+        await tapKey(t, 'save-level-2');
+
+        expect(find.byKey(const Key('recalc-around-2')), findsOneWidget);
+        expect(find.text('Recalculate around this'), findsOneWidget);
+        expect(find.text('Use these blinds'), findsOneWidget);
+        await tapKey(t, 'recalc-around-2');
+        expect(find.byKey(const Key('recalc-around-2')), findsOneWidget);
+        await unmount(t);
+      },
+    );
   });
 
   group('the rebuy-close marker', () {
@@ -484,7 +577,11 @@ void main() {
     });
 
     testWidgets('the blocked card shows; Approve is disabled; no Confirm', (t) async {
-      final c = _ctl(chips: tiny, players: 12);
+      final c = _ctl(
+        chips: tiny,
+        players: 12,
+        format: TournamentFormat.rebuy,
+      );
       await t.binding.setSurfaceSize(const Size(800, 4800));
       await t.pumpWidget(MaterialApp(
         home: Scaffold(
@@ -500,6 +597,16 @@ void main() {
       await tapKey(t, 'builder-next');
       expect(find.byKey(const Key('builder-step-stack')), findsOneWidget);
       expect(find.byKey(const Key('stack-bank')), findsOneWidget);
+      expect(
+        find.textContaining(
+          'cannot give 12 players a playable stack (at least 20 big blinds)',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('It covers up to'), findsOneWidget);
+      expect(find.text('Fewer rebuys'), findsOneWidget);
+      expect(find.text('Play a freeze-out'), findsOneWidget);
+      expect(find.textContaining('Reduce to '), findsOneWidget);
       final approve = t.widget<AppButton>(find.byKey(const Key('approve-stack')));
       expect(approve.onPressed, isNull);
       expect(find.byKey(const Key('builder-confirm')), findsNothing);

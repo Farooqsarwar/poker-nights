@@ -565,6 +565,16 @@ class _StackStepState extends State<_StackStep> {
                   style: AppTypography.bodySm,
                 ),
               ],
+              if (s.chipSetAssumedValues) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'These chips had no printed denominations, so their values were assumed.',
+                  key: const Key('stack-assumed-values'),
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.sm),
               Text(
                 s.bankOk
@@ -584,6 +594,21 @@ class _StackStepState extends State<_StackStep> {
           structure: s,
           players: c.players,
           onEditChips: b.onEditChips,
+          onFewerRebuys: c.rebuyNight
+              ? () => c.goTo(BuilderStep.inputs)
+              : null,
+          onPlayFreezeOut: c.rebuyNight
+              ? () {
+                  c.setFormat(TournamentFormat.freezeOut);
+                  b.onPersist?.call();
+                }
+              : null,
+          onReduceField: s.maxPlayersSupported == null
+              ? null
+              : () {
+                  c.setPlayers(s.maxPlayersSupported!);
+                  b.onPersist?.call();
+                },
           shallowFixes: c.shallowFixes,
           onApplyShallowFix: (fix) {
             c.applyShallowFix(fix);
@@ -789,6 +814,21 @@ class _StructureStepState extends State<_StructureStep> {
           structure: s,
           players: c.players,
           onEditChips: b.onEditChips,
+          onFewerRebuys: c.rebuyNight
+              ? () => c.goTo(BuilderStep.inputs)
+              : null,
+          onPlayFreezeOut: c.rebuyNight
+              ? () {
+                  c.setFormat(TournamentFormat.freezeOut);
+                  b.onPersist?.call();
+                }
+              : null,
+          onReduceField: s.maxPlayersSupported == null
+              ? null
+              : () {
+                  c.setPlayers(s.maxPlayersSupported!);
+                  b.onPersist?.call();
+                },
           shallowFixes: c.shallowFixes,
           onApplyShallowFix: c.applyShallowFix,
         ),

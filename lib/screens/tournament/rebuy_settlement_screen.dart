@@ -388,9 +388,9 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'Pool ${preview.prizePool}, organiser '
-                      '${preview.organizerAmount}, rounding '
-                      '${preview.roundingRemainder}.',
+                      'Pool ${Formatters.prize(preview.prizePool)}, organiser '
+                      '${Formatters.prize(preview.organizerAmount)}, rounding '
+                      '${Formatters.prize(preview.roundingRemainder)}.',
                       style: AppTypography.bodySm,
                     ),
                     const SizedBox(height: AppSpacing.sm),
@@ -723,7 +723,7 @@ class _AddOnsStep extends StatelessWidget {
                     ),
                     const Spacer(),
                     Text(
-                      Formatters.chips(estPrizePool),
+                      Formatters.prize(estPrizePool),
                       style: AppTypography.monoSm.copyWith(
                         color: AppColors.primaryText,
                       ),

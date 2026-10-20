@@ -13,6 +13,7 @@ import '../../models/tournament_preset.dart';
 import '../../providers/app_provider.dart';
 import '../../services/payment_service.dart';
 import '../../utils/mock_data.dart';
+import '../../utils/formatters.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
@@ -338,7 +339,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                           spacing: AppSpacing.sm,
                           runSpacing: AppSpacing.xs,
                           children: [
-                            _Tag(text: 'Buy-in ${p.buyIn}'),
+                            _Tag(text: 'Buy-in ${Formatters.prize(p.buyIn)}'),
                             _Tag(text: '${_hours(p.durationHours)}h'),
                             _Tag(
                               text:
@@ -362,7 +363,9 @@ class _PresetsScreenState extends State<PresetsScreen> {
                             ),
                             _Tag(text: p.addOn ? 'Add-on' : 'No add-on'),
                             _Tag(
-                              text: p.koEnabled ? 'KO ${p.koAmount}' : 'No KO',
+                              text: p.koEnabled
+                                  ? 'KO ${Formatters.prize(p.koAmount)}'
+                                  : 'No KO',
                             ),
                             _Tag(
                               text: p.anteEnabled

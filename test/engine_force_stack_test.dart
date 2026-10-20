@@ -67,6 +67,33 @@ void main() {
     expect(s.levels.first.sb, lessThan(s.levels.first.bb));
   });
 
+  test('forced 40,000 on Home 25 names the real bank shortfall', () {
+    final s = TournamentEngine.generate(base(base25, forceStack: 40000));
+
+    expect(s.startingStack, 40000);
+    expect(s.bankOk, isFalse);
+    expect(s.feasible, isFalse);
+    expect(s.bankShortfall, isNotEmpty);
+    expect(s.bankShortfall.map((entry) => entry.colour), contains('Yellow'));
+    expect(s.bankShortfall.firstWhere((entry) => entry.colour == 'Yellow').short,
+        greaterThan(0));
+  });
+
+  test('unnumbered chip values are normalised and marked as assumed', () {
+    const unnumbered = [
+      ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 0, quantity: 150),
+      ChipColor(color: 'Red', hex: 0xFFC0392B, value: 0, quantity: 100),
+      ChipColor(color: 'Green', hex: 0xFF27AE60, value: 0, quantity: 80),
+      ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 0, quantity: 50),
+    ];
+
+    final s = TournamentEngine.generate(base(unnumbered));
+
+    expect(s.chipSetAssumedValues, isTrue);
+    expect(s.chipPlan, isNotEmpty);
+    expect(s.chipPlan.every((entry) => entry.value > 0), isTrue);
+  });
+
   test('targetDepthBB drives depth independently of pace', () {
     final shallow = TournamentEngine.generate(base(box500, targetDepthBB: 50));
     final deep = TournamentEngine.generate(base(box500, targetDepthBB: 150));

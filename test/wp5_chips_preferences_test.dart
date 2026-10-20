@@ -405,7 +405,6 @@ void main() {
 
   testWidgets('a fourth preset refusal offers See Premium', (tester) async {
     final app = _provider();
-    addTearDown(app.dispose);
     for (final id in ['one', 'two', 'three']) {
       expect(app.savePreset(_preset(id)), isTrue);
     }
@@ -428,6 +427,8 @@ void main() {
 
     expect(find.text('Free accounts can save up to 3 presets.'), findsOneWidget);
     expect(find.text('See Premium'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    app.dispose();
   });
 
   testWidgets('event bonus estimate uses the engine proposed stack', (

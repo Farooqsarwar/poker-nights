@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../app/colors.dart';
+import '../app/route_paths.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/live_game.dart';
@@ -20,6 +22,7 @@ Future<void> offerSaveGamePreset(
   final name = TextEditingController();
   var makeDefault = false;
   String? error;
+  var limitReached = false;
 
   await showAppModal(
     context: context,
@@ -43,6 +46,15 @@ Future<void> offerSaveGamePreset(
             placeholder: 'e.g. Friday deep stack',
             error: error,
           ),
+          if (limitReached) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              fullWidth: true,
+              variant: AppButtonVariant.secondary,
+              onPressed: () => modalContext.push(RoutePaths.upgrade),
+              child: const Text('See Premium'),
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
           AppToggle(
             value: makeDefault,
@@ -55,7 +67,10 @@ Future<void> offerSaveGamePreset(
             onPressed: () {
               final label = name.text.trim();
               if (label.isEmpty) {
-                setModalState(() => error = 'Enter a name.');
+                setModalState(() {
+                  error = 'Enter a name.';
+                  limitReached = false;
+                });
                 return;
               }
               final preset = TournamentPreset.fromSettings(
@@ -65,7 +80,10 @@ Future<void> offerSaveGamePreset(
               );
               if (!app.savePreset(preset)) {
                 setModalState(
-                  () => error = 'Free accounts can save up to 3 presets.',
+                  () {
+                    error = 'Free accounts can save up to 3 presets.';
+                    limitReached = true;
+                  },
                 );
                 return;
               }

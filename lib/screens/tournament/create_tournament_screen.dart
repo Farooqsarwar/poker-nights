@@ -101,7 +101,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
   GameSettings _defaultDraft(AppProvider app) {
     final start = DateTime.now().add(const Duration(hours: 2));
-    final savedSet = app.savedChipSets.isEmpty ? null : app.savedChipSets.first;
+    final preferredChipSetId =
+        app.currentGroup.defaultChipSetId ?? app.defaultChipSetId;
+    final savedSet = preferredChipSetId == null
+        ? app.savedChipSets.firstOrNull
+        : app.savedChipSets
+              .where((set) => set.id == preferredChipSetId)
+              .firstOrNull;
     final chips =
         savedSet?.chips ?? TournamentEngine.getPreset('Home Set (4 colour)');
     final starter = GameSettings(
@@ -307,7 +313,16 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   int get _bonusPct =>
       ((_draft.earlyArrivalBonusPctOverride ?? 0.10) * 100).round();
 
-  int get _indicativeStack => _draft.forceStack ?? 2000;
+  int get _indicativeStack {
+    final forced = _draft.forceStack;
+    if (forced != null && forced > 0) return forced;
+    final controller = StructureBuilderController.fromSettings(_draft);
+    try {
+      return controller.structure.startingStack;
+    } finally {
+      controller.dispose();
+    }
+  }
 
   Widget _label(String text) => Text(
     text,
@@ -364,7 +379,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
     final type = _typeForSettings(_draft);
     final format = _draft.effectiveFormat;
-    final bonusChips = (_indicativeStack * _bonusPct / 100).round();
+    final indicativeStack =
+        _draft.earlyArrivalBonusEnabled ? _indicativeStack : 0;
+    final bonusChips = (indicativeStack * _bonusPct / 100).round();
     final currency = Formatters.currencySymbol;
 
     return AppPage(
@@ -611,7 +628,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   Text(
                     '≈ ${Formatters.chips(bonusChips)} chips at a '
-                    '${Formatters.chips(_indicativeStack)} stack — final '
+                    '${Formatters.chips(indicativeStack)} stack — final '
                     'amount set in Create structure',
                     textAlign: TextAlign.left,
                     style: AppTypography.bodyXs.copyWith(

@@ -742,7 +742,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    'In ${player.totalBuyIns.toInt()} · ${player.buyInCount} buy-in${player.buyInCount == 1 ? '' : 's'}',
+                    'In ${Formatters.money('', player.totalBuyIns)} · '
+                    '${player.buyInCount} buy-in'
+                    '${player.buyInCount == 1 ? '' : 's'}',
                     style: TextStyle(
                       color: AppColors.mutedForeground,
                       fontSize: 13,

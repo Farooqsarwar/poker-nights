@@ -15,6 +15,7 @@ import '../../models/live_game.dart';
 import '../../models/table_settings.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/formatters.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
@@ -1021,7 +1022,7 @@ class _PremiumGameCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  'Buy-in: ${game.settings.buyIn}',
+                  'Buy-in: ${Formatters.prize(game.settings.buyIn)}',
                   style: TextStyle(
                     color: AppColors.foreground,
                     fontSize: 11,

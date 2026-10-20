@@ -410,7 +410,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                 ],
                                 if (r.prize != null)
                                   Text(
-                                    Formatters.chips(r.prize!.amount),
+                                    Formatters.prize(r.prize!.amount),
                                     style: AppTypography.monoSm.copyWith(
                                       color: AppColors.primaryText,
                                     ),
@@ -478,7 +478,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                               ),
                             ),
                             Text(
-                              Formatters.chips(prizes[i].amount),
+                              Formatters.prize(prizes[i].amount),
                               style: AppTypography.monoSm.copyWith(
                                 color: AppColors.primaryText,
                               ),

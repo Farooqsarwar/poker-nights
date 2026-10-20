@@ -3838,13 +3838,13 @@ class _BubbleSaveSheet extends StatelessWidget {
                 ),
                 if (i < old.length)
                   Text(
-                    '${Formatters.chips(old[i].amount ~/ 100)} → ',
+                    '${Formatters.prize(old[i].amount ~/ 100)} → ',
                     style: AppTypography.bodyXs.copyWith(
                       color: AppColors.mutedForeground,
                     ),
                   ),
                 Text(
-                  Formatters.chips(ladder[i] ~/ 100),
+                  Formatters.prize(ladder[i] ~/ 100),
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w700,
                     color: AppColors.primaryText,
@@ -4924,7 +4924,7 @@ class _PrizeTab extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${p.amount}',
+                        Formatters.prize(p.amount),
                         style: AppTypography.monoSm.copyWith(
                           fontWeight: FontWeight.w700,
                           color: AppColors.primary,
@@ -4944,7 +4944,7 @@ class _PrizeTab extends StatelessWidget {
                   ),
                   const Spacer(),
                   Text(
-                    '${structure.prizePool}',
+                    Formatters.prize(structure.prizePool),
                     style: AppTypography.monoXs.copyWith(
                       color: AppColors.foreground,
                     ),
@@ -4962,7 +4962,7 @@ class _PrizeTab extends StatelessWidget {
                   ),
                   const Spacer(),
                   Text(
-                    '${structure.organizerAmount}',
+                    Formatters.prize(structure.organizerAmount),
                     style: AppTypography.monoXs.copyWith(
                       color: AppColors.foreground,
                     ),

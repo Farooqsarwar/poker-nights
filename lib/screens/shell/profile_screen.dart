@@ -285,11 +285,13 @@ class ProfileScreen extends StatelessWidget {
               ),
               _buildAchievementPill(
                 icon: Icons.payments_outlined,
-                title: '\$1K NIGHT',
+                title: '1K NIGHT',
                 bgColor: AppColors.successSoft,
                 borderColor: AppColors.successSoftBorder,
                 textColor: AppColors.successText,
-                active: achievements.any((a) => a.contains('\$1K NIGHT')),
+                active: achievements.any(
+                  (a) => a.contains('1K NIGHT'),
+                ),
               ),
             ],
           ),
@@ -548,7 +550,7 @@ class ProfileScreen extends StatelessWidget {
         if (prize > biggestPrize) biggestPrize = prize;
       }
     }
-    if (biggestPrize >= 1000) earned.add('\$1K NIGHT');
+    if (biggestPrize >= 1000) earned.add('1K NIGHT');
     return earned;
   }
 

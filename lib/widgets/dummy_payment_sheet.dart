@@ -6,6 +6,7 @@ import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/payment_record.dart';
 import '../providers/app_provider.dart';
+import '../utils/formatters.dart';
 import 'app_button.dart';
 import 'app_modal.dart';
 import 'glass_styles.dart';
@@ -144,7 +145,7 @@ class _DummyPaymentBodyState extends State<_DummyPaymentBody> {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                '${widget.amount}',
+                Formatters.prize(widget.amount),
                 style: AppTypography.display(
                   size: AppFontSizes.xxxl,
                   weight: FontWeight.w700,

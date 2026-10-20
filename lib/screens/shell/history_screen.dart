@@ -932,8 +932,8 @@ class _HistoryRow extends StatelessWidget {
                               if (net != null && showAmounts)
                                 Text(
                                   net >= 0
-                                      ? '+\$${net.abs()}'
-                                      : '-\$${net.abs()}',
+                                      ? '+${Formatters.prize(net.abs())}'
+                                      : '-${Formatters.prize(net.abs())}',
                                   style: TextStyle(
                                     color: net >= 0
                                         ? AppColors.successText

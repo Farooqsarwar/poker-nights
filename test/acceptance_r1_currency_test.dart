@@ -80,13 +80,18 @@ final _game = LiveGame(
   settlementConfirmed: true,
 );
 
+final _upcoming = _game.copyWith(
+  id: 'game-2',
+  status: LiveGameStatus.published,
+);
+
 final _group = Group(
   id: 'group-1',
   name: 'Friday regulars',
   joinCode: 'FRIDAY',
   ownerId: _host.id,
   members: const [_host],
-  games: [_game],
+  games: [_game, _upcoming],
   chat: const [],
   polls: const [],
   notifications: const [],

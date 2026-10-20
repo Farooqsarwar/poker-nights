@@ -6,6 +6,7 @@ import '../constants/app_constants.dart';
 import '../models/live_game.dart';
 import '../models/game.dart';
 import '../models/payment_record.dart';
+import '../utils/formatters.dart';
 import 'app_card.dart';
 import 'glass_styles.dart';
 
@@ -276,7 +277,7 @@ class _LedgerRow extends StatelessWidget {
           // A failed or cancelled attempt reached no money, so its amount is
           // struck through rather than reading as a contribution.
           Text(
-            '${record.amount}',
+            Formatters.prize(record.amount),
             style: AppTypography.monoXs.copyWith(
               color: record.status.countsTowardPool
                   ? AppColors.foreground

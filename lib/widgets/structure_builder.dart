@@ -668,6 +668,12 @@ class _StackStepState extends State<_StackStep> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 textAlign: TextAlign.center,
+                onChanged: (t) {
+                  final v = int.tryParse(t.replaceAll(RegExp(r'[^0-9]'), ''));
+                  if (v != null && v >= unit && v % unit == 0) {
+                    _commit(c, t);
+                  }
+                },
                 onSubmitted: (t) => _commit(c, t),
                 decoration: InputDecoration(
                   helperText: 'Steps of ${Formatters.chips(unit)}',
@@ -705,10 +711,30 @@ class _StackStepState extends State<_StackStep> {
               ? null
               : () {
                   _commit(c, _field.text);
+                  if (c.structure.isBlocked) {
+                    // DECISION: If typed stack causes shortfall, warn host immediately (fixes Dani B8 / M2).
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                      SnackBar(
+                        content: Text('Cannot approve: chip case falls short for this stack.'),
+                        backgroundColor: AppColors.destructive,
+                      ),
+                    );
+                    return;
+                  }
                   if (c.approveStack()) b.onPersist?.call();
                 },
           child: const Text('Approve stack'),
         ),
+        if (s.isBlocked) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Cannot approve: chip case falls short for this night. Apply a fix above.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.destructiveText,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
         const SizedBox(height: AppSpacing.sm),
         AppButton(
           fullWidth: true,

@@ -46,6 +46,7 @@ import '../../widgets/glass_styles.dart';
 import '../../models/shot_clock.dart';
 import '../../widgets/squircle_icon_button.dart';
 import '../../widgets/tournament_timer_card.dart';
+import '../../widgets/poker_table_seating_visual.dart';
 
 /// Admin live dashboard mirroring the web `AdminDashboardPage`.
 class AdminDashboardScreen extends StatefulWidget {
@@ -4739,87 +4740,10 @@ class _TableCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final game = context.select<AppProvider, LiveGame?>((a) => a.currentGame);
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'Table $table',
-                style: AppTypography.bodySm.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              AppBadge(
-                label: '${players.length} players',
-                variant: AppBadgeVariant.accent,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: AppSpacing.sm,
-              crossAxisSpacing: AppSpacing.sm,
-              childAspectRatio: 1.4,
-            ),
-            itemCount: players.length,
-            itemBuilder: (context, i) {
-              final p = players[i];
-              final isDealer = game?.dealerPlayerId == p.id;
-              return Container(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                decoration: BoxDecoration(
-                  color: isDealer ? AppColors.primarySoft : AppColors.secondary,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(
-                    color: isDealer
-                        ? AppColors.primary.withValues(alpha: 0.5)
-                        : AppColors.border,
-                  ),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      isDealer ? 'Dealer · Seat ${p.seat}' : 'Seat ${p.seat}',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: isDealer
-                            ? AppColors.primary
-                            : AppColors.mutedForeground,
-                        fontWeight: isDealer ? FontWeight.w700 : null,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xxs),
-                    Text(
-                      p.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.bodySm.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    if (p.isGuest)
-                      Text(
-                        'Guest',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ],
-      ),
+    // DECISION: Render real visual poker table drawing with drag-and-drop between seats & tables (fixes Dani T4 / S3).
+    return PokerTableSeatingCard(
+      table: table,
+      players: players,
     );
   }
 }

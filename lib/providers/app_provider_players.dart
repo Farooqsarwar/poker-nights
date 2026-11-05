@@ -1690,6 +1690,75 @@ extension AppProviderPlayers on AppProvider {
     return null;
   }
 
+  // DECISION: Support visual drag-and-drop seat swapping between players (fixes Dani T4 / S3).
+  String? swapPlayerSeats(String player1Id, String player2Id) {
+    _forceClaimEditor();
+    if (!canGrantRebuys) return 'Not permitted to assign seats.';
+    final game = _currentGame;
+    if (game == null) return null;
+    final p1 = game.players.where((p) => p.id == player1Id).firstOrNull;
+    final p2 = game.players.where((p) => p.id == player2Id).firstOrNull;
+    if (p1 == null || p2 == null) return 'Player not found.';
+    _pushUndo();
+    _currentGame = game.copyWith(
+      players: game.players.map((p) {
+        if (p.id == p1.id) return p.copyWith(table: p2.table, seat: p2.seat);
+        if (p.id == p2.id) return p.copyWith(table: p1.table, seat: p1.seat);
+        return p;
+      }).toList(),
+      seatingConfirmed: false,
+    );
+    addAnnouncement('${p1.name} and ${p2.name} swapped seats.', true);
+    if (!_disposed) notifyListeners();
+    return null;
+  }
+
+  // DECISION: Support dragging a player to any table or seat (fixes Dani T4 / S3).
+  String? movePlayerToTableAndSeat(String playerId, int toTable, [int? toSeat]) {
+    _forceClaimEditor();
+    if (!canGrantRebuys) return 'Not permitted to assign seats.';
+    final game = _currentGame;
+    if (game == null) return null;
+    final player = game.players.where((p) => p.id == playerId).firstOrNull;
+    if (player == null) return 'Player not found.';
+    if (toTable < 1) return 'Choose a valid table.';
+
+    int targetSeat = toSeat ?? 1;
+    if (toSeat == null) {
+      final occupiedSeats = game.players
+          .where((p) => p.table == toTable && !p.eliminated)
+          .map((p) => p.seat)
+          .toSet();
+      while (occupiedSeats.contains(targetSeat)) {
+        targetSeat++;
+      }
+    } else {
+      final occupied = game.players.any(
+        (p) =>
+            p.id != playerId &&
+            p.table == toTable &&
+            p.seat == toSeat &&
+            !p.eliminated,
+      );
+      if (occupied) return 'That seat is already taken — choose another.';
+    }
+
+    _pushUndo();
+    _currentGame = game.copyWith(
+      players: game.players.map((p) {
+        if (p.id == playerId) return p.copyWith(table: toTable, seat: targetSeat);
+        return p;
+      }).toList(),
+      seatingConfirmed: false,
+    );
+    addAnnouncement(
+      '${player.name} moved to Table $toTable seat $targetSeat.',
+      true,
+    );
+    if (!_disposed) notifyListeners();
+    return null;
+  }
+
   /// Detects when tables differ by more than one active player and builds a
   /// recommendation for the administrator (checklist 13-015/13-016/13-017).
   SeatMoveRecommendation? _buildSeatMoveRecommendation() {

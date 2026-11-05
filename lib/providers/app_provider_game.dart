@@ -908,12 +908,44 @@ extension AppProviderGame on AppProvider {
     final game = _currentGame;
     if (game == null) return;
     final finalPrizes = previewSettlementPrizes(0);
+
+    // M7: Re-plan remaining levels from real chips if >15% difference from plan
+    final totalRebuys = game.players.fold<int>(0, (s, p) => s + p.rebuys + p.reEntries);
+    final addOnsGranted = game.players.where((p) => p.hasAddOn).length;
+    final actualChips = game.settings.players * game.structure.startingStack +
+        totalRebuys * game.structure.rebuyStack +
+        addOnsGranted * game.structure.addOnStack;
+
+    final updatedStructure = TournamentEngine.replanRemainingLevels(
+      structure: game.structure,
+      actualChips: actualChips,
+      rebuysCloseLevel: game.settings.rebuysCloseLevel,
+      anteEnabled: game.settings.anteEnabled,
+      anteStyle: game.settings.anteStyle,
+      chipSet: savedChipSets.firstOrNull?.chips ?? MockData.defaultChipSet,
+    );
+
+    // DECISION: M7 - Warn when average stack at close is < 30 BB
+    final activeCount = game.activePlayers.length;
+    final avgStack = activeCount > 0 ? actualChips / activeCount : 0.0;
+    final nextLevelIdx = game.settings.rebuysCloseLevel;
+    final bb = (nextLevelIdx < updatedStructure.levels.length)
+        ? updatedStructure.levels[nextLevelIdx].bb
+        : updatedStructure.levels.last.bb;
+    final avgStackBB = bb > 0 ? avgStack / bb : 0.0;
+    if (avgStackBB > 0 && avgStackBB < 30.0) {
+      addAuditRecord(
+        'warning',
+        'Average stack at rebuy close is under 30 BB (\${avgStackBB.toStringAsFixed(1)} BB).',
+      );
+    }
+
     _currentGame = game.copyWith(
       settlementConfirmed: true,
       addOnWindowClosed: true,
       settings: game.settings.copyWith(addOnOvertime: false),
       pendingGuests: const [],
-      structure: game.structure.copyWith(
+      structure: updatedStructure.copyWith(
         organizerAmount: finalPrizes.organizerAmount,
         prizePool: finalPrizes.prizePool,
         prizes: finalPrizes.prizes,

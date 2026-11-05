@@ -971,7 +971,11 @@ class TournamentStructure {
     this.paceOverByMins = 0,
     this.explain = const [],
     this.chipSetAssumedValues = false,
+    this.expectedTotalChips = 0,
   });
+
+  /// Total chips expected in play across all players, rebuys, and add-ons (Build Spec §8.3 / M7).
+  final int expectedTotalChips;
 
   /// The rebuy cutoff this structure was actually built around.
   ///
@@ -1262,6 +1266,7 @@ class TournamentStructure {
     bool? depthOk,
     bool? bankOk,
     List<BankShortfall>? bankShortfall,
+    int? expectedTotalChips,
     String? depthShortfallNote,
     int? maxPlayersSupported,
     PaceMode? pace,
@@ -1314,6 +1319,7 @@ class TournamentStructure {
       explain: explain ?? this.explain,
       chipSetAssumedValues:
           chipSetAssumedValues ?? this.chipSetAssumedValues,
+      expectedTotalChips: expectedTotalChips ?? this.expectedTotalChips,
     );
   }
 }

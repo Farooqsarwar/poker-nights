@@ -115,6 +115,19 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
     final estPrizePool =
         structure.prizePool +
         (settings.addOn ? totalAddOns * settings.effectiveAddOnCost : 0);
+
+    // DECISION: M7 - Compute average stack at close and warn if < 30 BB
+    final totalRebuysAtClose = game.players.fold<int>(0, (s, p) => s + p.rebuys + p.reEntries);
+    final totalAddOnsGranted = game.players.where((p) => p.hasAddOn).length + _addOnSelections.length;
+    final totalChipsAtClose = settings.players * structure.startingStack +
+        totalRebuysAtClose * structure.rebuyStack +
+        totalAddOnsGranted * structure.addOnStack;
+    final avgStackAtClose = activePlayers.isNotEmpty ? totalChipsAtClose / activePlayers.length : 0.0;
+    final nextLevelIdx = settings.rebuysCloseLevel;
+    final closeBB = (nextLevelIdx < structure.levels.length)
+        ? structure.levels[nextLevelIdx].bb
+        : (game.currentLevelData?.bb ?? structure.levels.first.bb);
+    final avgStackAtCloseBB = closeBB > 0 ? avgStackAtClose / closeBB : 0.0;
     // §25.4a is a strict sequence and each step is gated on the previous one's
     // submission: attendance fixes the field, the add-on step fixes
     // `totalAddOns`, and only then can §18's grossEligible — and so the prize
@@ -174,6 +187,14 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
             message:
                 'Rebuys are now closed. No new players may join after this point.',
           ),
+          if (avgStackAtCloseBB > 0 && avgStackAtCloseBB < 30) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppAlertBanner(
+              type: AppAlertType.warning,
+              message:
+                  'Average stack at close is under 30 BB (\${avgStackAtCloseBB.toStringAsFixed(1)} BB). The game may run fast or play shallow.',
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           // Spec C6. The break does not have to be played out, and the four
           // steps below are a sequence the host can be slow at — a table

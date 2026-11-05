@@ -3134,6 +3134,7 @@ class TournamentEngine {
       breaks: resolvedBreaks,
       styleNote: styleNote,
       rebuysCloseLevel: optimisedRebuyClose,
+      expectedTotalChips: expectedTotalChips.round(),
       startingStack: stack,
       chipPlan: chipPlan,
       rebuyStack: rebuyStack,
@@ -3680,6 +3681,87 @@ class TournamentEngine {
     }
     shortfall.sort((a, b) => b.value - a.value);
     return (ok: ok, shortfall: shortfall);
+  }
+
+  /// Spec M7: At the add-on break, re-plan the remaining levels from real chips
+  /// unless within 15% of plan.
+  static TournamentStructure replanRemainingLevels({
+    required TournamentStructure structure,
+    required int actualChips,
+    required int rebuysCloseLevel,
+    required bool anteEnabled,
+    required AnteStyle anteStyle,
+    required List<ChipColor> chipSet,
+  }) {
+    if (structure.expectedTotalChips <= 0) {
+      return structure;
+    }
+    final diff = (actualChips - structure.expectedTotalChips).abs();
+    final ratio = diff / structure.expectedTotalChips;
+    // DECISION: M7 - Only re-plan when real chips differ from plan by more than 15%.
+    if (ratio <= 0.15) {
+      return structure;
+    }
+
+    final endTargetK = anteEnabled ? kEndTargetKWithAnte : kEndTargetKNoAnte;
+    final targetFinalBB = actualChips / endTargetK;
+    final planned = structure.plannedLevels > 0 ? structure.plannedLevels : structure.levels.length;
+    final spares = math.max(0, structure.levels.length - planned);
+    final newBbEnd = spares > 0 ? targetFinalBB * math.pow(1.25, spares) : targetFinalBB;
+    final existingBB = structure.levels.map((l) => l.bb).toList();
+    if (existingBB.isEmpty) return structure;
+
+    final pins = <PinnedLevel>[];
+    for (var i = 0; i < rebuysCloseLevel && i < structure.levels.length; i++) {
+      pins.add(PinnedLevel(
+        levelNum: i + 1,
+        sb: structure.levels[i].sb,
+        bb: structure.levels[i].bb,
+      ));
+    }
+
+    final cmin = structure.chipPlan.isNotEmpty
+        ? structure.chipPlan.map((e) => e.value).reduce(math.min)
+        : 1;
+
+    final resolved = resolveAroundPins(
+      existingBB: existingBB,
+      cminOfLevel: List<int>.filled(existingBB.length, cmin),
+      pins: pins,
+      bbEnd: newBbEnd,
+    );
+
+    if (!resolved.feasible) return structure;
+
+    final sortedChips = List.of(chipSet)
+      ..sort((a, b) => a.value.compareTo(b.value));
+    final chipVals = sortedChips.map((c) => c.value).toList();
+
+    final newLevels = [
+      for (var i = 0; i < structure.levels.length; i++) () {
+        final orig = structure.levels[i];
+        if (i < rebuysCloseLevel) return orig;
+        final newSb = resolved.sbLadder[i];
+        final newBb = resolved.bbLadder[i];
+        int? newAnte = orig.ante;
+        if (orig.ante != null) {
+          newAnte = anteStyle == AnteStyle.individual
+              ? individualAnteValue(newBb, chipVals)
+              : newBb;
+        }
+        return orig.copyWith(
+          sb: newSb,
+          bb: newBb,
+          ante: newAnte,
+          clearAnte: newAnte == null,
+        );
+      }(),
+    ];
+
+    return structure.copyWith(
+      levels: newLevels,
+      expectedTotalChips: actualChips,
+    );
   }
 
   /// F2/F19 — regenerate a structure and re-solve it around host pins in one

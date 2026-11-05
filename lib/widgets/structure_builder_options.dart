@@ -166,7 +166,9 @@ class BuilderMoreOptions extends StatelessWidget {
     final showAddOn = c.rebuyNight && c.addOn;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-      child: ExpansionTile(
+      child: Material(
+        type: MaterialType.transparency,
+        child: ExpansionTile(
         key: const Key('more-options'),
         tilePadding: EdgeInsets.zero,
         title: Text('More options',
@@ -326,6 +328,7 @@ class BuilderMoreOptions extends StatelessWidget {
               ),
             ),
         ],
+      ),
       ),
     );
   }

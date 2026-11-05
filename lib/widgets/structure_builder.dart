@@ -157,6 +157,8 @@ class _InputsStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = builder.controller;
     final isCustom = c.customDepth;
+    // DECISION: Show actual calculated opening depth if available (fixes Dani B1 / M1).
+    final currentDepth = c.stackDepthBB?.round() ?? c.depthBB;
     return Column(
       key: const Key('builder-step-inputs'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -228,8 +230,8 @@ class _InputsStep extends StatelessWidget {
         _Section(
           label: 'Tournament type',
           hint: isCustom
-              ? 'Custom depth: ${c.depthBB} big blinds'
-              : '${c.depthBB} big blinds deep',
+              ? 'Custom depth: $currentDepth big blinds'
+              : '$currentDepth big blinds deep',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

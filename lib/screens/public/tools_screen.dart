@@ -1281,26 +1281,19 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
   }
 
   void _build() {
-    final structure = TournamentEngine.generate(
-      TournamentParams(
-        players: _players,
-        durationHours: _hours.toDouble(),
-        buyIn: 20,
-        chipSet:
-            widget.chipBankOverride ??
-            TournamentEngine.neverBindingBank(kToolChipSet, players: _players),
-        rebuys: true,
-        rebuysCloseLevel: 6,
-        reEntry: false,
-        addOn: true,
-        anteEnabled: false,
-        anteAfterLevel: 7,
-        anteStyle: AnteStyle.bigBlind,
-        koEnabled: false,
-        koAmount: 0,
-        organizerPct: 0,
-      ),
+    // DECISION: Unify standalone clock with StructureBuilderController (fixes Dani F1 / audit B9).
+    final controller = StructureBuilderController(
+      mode: BuilderMode.tool,
+      chipSet:
+          widget.chipBankOverride ??
+          TournamentEngine.neverBindingBank(kToolChipSet, players: _players),
+      syntheticBank: widget.chipBankOverride == null,
+      players: _players,
+      durationHours: _hours.toDouble(),
+      format: TournamentFormat.rebuy,
+      anteEnabled: false,
     );
+    final structure = controller.structure;
     // §F1.5 point 7: a night the box can't deal has only a placeholder ladder.
     // Don't build a clock from it — keep the setup view and show the card.
     if (structure.isBlocked) {

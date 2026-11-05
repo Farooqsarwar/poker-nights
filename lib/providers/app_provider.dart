@@ -689,7 +689,8 @@ class AppProvider extends ChangeNotifier {
   static const seedChipSet = (
     id: 'cs-default',
     name: 'Home Set (4 colour)',
-    chips: MockData.defaultChipSet,
+    // DECISION: Home Set (4 colour) must strictly contain 4 colours (fixes C1 contradictory count).
+    chips: MockData.homeSet4Colour,
   );
 
   final List<({String id, String name, List<ChipColor> chips})> _savedChipSets =
@@ -731,7 +732,7 @@ class AppProvider extends ChangeNotifier {
       anteAfterLevel: 3,
       organizerPct: 0,
       chipSetName: 'Home Set (4 colour)',
-      chipSet: List.of(MockData.defaultChipSet),
+      chipSet: List.of(MockData.homeSet4Colour),
     ),
     TournamentPreset(
       id: 'starter-deep',

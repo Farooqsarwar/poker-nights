@@ -609,10 +609,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
-                      onPressed: () => context.go(RoutePaths.tvMode),
+                      onPressed: () => context.push(RoutePaths.tvMode),
                       child: const AppIconLabel(
-                        label: 'TV',
-                        icon: Icons.tv_outlined,
+                        label: 'Cast',
+                        icon: Icons.cast,
                       ),
                     ),
                     AppButton(
@@ -1662,9 +1662,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   const SizedBox(width: 8),
                   _buildQuickToolButton(
-                    icon: Icons.tv_outlined,
-                    label: 'TV',
-                    onTap: () => context.go(RoutePaths.tvMode),
+                    icon: Icons.cast,
+                    label: 'Cast',
+                    onTap: () => context.push(RoutePaths.tvMode),
                   ),
                 ],
               ),
@@ -2553,9 +2553,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   },
                 ),
                 ListTile(
-                  leading: Icon(Icons.tv_outlined, color: AppColors.foreground),
+                  leading: Icon(Icons.cast, color: AppColors.foreground),
                   title: Text(
-                    'TV Mode',
+                    'Cast display',
                     style: TextStyle(color: AppColors.foreground),
                   ),
                   subtitle: Text(
@@ -2567,7 +2567,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   onTap: () {
                     Navigator.pop(ctx);
-                    context.go(RoutePaths.tvMode);
+                    context.push(RoutePaths.tvMode);
                   },
                 ),
                 ListTile(

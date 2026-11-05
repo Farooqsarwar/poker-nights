@@ -302,10 +302,10 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       AppButton(
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.ghost,
-                        onPressed: () => context.go(RoutePaths.tvMode),
+                        onPressed: () => context.push(RoutePaths.tvMode),
                         child: const AppIconLabel(
-                          label: 'TV Mode',
-                          icon: Icons.tv_outlined,
+                          label: 'Cast',
+                          icon: Icons.cast,
                         ),
                       ),
                       // Guests have no chat (Tech §3.3/§6.6 — audit fix C1).

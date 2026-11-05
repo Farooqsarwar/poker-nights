@@ -66,8 +66,10 @@ abstract final class ClockSequence {
     TournamentStructure structure, {
     bool includeRebuyPause = false,
     int rebuyPauseMins = 10,
+    bool importAllLevels = false,
   }) {
-    final levels = plannedLevels(structure);
+    // DECISION: Support importAllLevels for standalone clock (fixes Dani F2 / #30 - 17 levels, not 13).
+    final levels = importAllLevels ? structure.levels : plannedLevels(structure);
     final segments = <ClockSegment>[];
 
     for (final level in levels) {

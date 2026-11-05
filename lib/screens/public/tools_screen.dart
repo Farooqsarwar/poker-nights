@@ -81,17 +81,79 @@ const kToolChipSets = <String, List<ChipColor>>{
   ],
 };
 
+/// Next-step handoff bar pointing free tools to each other (§F2).
+class ToolNextStepBar extends StatelessWidget {
+  const ToolNextStepBar({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.primarySoft),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.foreground,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          AppButton(
+            size: AppButtonSize.sm,
+            onPressed: onTap,
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Shared chrome: a title, the tool, and one quiet line about the app.
 class _ToolScaffold extends StatelessWidget {
   const _ToolScaffold({
     required this.title,
     required this.blurb,
     required this.child,
+    this.nextStepBar,
   });
 
   final String title;
   final String blurb;
   final Widget child;
+  final Widget? nextStepBar;
 
   @override
   Widget build(BuildContext context) {
@@ -150,6 +212,10 @@ class _ToolScaffold extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xl),
             child,
+            if (nextStepBar != null) ...[
+              const SizedBox(height: AppSpacing.lg),
+              nextStepBar!,
+            ],
             const SizedBox(height: AppSpacing.xxl),
             // The soft prompt. One line, after the answer.
             AppCard(
@@ -519,6 +585,15 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
       blurb:
           'Set up the night, check the starting stack, then fine-tune any '
           'level. Nothing is saved.',
+      nextStepBar: _c.structure.isBlocked
+          ? null
+          : ToolNextStepBar(
+              title: 'Next step: Tournament Clock',
+              subtitle:
+                  'Play these exact ${_c.structure.levels.length} levels with zero truncation.',
+              actionLabel: 'Open Clock',
+              onTap: () => _offerClock(_c.structure),
+            ),
       child: StructureBuilder(
         controller: _c,
         confirmLabel: 'Use these blinds',
@@ -563,6 +638,12 @@ class _ToolPayoutsScreenState extends State<ToolPayoutsScreen> {
     return _ToolScaffold(
       title: 'Payout Calculator',
       blurb: 'Clean amounts that divide properly at a real table.',
+      nextStepBar: ToolNextStepBar(
+        title: 'Next step: Deal / Chop Calculator',
+        subtitle: 'Settle a final table deal with ICM equity calculation.',
+        actionLabel: 'Chop deal',
+        onTap: () => context.go(RoutePaths.toolIcm),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1258,7 +1339,7 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
 
   /// Puts [structure] on the clock, stopped at the top of level 1.
   void _loadStructure(TournamentStructure structure) {
-    final segments = ClockSequence.build(structure);
+    final segments = ClockSequence.build(structure, importAllLevels: true);
     _blocked = null;
     _structure = structure;
     _segments = segments;
@@ -1451,6 +1532,12 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
     return _ToolScaffold(
       title: 'Tournament Clock',
       blurb: 'A blind schedule and a countdown. Nothing else on the screen.',
+      nextStepBar: ToolNextStepBar(
+        title: 'Next step: Payout Calculator',
+        subtitle: 'Determine clean payout distributions for $_players players.',
+        actionLabel: 'Payouts',
+        onTap: () => context.go(RoutePaths.toolPayouts),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -22,7 +22,9 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_tabs.dart';
 import '../../widgets/app_toggle.dart';
+import '../../widgets/poll_card.dart';
 import '../../widgets/code_display.dart';
 import '../../widgets/rsvp_badge.dart';
 
@@ -36,6 +38,7 @@ class GroupScreen extends StatefulWidget {
 }
 
 class _GroupScreenState extends State<GroupScreen> {
+  String _activeTab = 'games';
   void _confirmLeaveGroup(BuildContext context) {
     final app = context.read<AppProvider>();
     final dialogInsets = appDialogInsets(context);
@@ -366,6 +369,24 @@ class _GroupScreenState extends State<GroupScreen> {
             ),
           ],
           const SizedBox(height: AppSpacing.lg),
+          // DECISION: Group hub tabs (Games vs Polls) per Dani P4.
+          AppTabs(
+            active: _activeTab,
+            onChanged: (id) => setState(() => _activeTab = id),
+            tabs: [
+              AppTabItem(
+                id: 'games',
+                label: 'Games',
+                count: upcomingGames.length,
+              ),
+              AppTabItem(
+                id: 'polls',
+                label: 'Polls',
+                count: group.polls.length,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
           // Games Section with count
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -388,7 +409,10 @@ class _GroupScreenState extends State<GroupScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          _buildGames(app, group, upcomingGames, isAdmin, user),
+          if (_activeTab == 'games')
+            _buildGames(app, group, upcomingGames, isAdmin, user)
+          else
+            _buildPollsTab(app, group, isAdmin, user),
         ],
       ),
     );
@@ -425,6 +449,61 @@ class _GroupScreenState extends State<GroupScreen> {
             user: user,
             onTap: () => _openGame(context, app, game),
           ),
+      ],
+    );
+  }
+
+  Widget _buildPollsTab(
+    AppProvider app,
+    Group group,
+    bool isAdmin,
+    AppUser? user,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Group polls',
+              style: TextStyle(
+                color: AppColors.foreground,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            AppButton(
+              size: AppButtonSize.sm,
+              onPressed: () => context.push(RoutePaths.polls),
+              child: const Text('+ Create poll'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (group.polls.isEmpty)
+          AppEmptyState(
+            icon: Icons.poll_outlined,
+            title: 'No polls yet',
+            description: 'Create a poll to help plan the next game.',
+            action: AppButton(
+              size: AppButtonSize.sm,
+              onPressed: () => context.push(RoutePaths.polls),
+              child: const Text('Create poll'),
+            ),
+          )
+        else
+          for (final poll in group.polls)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: PollCard(
+                poll: poll,
+                userId: user?.id,
+                isAdmin: isAdmin,
+                onVote: (opts) => app.votePoll(poll.id, opts),
+                onClose: () => app.closePoll(poll.id),
+              ),
+            ),
       ],
     );
   }
@@ -549,7 +628,7 @@ class _GroupScreenState extends State<GroupScreen> {
     var randomize = group.tableSettings.randomizeByDefault;
     showAppModal(
       context: context,
-      title: 'Table settings',
+      title: 'Group settings',
       child: StatefulBuilder(
         builder: (context, setState) => Column(
           mainAxisSize: MainAxisSize.min,
@@ -843,7 +922,7 @@ class _GroupActionChips extends StatelessWidget {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      'Table settings',
+                      'Group settings',
                       style: TextStyle(
                         color: AppColors.foreground,
                         fontSize: 12,

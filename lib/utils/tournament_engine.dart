@@ -2782,30 +2782,49 @@ class TournamentEngine {
     // up in the player's favour instead.
     final colorUpInstructions = <String>[];
     if (sortedChips.length >= 2) {
-      final planByValue = {for (final entry in chipPlan) entry.value: entry};
       for (var i = 0; i < sortedChips.length - 1; i++) {
         final chip = sortedChips[i];
         final next = sortedChips[i + 1];
-        // A zero-valued denomination would make the exchange ratio below
-        // divide by zero (Infinity, which `.ceil()` rejects).
         if (chip.value <= 0 || next.value <= 0) continue;
-        // Build Spec v3.1 §F1.7/§F1.18: the chip is played out once the BB
-        // reaches 4x the REPLACEMENT chip's value, not 20x the retiring
-        // chip's own value. The two coincide whenever the ladder happens to
-        // step in clean 5x jumps (5->25->500: 25*4 == 5*20 == 100), which
-        // is why this went unnoticed — but they diverge on any other jump,
-        // including this app's own "Home Set" preset (25->100 is only a 4x
-        // step): the old rule waited for BB>=500 to retire the 25s, the
-        // correct one retires them at BB>=400, a full level early.
-        final level = levels.indexWhere((l) => l.bb >= next.value * 4);
-        if (level < 0 || level == 0) continue;
-        final entry = planByValue[chip.value];
-        if (entry == null) continue;
-        final count = entry.count;
-        final newCount = ((count * chip.value) / next.value).ceil();
+
+        // A chip is retired only when no later blind or ante needs it (fixes Dani B2 / M5).
+        var retireLevelIdx = -1;
+        for (var l = 1; l < levels.length; l++) {
+          var neededLater = false;
+          for (var j = l; j < levels.length; j++) {
+            final lvl = levels[j];
+            if (lvl.sb % next.value != 0 ||
+                lvl.bb % next.value != 0 ||
+                ((lvl.ante ?? 0) > 0 && lvl.ante! % next.value != 0)) {
+              neededLater = true;
+              break;
+            }
+          }
+          if (!neededLater) {
+            retireLevelIdx = l;
+            break;
+          }
+        }
+
+        if (retireLevelIdx <= 0) continue;
+
+        int gcd(int a, int b) {
+          while (b != 0) {
+            final t = b;
+            b = a % b;
+            a = t;
+          }
+          return a;
+        }
+
+        final g = gcd(chip.value, next.value);
+        final fromCount = next.value ~/ g;
+        final toCount = chip.value ~/ g;
+
+        // DECISION: Color-up exchanges must multiply out exactly (fixes Dani B2 / M5).
         colorUpInstructions.add(
-          'Level ${levels[level].level}: exchange $count × ${chip.value} ${chip.color} '
-          'chips for $newCount × ${next.value} ${next.color}',
+          'Level ${levels[retireLevelIdx].level}: exchange $fromCount × ${chip.value} ${chip.color} '
+          'chips for $toCount × ${next.value} ${next.color}',
         );
       }
       if (colorUpInstructions.isNotEmpty) {

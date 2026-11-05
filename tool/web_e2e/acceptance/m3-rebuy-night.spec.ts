@@ -241,7 +241,13 @@ test('M3: rebuy night — close at L4, gated payouts, settlement reveal', async 
 async function startQuickGame(page: Page): Promise<void> {
   await openHome(page);
   await selectTestClub(page);
-  await tap(page, 'Start a game now', { exact: false, timeout: 40_000 });
+  if (await hasText(page, 'Start a game now')) {
+    await tap(page, 'Start a game now', { exact: false, timeout: 40_000 });
+  } else if (await hasText(page, 'Start game')) {
+    await tap(page, 'Start game', { exact: true, timeout: 40_000 });
+  } else {
+    await tap(page, 'New game', { exact: false, timeout: 40_000 });
+  }
   await expectText(page, 'Next: starting stack', 30_000);
 }
 

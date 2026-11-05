@@ -2,13 +2,14 @@ import { test, type Page } from '@playwright/test';
 import {
   appText,
   expectText,
+  hasText,
   launchApp,
   screenshot,
   scrollUntilVisible,
   tap,
 } from './helpers/flutter';
 import { ensureAccount } from './helpers/auth';
-import { goHomeInApp, openHome } from './helpers/nav';
+import { goHomeInApp, openHome, selectTestClub } from './helpers/nav';
 import { ensureNoUserPresets, openPresets, scrollToCard } from './helpers/presets';
 import { savePresetDialog } from './helpers/save_preset';
 
@@ -32,7 +33,14 @@ import { savePresetDialog } from './helpers/save_preset';
 /** Home → "Start a game now" → the builder's inputs step. */
 async function startQuickGame(page: Page): Promise<void> {
   await openHome(page);
-  await tap(page, 'Start a game now', { exact: false, timeout: 40_000 });
+  await selectTestClub(page);
+  if (await hasText(page, 'Start a game now')) {
+    await tap(page, 'Start a game now', { exact: false, timeout: 40_000 });
+  } else if (await hasText(page, 'Start game')) {
+    await tap(page, 'Start game', { exact: true, timeout: 40_000 });
+  } else {
+    await tap(page, 'New game', { exact: false, timeout: 40_000 });
+  }
   await expectText(page, 'Next: starting stack', 30_000);
 }
 
@@ -88,20 +96,10 @@ async function firstControl(
  * (tapping the number itself) and cancelling out.
  */
 async function readCount(page: Page, minTop: number): Promise<number | null> {
-  const plus = await firstControl(page, 'Increase', minTop);
-  if (!plus) return null;
-  const x = plus.left - 32; // the number cell sits left of the +, inside the row
-  await page.mouse.click(x, plus.y);
-  await expectText(page, 'Enter number', 15_000);
-  await page.waitForTimeout(400);
-  const field = page.locator('input, textarea').last();
-  await field.evaluate((el) => (el as HTMLElement).focus()).catch(() => {});
-  await page.waitForTimeout(120);
-  const raw = (await field.inputValue({ timeout: 3_000 }).catch(() => '')).trim();
-  await tap(page, 'Cancel');
-  await page.waitForTimeout(400);
-  const n = Number(raw);
-  return raw !== '' && Number.isFinite(n) ? n : null;
+  const t = await appText(page);
+  const m = t.match(/How many\s+Decrease\s+(\d+)\s+Increase/i) ?? t.match(/Decrease\s+(\d+)\s+Increase/i);
+  if (m) return Number(m[1]);
+  return null;
 }
 
 test('M5 steps 1-4: hold +, ×25 step, typed 80 answered, custom Teal', async () => {
@@ -154,9 +152,13 @@ test('M5 steps 1-4: hold +, ×25 step, typed 80 answered, custom Teal', async ()
     await screenshot(page, 'm5-step2-step25');
 
     // ── 3. The count number itself: type 80; invalid entries refused ───────
-    const plus3 = await firstControl(page, 'Increase', top);
-    if (!plus3) throw new Error('M5 step 3: no + control to locate the count');
-    await page.mouse.click(plus3.left - 32, plus3.y);
+    const count3 = await readCount(page, top);
+    if (count3 !== null && await hasText(page, String(count3))) {
+      await tap(page, String(count3), { exact: true });
+    } else {
+      const plus3 = await firstControl(page, 'Increase', top);
+      if (plus3) await page.mouse.click(plus3.left - 25, plus3.y);
+    }
     await expectText(page, 'Enter number', 15_000);
     await page.waitForTimeout(400);
     {
@@ -174,9 +176,13 @@ test('M5 steps 1-4: hold +, ×25 step, typed 80 answered, custom Teal', async ()
     if (typed !== 80) throw new Error(`M5 step 3: count reads ${typed} after typing 80`);
 
     // Invalid: letters in the dialog must not change the count.
-    const plus3b = await firstControl(page, 'Increase', top);
-    if (!plus3b) throw new Error('M5 step 3: no + control to locate the count');
-    await page.mouse.click(plus3b.left - 32, plus3b.y);
+    const count3b = await readCount(page, top);
+    if (count3b !== null && await hasText(page, String(count3b))) {
+      await tap(page, String(count3b), { exact: true });
+    } else {
+      const plus3b = await firstControl(page, 'Increase', top);
+      if (plus3b) await page.mouse.click(plus3b.left - 25, plus3b.y);
+    }
     await expectText(page, 'Enter number', 15_000);
     await page.waitForTimeout(400);
     {

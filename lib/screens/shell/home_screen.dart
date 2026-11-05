@@ -1480,8 +1480,12 @@ class _GameRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final going = game.goingCount;
-    return InkWell(
+    return Semantics(
+      button: true,
+      label: 'Open game ${game.settings.date}',
       onTap: onOpen,
+      child: InkWell(
+        onTap: onOpen,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
@@ -1565,6 +1569,7 @@ class _GameRow extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }

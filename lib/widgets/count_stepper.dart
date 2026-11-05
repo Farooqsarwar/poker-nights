@@ -130,19 +130,24 @@ class _CountStepperState extends State<CountStepper> {
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm,
                     ),
-                    child: InkWell(
+                    child: Semantics(
+                      button: true,
+                      label: '${widget.value}',
                       onTap: _enterNumber,
-                      borderRadius: BorderRadius.circular(AppRadius.xs),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text(
-                          widget.suffix == null
-                              ? '${widget.value}'
-                              : '${widget.value} ${widget.suffix}',
-                          textAlign: TextAlign.center,
-                          style: AppTypography.bodyStyle.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.foreground,
+                      child: InkWell(
+                        onTap: _enterNumber,
+                        borderRadius: BorderRadius.circular(AppRadius.xs),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Text(
+                            widget.suffix == null
+                                ? '${widget.value}'
+                                : '${widget.value} ${widget.suffix}',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.bodyStyle.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.foreground,
+                            ),
                           ),
                         ),
                       ),

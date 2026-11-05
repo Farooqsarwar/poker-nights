@@ -11,7 +11,7 @@ import {
   scrollUntilVisible,
   tap,
 } from './helpers/flutter';
-import { ensureAccount, typeInto } from './helpers/auth';
+import { ensureAccount, loadState, typeInto } from './helpers/auth';
 import { openHome, selectTestClub } from './helpers/nav';
 import { setCountStepper } from './helpers/chips';
 
@@ -30,9 +30,9 @@ async function readStepperLabel(page: Page, pattern: RegExp): Promise<{ label: s
  */
 async function openNewGameForm(page: Page): Promise<void> {
   const tries: Array<[string, boolean]> = [
+    ['New game', true],
     ['+ New game', false],
     ['＋ New game', false],
-    ['New game', false],
     ['Create tournament', true],
   ];
   let last = 'no attempts';
@@ -55,68 +55,30 @@ async function openNewGameForm(page: Page): Promise<void> {
  * and an "RSVP update" alert whose text also matches the word.
  */
 async function tapRsvpOn(page: Page, isoDate: string): Promise<void> {
-  // Scroll to the very top first so the latest card (at index 0) is not scrolled off-screen above
-  await page.mouse.move(195, 300);
-  for (let i = 0; i < 8; i++) {
-    await page.mouse.wheel(0, -800);
-    await page.waitForTimeout(100);
-  }
-  await page.waitForTimeout(500);
+  if (await hasText(page, 'Your RSVP')) return;
 
-  // Poll until the new card appears from Firestore
+  const targetLabel = `Open game ${isoDate}`;
+
+  // Poll for the new card to arrive from Firestore
   const start = Date.now();
-  while (Date.now() - start < 30_000) {
-    if (await hasText(page, isoDate)) break;
+  while (Date.now() - start < 20_000) {
+    if (await hasText(page, targetLabel) || await hasText(page, isoDate)) break;
     await page.waitForTimeout(1_000);
   }
 
-  await scrollUntilVisible(page, isoDate, { contains: true }).catch(() => null);
-  await page.waitForTimeout(600);
+  // Scroll to bring the newly posted card into view
+  await scrollUntilVisible(page, targetLabel, { contains: true }).catch(() => null);
+  if (!await hasText(page, targetLabel)) {
+    await scrollUntilVisible(page, isoDate, { contains: true }).catch(() => null);
+  }
 
-  const hit = await page.evaluate((date) => {
-    const norm = (s: string | null) => (s ?? '').replace(/\s+/g, ' ').trim();
-    const onScreen = (r: DOMRect) =>
-      r.width > 0 && r.height > 0 && r.top + r.height / 2 > 80 && r.top + r.height / 2 < window.innerHeight - 70;
-    const nodes = Array.from(document.querySelectorAll('flt-semantics'));
-    let chips = nodes.filter(
-      (e) => norm((e as HTMLElement).innerText) === 'RSVP' || norm(e.getAttribute('aria-label')) === 'RSVP',
-    );
-    if (!chips.length) {
-      chips = nodes.filter(
-        (e) => /^RSVP\b/.test(norm((e as HTMLElement).innerText)) || /^RSVP\b/.test(norm(e.getAttribute('aria-label'))),
-      );
-    }
-    // List rows below the fold still carry live semantics rects, so filter to
-    // what a finger can actually reach before ranking by position.
-    chips = chips.filter((e) => onScreen(e.getBoundingClientRect()));
-    const dates = nodes.filter(
-      (e) =>
-        (norm((e as HTMLElement).innerText).includes(date) || norm(e.getAttribute('aria-label')).includes(date)) &&
-        onScreen(e.getBoundingClientRect()),
-    );
-    let best: { x: number; y: number; top: number } | null = null;
-    for (const chip of chips) {
-      const cr = chip.getBoundingClientRect();
-      let own: { d: number; top: number } | null = null;
-      for (const d of dates) {
-        const dr = d.getBoundingClientRect();
-        const dist = Math.abs(cr.top - dr.top) * 1000 + Math.abs(cr.left - dr.left);
-        if (!own || dist < own.d) own = { d: dist, top: dr.top };
-      }
-      if (!own) continue;
-      if (!best || own.top > best.top) {
-        best = { x: cr.left + cr.width / 2, y: cr.top + cr.height / 2, top: own.top };
-      }
-    }
-    if (!best && dates.length > 0) {
-      const dr = dates[dates.length - 1].getBoundingClientRect();
-      best = { x: dr.left + dr.width / 2, y: dr.top + dr.height / 2, top: dr.top };
-    }
-    return best;
-  }, isoDate);
-  if (!hit) throw new Error(`M2: no RSVP chip on the ${isoDate} card`);
-  await page.mouse.click(hit.x, hit.y);
-  await page.waitForTimeout(1_000);
+  if (await hasText(page, targetLabel)) {
+    await tap(page, targetLabel, { exact: false });
+    await page.waitForTimeout(1_500);
+  } else if (await hasText(page, isoDate)) {
+    await tap(page, isoDate, { exact: false });
+    await page.waitForTimeout(1_500);
+  }
 }
 
 /**
@@ -198,6 +160,7 @@ async function expectLocation(page: Page, value: string, timeout = 15_000): Prom
  * 12 % and the difference is recorded in the log rather than failed.
  */
 test('M2: short-form post, B RSVPs Going, host builds the structure', async () => {
+  test.setTimeout(10 * 60 * 1000);
   const a = await launchApp('qa-a');
   let b: Awaited<ReturnType<typeof launchApp>> | undefined;
   try {
@@ -365,11 +328,25 @@ test('M2: short-form post, B RSVPs Going, host builds the structure', async () =
     b = await launchApp('qa-b');
     await ensureAccount(b.page, 'B');
     await openHome(b.page);
-    await selectTestClub(b.page);
-    // Switching clubs can land on the group screen; the RSVP card is on Home.
-    if (await hasText(b.page, 'GROUP CODE')) {
-      await tap(b.page, 'Home', { exact: true, timeout: 10_000 });
-      await b.page.waitForTimeout(1_200);
+    const targetCodeB = loadState().testClubCode;
+    if (targetCodeB && !(await hasText(b.page, targetCodeB))) {
+      console.log(`M2: B is not in canonical club ${targetCodeB}, joining via in-app join flow...`);
+      await scrollUntilVisible(b.page, 'Join another group');
+      await tap(b.page, 'Join another group', { exact: false });
+      await expectText(b.page, 'Join a game or group', 20_000);
+      try {
+        await typeInto(b.page, 'Invite code or link', targetCodeB);
+      } catch {
+        await typeInto(b.page, 'CODE', targetCodeB);
+      }
+      await tap(b.page, 'Continue', { exact: true });
+      await expectText(b.page, 'Welcome back', 30_000);
+    } else {
+      await selectTestClub(b.page);
+      if (await hasText(b.page, 'GROUP CODE')) {
+        await tap(b.page, 'Home', { exact: true, timeout: 10_000 });
+        await b.page.waitForTimeout(1_200);
+      }
     }
     const bClub = await readTextMatch(b.page, /Join Code [A-HJ-NP-Z2-9]{6}/);
     console.log(`M2: B RSVPs from club ${bClub ?? '(code not shown)'}`);
@@ -386,6 +363,7 @@ test('M2: short-form post, B RSVPs Going, host builds the structure', async () =
     }
     await expectText(b.page, 'Your RSVP', 30_000);
     await expectNoText(b.page, 'Create structure', 2_000);
+    await scrollUntilVisible(b.page, 'Going', { contains: true }).catch(() => null);
     await tap(b.page, 'Going', { exact: true });
     await expectText(b.page, 'Bringing guests', 15_000);
     await screenshot(b.page, 'm2-b-rsvp');

@@ -150,8 +150,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    try {
-      final app = context.watch<AppProvider>();
+    final app = context.watch<AppProvider>();
 
       // Spec §3.3: Only admin can run final table.
       if (!app.isAdmin) {
@@ -504,10 +503,6 @@ class _FinalTableScreenState extends State<FinalTableScreen> with SingleTickerPr
         ],
       ),
     );
-    } catch (e, stack) {
-      print('BUILD EXCEPTION: $e\n$stack');
-      rethrow;
-    }
   }
 }
 
@@ -729,8 +724,7 @@ class _FinalistLeaderboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    try {
-      final active = List<dynamic>.from(game.activePlayers);
+    final active = List<dynamic>.from(game.activePlayers);
       active.sort((dynamic a, dynamic b) => (b.stack ?? 0).compareTo(a.stack ?? 0) as int);
       final int rawBb = (game.structure.levels.isNotEmpty && game.currentLevel > 0 && game.currentLevel <= game.structure.levels.length)
           ? game.structure.levels[game.currentLevel - 1].bb
@@ -801,9 +795,5 @@ class _FinalistLeaderboard extends StatelessWidget {
         ],
       ),
     );
-    } catch (e, stack) {
-      print('LEADERBOARD EXCEPTION: $e\n$stack');
-      rethrow;
-    }
   }
 }

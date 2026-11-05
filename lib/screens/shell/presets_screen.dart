@@ -339,7 +339,10 @@ class _PresetsScreenState extends State<PresetsScreen> {
               Column(
                 children: [
                   for (final p in presets)
-                  AppCard(
+                  Semantics(
+                    button: true,
+                    label: '${p.name}\nBuy-in ${Formatters.prize(p.buyIn)} ${_hours(p.durationHours)}h ${p.format?.label ?? (p.reEntry ? "Re-entry" : p.rebuys ? "Rebuy" : "Freeze-out")} ${p.pace != null ? "${p.pace!.label} pace" : "Regular pace"} ${p.targetDepthBB ?? 100} BB deep ${p.rebuys ? "Rebuys" : "No rebuys"} ${p.addOn ? "Add-on" : "No add-on"} ${p.anteEnabled ? "Ante L${p.anteAfterLevel}+" : "No ante"} ${p.chipSetName} ${p.chipSet.map((c) => c.color).join(" ")} ${app.defaultGamePreset.id == p.id ? "DEFAULT" : ""}',
+                    child: AppCard(
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     margin: const EdgeInsets.only(bottom: AppSpacing.md),
                     child: Column(
@@ -496,6 +499,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                         ),
                       ],
                     ),
+                  ),
                   ),
               ],
             ),

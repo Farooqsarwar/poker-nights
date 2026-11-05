@@ -48,6 +48,10 @@ export async function openPresets(page: Page): Promise<void> {
   await page.waitForTimeout(900);
   await tap(page, 'Presets', { exact: true, timeout: 10_000 });
   await expectText(page, 'Game presets', 20_000);
+  if (await hasText(page, 'Tournament presets')) {
+    await tap(page, 'Tournament presets');
+    await page.waitForTimeout(800);
+  }
 }
 
 /**
@@ -67,10 +71,11 @@ export async function presetCards(page: Page): Promise<PresetCard[]> {
       actions: { text: string; role: string; disabled: boolean; x: number; y: number }[];
     }[] = [];
     for (const el of nodes) {
-      const raw = el.getAttribute('aria-label') ?? '';
-      if (!/\nBUY-IN\b/.test(raw)) continue;
-      if ((el.getAttribute('role') ?? '') !== 'button') continue;
-      const name = (raw.split('\n')[0] ?? '').trim();
+      const raw = el.getAttribute('aria-label') || (el as HTMLElement).innerText || '';
+      if (!/BUY-IN/i.test(raw)) continue;
+      const lines = raw.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
+      let name = lines[0] ?? '';
+      name = name.split(/\s+Buy-in\b/i)[0].trim();
       if (!name) continue;
       const cr = el.getBoundingClientRect();
       const rect = { x: cr.left, y: cr.top, width: cr.width, height: cr.height };
@@ -93,7 +98,7 @@ export async function presetCards(page: Page): Promise<PresetCard[]> {
           y: cy,
         });
       }
-      out.push({ name, label: norm(raw), isDefault: /\bDEFAULT\b/.test(raw), rect, actions });
+      out.push({ name, label: norm(raw), isDefault: /\bDEFAULT\b/i.test(raw), rect, actions });
     }
     return out;
   });

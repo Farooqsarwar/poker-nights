@@ -135,14 +135,14 @@ export async function enableSemantics(page: Page): Promise<void> {
  */
 export async function goto(page: Page, path: string): Promise<void> {
   let lastErr: unknown;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 5; attempt++) {
     try {
-      await page.goto(path, { waitUntil: 'domcontentloaded' });
+      await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await enableSemantics(page);
       return;
     } catch (e) {
       lastErr = e;
-      if (attempt < 3) await page.waitForTimeout(1200 * attempt);
+      if (attempt < 5) await page.waitForTimeout(2000 * attempt);
     }
   }
   throw lastErr;

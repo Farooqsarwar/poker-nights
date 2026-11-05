@@ -54,14 +54,18 @@ test('M1: quick game — every documented step', async () => {
   try {
     const { page } = app;
     await ensureAccount(page, 'A');
-    await selectTestClub(page);
     await setDefaultChipSet(page, 'Home 25');
     await openHome(page);
+    await selectTestClub(page);
 
     // ── Step 1 ───────────────────────────────────────────────────────────────
     // "Start a game now" opens the builder on its setup step, with no blind
     // levels yet.
-    await tap(page, 'Start a game now', { exact: false, timeout: 40_000 });
+    if (await hasText(page, 'Start a game now')) {
+      await tap(page, 'Start a game now', { exact: false, timeout: 40_000 });
+    } else {
+      await tap(page, 'New game', { exact: false, timeout: 40_000 });
+    }
     await expectText(page, 'Next: starting stack', 30_000);
     await expectNoText(page, 'minute levels', 3_000);
     await expectNoText(page, 'Approve stack', 1_500);

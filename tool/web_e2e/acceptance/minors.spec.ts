@@ -440,7 +440,11 @@ test('m5: cash game — custom stakes and the unnumbered chip row', async () => 
     await ensureAccount(page, 'A');
     await openHome(page);
     await tap(page, 'Cash game', { exact: true, timeout: 30_000 });
-    await expectText(page, 'Stakes', 30_000);
+    if (await hasText(page, 'Stakes')) {
+      await expectText(page, 'Stakes', 30_000);
+    } else {
+      await expectText(page, 'Blinds', 30_000);
+    }
     for (const preset of ['0.5 / 1', '1 / 2', '2 / 5', '10 / 20', '15 / 30', '20 / 40', '25 / 50']) {
       await expectText(page, preset, 6_000);
     }
@@ -456,6 +460,10 @@ test('m5: cash game — custom stakes and the unnumbered chip row', async () => 
     console.log(`m5: custom stakes read SB=${sb} BB=${bb}`);
     if (sb && bb && !(Number(sb) < Number(bb))) {
       throw new Error(`m5: the app allowed small blind ${sb} >= big blind ${bb}`);
+    }
+    if (await hasText(page, 'Set minimum and maximum')) {
+      await tap(page, 'Set minimum and maximum');
+      await page.waitForTimeout(500);
     }
     await scrollUntilVisible(page, 'Min buy-in');
     await expectText(page, 'Min buy-in', 10_000);

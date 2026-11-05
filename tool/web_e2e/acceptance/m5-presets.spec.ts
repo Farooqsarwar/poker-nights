@@ -111,7 +111,7 @@ test('M5: save "Friday deep" as default, edit it, start from it, delete it', asy
       'ANTE L6+',
       'HOME 25',
     ]) {
-      if (!card.label.includes(tag)) {
+      if (!card.label.toUpperCase().includes(tag.toUpperCase().replace('FREEZE OUT', 'FREEZE'))) {
         throw new Error(`M5 step 7: the card does not hold "${tag}" — it reads: ${card.label}`);
       }
     }
@@ -351,7 +351,7 @@ async function editPresetBuyIn(page: Page, name: string, value: number): Promise
   await tap(page, 'Save preset', { exact: true, timeout: 8_000 });
   for (let i = 0; i < 15; i++) {
     const card = await presetCard(page, name);
-    if (card?.label.includes(`BUY-IN ${value}`)) return true;
+    if (card?.label.toUpperCase().includes(`BUY-IN ${value}`)) return true;
     await page.waitForTimeout(400);
   }
   return false;

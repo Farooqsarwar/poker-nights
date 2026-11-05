@@ -310,6 +310,11 @@ class _CashGameScreenState extends State<CashGameScreen> {
                     'Standard set',
                     style: TextStyle(color: AppColors.foreground),
                   ),
+                  // DECISION: C1 - Show every chip value and count in the dialog
+                  subtitle: Text(
+                    MockData.defaultChipSet.map((c) => '${c.value} (${c.quantity})').join(', '),
+                    style: TextStyle(color: AppColors.mutedForeground, fontSize: 12),
+                  ),
                   trailing: _selectedChipSetId == null
                       ? Icon(Icons.check, color: AppColors.primary)
                       : null,
@@ -324,8 +329,13 @@ class _CashGameScreenState extends State<CashGameScreen> {
                 for (final set in app.savedChipSets)
                   ListTile(
                     title: Text(
-                      '${set.name} · ${set.chips.length} colours',
+                      set.name,
                       style: TextStyle(color: AppColors.foreground),
+                    ),
+                    // DECISION: C1 - Show every chip value and count in the dialog
+                    subtitle: Text(
+                      set.chips.map((c) => '${c.value} (${c.quantity})').join(', '),
+                      style: TextStyle(color: AppColors.mutedForeground, fontSize: 12),
                     ),
                     trailing: _selectedChipSetId == set.id
                         ? Icon(Icons.check, color: AppColors.primary)

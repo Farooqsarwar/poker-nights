@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:provider/provider.dart';
 
 import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/chip_color.dart';
 import '../models/chip_palette.dart';
+import '../providers/app_provider.dart';
+import '../utils/formatters.dart';
 import '../utils/tournament_engine.dart';
 import 'app_button.dart';
 import 'chip_palette_swatch.dart';
@@ -83,6 +86,9 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
     }
     return dupes;
   }
+
+  int get _totalCount => _chips.fold<int>(0, (sum, c) => sum + c.quantity);
+  int get _totalValue => _chips.fold<int>(0, (sum, c) => sum + c.value * c.quantity);
 
   void _emit() {
     _chips.sort((a, b) => a.value - b.value);
@@ -289,6 +295,39 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
               DropdownMenuItem(value: n, child: Text(n)),
           ],
         ),
+        const SizedBox(height: AppSpacing.sm),
+        // DECISION: B16 - Summary card displaying total chip count and total face value (using Wrap to prevent overflow on narrow screens)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: AppColors.secondary,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            runAlignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              Text(
+                '$_totalCount chips total',
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.foreground,
+                ),
+              ),
+              Text(
+                'Face value: ${Formatters.prize(_totalValue)}',
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.foreground,
+                ),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: AppSpacing.md),
         Text(
           'Set the value and how many chips of each colour you own. '
@@ -332,6 +371,21 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
           onPressed: _chips.length >= _values.length ? null : _addColor,
           child: const Text('Add a colour'),
         ),
+        const SizedBox(height: AppSpacing.sm),
+        // DECISION: B16 - "Save as preset" button inside the chip editor
+        AppButton(
+          variant: AppButtonVariant.secondary,
+          onPressed: () {
+            final app = context.read<AppProvider>();
+            final id = 'chipset-${DateTime.now().millisecondsSinceEpoch}';
+            final name = _name == 'Custom' ? 'Custom Preset (${_chips.length} colours)' : _name;
+            app.saveChipSet(id, name, List.of(_chips));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Chip set saved as "$name"')),
+            );
+          },
+          child: const Text('Save as preset'),
+        ),
       ],
     );
   }
@@ -369,38 +423,57 @@ class _ChipRow extends StatelessWidget {
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // The whole token is the tap target for re-colouring — on a phone a
-          // small swatch alone is under the 44px minimum.
-          InkWell(
-            onTap: onColor,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ChipToken(
-                      colorName: chip.color,
-                      hex: chip.colorValue,
-                      value: chip.value,
-                      count: chip.quantity,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Icon(
-                    Icons.palette_outlined,
-                    size: 18,
-                    color: AppColors.mutedForeground,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
+          // Top row: Token + Color picker tap target + Remove button
           Row(
             children: [
               Expanded(
+                child: InkWell(
+                  onTap: onColor,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ChipToken(
+                            colorName: chip.color,
+                            hex: chip.colorValue,
+                            value: chip.value,
+                            count: chip.quantity,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Icon(
+                          Icons.palette_outlined,
+                          size: 18,
+                          color: AppColors.mutedForeground,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (onRemove != null)
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Remove ${chip.color}',
+                  onPressed: onRemove,
+                  icon: Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // DECISION: B16 - Fixed width for Value dropdown and scaling Stepper to prevent vertical label wrapping
+          Row(
+            children: [
+              SizedBox(
+                width: 110,
                 child: AppSelect<int>(
                   label: 'Value',
                   value: values.contains(chip.value) ? chip.value : null,
@@ -414,40 +487,35 @@ class _ChipRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'How many',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'How many',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  CountStepper(
-                    value: chip.quantity,
-                    min: 1,
-                    max: 1000,
-                    step: 5,
-                    stepSizes: const [1, 5, 25, 100],
-                    semanticLabel: '${chip.color} chips owned',
-                    onChanged: onQuantity,
-                  ),
-                ],
-              ),
-              if (onRemove != null)
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Remove ${chip.color}',
-                  onPressed: onRemove,
-                  icon: Icon(
-                    Icons.delete_outline,
-                    size: 18,
-                    color: AppColors.mutedForeground,
-                  ),
+                    const SizedBox(height: AppSpacing.xs),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: CountStepper(
+                        value: chip.quantity,
+                        min: 1,
+                        max: 1000,
+                        step: 5,
+                        stepSizes: const [1, 5, 25, 100],
+                        semanticLabel: '${chip.color} chips owned',
+                        onChanged: onQuantity,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
             ],
           ),
         ],

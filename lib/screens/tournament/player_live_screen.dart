@@ -1499,6 +1499,7 @@ class LevelsTableCard extends StatelessWidget {
     super.key,
     required this.game,
     this.showRebuyNote = false,
+    this.onEditLevel,
   });
 
   final LiveGame game;
@@ -1507,6 +1508,9 @@ class LevelsTableCard extends StatelessWidget {
   /// rebuy-close control instead and must not also advertise a rule it is
   /// about to change.
   final bool showRebuyNote;
+
+  /// Optional edit callback for admin/host to edit a specific level (spec T5).
+  final void Function(BlindLevel level)? onEditLevel;
 
   @override
   Widget build(BuildContext context) {
@@ -1519,20 +1523,22 @@ class LevelsTableCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Table(
-            columnWidths: const {
-              0: FlexColumnWidth(1),
-              1: FlexColumnWidth(2.5),
-              2: FlexColumnWidth(1.5),
-              3: FlexColumnWidth(1.5),
+            columnWidths: {
+              0: const FlexColumnWidth(1),
+              1: const FlexColumnWidth(2.5),
+              2: const FlexColumnWidth(1.5),
+              3: const FlexColumnWidth(1.5),
+              if (onEditLevel != null) 4: const FixedColumnWidth(44),
             },
             defaultVerticalAlignment: TableCellVerticalAlignment.middle,
             children: [
-              const TableRow(
+              TableRow(
                 children: [
-                  _LevelsHeader('LVL'),
-                  _LevelsHeader('BLINDS'),
-                  _LevelsHeader('ANTE', alignEnd: true),
-                  _LevelsHeader('TIME', alignEnd: true),
+                  const _LevelsHeader('LVL'),
+                  const _LevelsHeader('BLINDS'),
+                  const _LevelsHeader('ANTE', alignEnd: true),
+                  const _LevelsHeader('TIME', alignEnd: true),
+                  if (onEditLevel != null) const _LevelsHeader(''),
                 ],
               ),
               for (final l in structure.levels) ...[
@@ -1652,6 +1658,22 @@ class LevelsTableCard extends StatelessWidget {
             ),
           ),
         ),
+        if (onEditLevel != null)
+          TableCell(
+            verticalAlignment: TableCellVerticalAlignment.middle,
+            child: Semantics(
+              button: true,
+              label: 'Edit Level ${l.level}',
+              child: IconButton(
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                color: AppColors.mutedForeground,
+                hoverColor: AppColors.primarySoft,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                onPressed: () => onEditLevel!(l),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -1701,6 +1723,7 @@ class LevelsTableCard extends StatelessWidget {
             ),
           ),
         ),
+        if (onEditLevel != null) const SizedBox.shrink(),
       ],
     );
   }

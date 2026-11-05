@@ -47,6 +47,7 @@ import '../../models/shot_clock.dart';
 import '../../widgets/squircle_icon_button.dart';
 import '../../widgets/tournament_timer_card.dart';
 import '../../widgets/poker_table_seating_visual.dart';
+import '../../widgets/dashboard_level_edit_dialog.dart';
 
 /// Admin live dashboard mirroring the web `AdminDashboardPage`.
 class AdminDashboardScreen extends StatefulWidget {
@@ -2038,7 +2039,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final endAt = endRebuysNowLevelFor(game: game, canRunGame: isAdmin);
     final closing = game.rebuysClosingArmed;
     return [
-      LevelsTableCard(game: game),
+      LevelsTableCard(
+        game: game,
+        onEditLevel: isAdmin
+            ? (l) => _showLevelEditDialog(context, app, game, l)
+            : null,
+      ),
       const SizedBox(height: AppSpacing.lg),
       if (game.settings.rebuys)
         AppCard(
@@ -3374,6 +3380,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         onCancel: (reason) {
           app.cancelGame(reason);
           Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+    void _showLevelEditDialog(
+    BuildContext context,
+    AppProvider app,
+    LiveGame game,
+    BlindLevel level,
+  ) {
+    showAppModal(
+      context: context,
+      title: 'Edit Level ${level.level}',
+      child: DashboardLevelEditDialog(
+        game: game,
+        level: level,
+        onApply: ({
+          required int sb,
+          required int bb,
+          int? ante,
+          required int durationMins,
+          required bool recalculateAfter,
+        }) {
+          app.editSingleDashboardLevel(
+            levelNumber: level.level,
+            sb: sb,
+            bb: bb,
+            ante: ante,
+            durationMins: durationMins,
+            recalculateAfter: recalculateAfter,
+          );
         },
       ),
     );

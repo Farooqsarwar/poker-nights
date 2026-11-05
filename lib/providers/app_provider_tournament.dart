@@ -1884,6 +1884,92 @@ extension AppProviderTournament on AppProvider {
     addAnnouncement('Level structure updated by host.', false);
   }
 
+  // DECISION: Support pen on every dashboard level with "this level only" or "recalculate after this" (fixes Dani T5 / S4).
+  void editSingleDashboardLevel({
+    required int levelNumber,
+    required int sb,
+    required int bb,
+    int? ante,
+    required int durationMins,
+    required bool recalculateAfter,
+  }) {
+    final game = _currentGame;
+    if (game == null || !canEditStructure) return;
+    if (sb <= 0 || bb <= sb) return;
+
+    _pushUndo();
+    final allLevels = [...game.structure.levels];
+    final idx = allLevels.indexWhere((l) => l.level == levelNumber);
+    if (idx < 0) return;
+
+    final editedLevel = allLevels[idx].copyWith(
+      sb: sb,
+      bb: bb,
+      ante: ante,
+      durationMins: durationMins,
+      manuallyEdited: true,
+    );
+
+    if (!recalculateAfter) {
+      // "This level only": update only this level
+      allLevels[idx] = editedLevel;
+    } else {
+      // "Recalculate after this":
+      // Levels before this level (0..idx-1) remain untouched!
+      allLevels[idx] = editedLevel;
+
+      final minChip = game.structure.chipPlan.isNotEmpty
+          ? game.structure.chipPlan.first.value
+          : 25;
+
+      int curBB = bb;
+      for (var i = idx + 1; i < allLevels.length; i++) {
+        final stepMultiplier = 1.35;
+        var nextBB = ((curBB * stepMultiplier) / minChip).round() * minChip;
+        if (nextBB <= curBB) {
+          nextBB = curBB + minChip;
+        }
+        var nextSB = nextBB ~/ 2;
+        if (nextSB % minChip != 0) {
+          nextSB = ((nextSB / minChip).round() * minChip).clamp(minChip, nextBB);
+        }
+        if (nextSB >= nextBB) {
+          nextSB = nextBB - minChip;
+        }
+
+        int? nextAnte;
+        if (ante != null || allLevels[i].ante != null) {
+          if (game.settings.anteStyle == AnteStyle.individual) {
+            nextAnte = (nextBB * 0.5).round();
+          } else {
+            nextAnte = nextBB;
+          }
+        }
+
+        allLevels[i] = allLevels[i].copyWith(
+          sb: nextSB,
+          bb: nextBB,
+          ante: nextAnte,
+          manuallyEdited: true,
+        );
+        curBB = nextBB;
+      }
+    }
+
+    _currentGame = game.copyWith(
+      structure: _structureWithLevels(game.structure, allLevels),
+      secondsRemaining: (levelNumber == game.currentLevel && game.secondsRemaining > durationMins * 60)
+          ? durationMins * 60
+          : game.secondsRemaining,
+    );
+    addAuditRecord(
+      'level_edited',
+      'Level $levelNumber edited (${recalculateAfter ? "recalculated following" : "this level only"})',
+    );
+    addAnnouncement('Level $levelNumber updated by host.', false);
+    if (!_disposed) notifyListeners();
+  }
+
   /// Inserts one intermediate future level directly after [afterLevel]
   /// (Tech Spec §8.6 permitted slow-down action; User Flow §4.14 "An
   /// intermediate future blind level may be inserted"). Subsequent levels are

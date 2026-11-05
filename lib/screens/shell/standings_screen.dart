@@ -243,6 +243,8 @@ class _StandingsScreenState extends State<StandingsScreen> {
               onFormula: (f) => setState(() => _formula = f),
               standings: _season(app, nights, imported, year),
               explanation: _explanation,
+              lastGame: nights.isNotEmpty ? nights.last : null,
+              customPoints: _customPoints,
             ),
           ),
           if (app.isAdmin) ...[
@@ -339,12 +341,16 @@ class _SeasonBlock extends StatelessWidget {
     required this.onFormula,
     required this.standings,
     required this.explanation,
+    this.lastGame,
+    this.customPoints = const [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
   });
 
   final SeasonFormula formula;
   final ValueChanged<SeasonFormula> onFormula;
   final List<SeasonStanding> standings;
   final String explanation;
+  final LiveGame? lastGame;
+  final List<int> customPoints;
 
   @override
   Widget build(BuildContext context) {
@@ -420,14 +426,106 @@ class _SeasonBlock extends StatelessWidget {
             ),
           ),
         const SizedBox(height: AppSpacing.md),
-        Text(
-          explanation,
-          style: AppTypography.bodyXs.copyWith(
-            color: AppColors.mutedForeground,
-            height: 1.4,
-          ),
-        ),
+
+        // DECISION: "How points work" panel with formula and example from last game (spec T15 / S6).
+        _buildHowPointsWorkPanel(),
       ],
+    );
+  }
+
+  Widget _buildHowPointsWorkPanel() {
+    final field = lastGame != null && lastGame!.finishOrder.isNotEmpty
+        ? lastGame!.finishOrder.length
+        : 8;
+    final gameTitle = lastGame != null
+        ? '${lastGame!.settings.name} ($field players)'
+        : 'Example ($field-player tournament)';
+
+    final p1 = PayoutsEngine.seasonPoints(field, 1, formula: formula, custom: customPoints);
+    final p2 = PayoutsEngine.seasonPoints(field, 2, formula: formula, custom: customPoints);
+    final p3 = PayoutsEngine.seasonPoints(field, 3, formula: formula, custom: customPoints);
+    final pLast = PayoutsEngine.seasonPoints(field, field, formula: formula, custom: customPoints);
+
+    String winnerName = 'Winner';
+    String runnerUpName = '2nd place';
+    if (lastGame != null && lastGame!.finishOrder.isNotEmpty) {
+      final wId = lastGame!.finishOrder.first;
+      winnerName = lastGame!.players.where((p) => p.id == wId).firstOrNull?.name ?? 'Winner';
+      if (lastGame!.finishOrder.length >= 2) {
+        final rId = lastGame!.finishOrder[1];
+        runnerUpName = lastGame!.players.where((p) => p.id == rId).firstOrNull?.name ?? '2nd place';
+      }
+    }
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline, size: 16, color: AppColors.primary),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                'How points work',
+                style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            explanation,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          const Divider(height: 1),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Example from last game: $gameTitle',
+            style: AppTypography.bodyXs.copyWith(
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '1st ($winnerName): $p1 pts',
+                  style: AppTypography.monoXs,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  '2nd ($runnerUpName): $p2 pts',
+                  style: AppTypography.monoXs,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '3rd place: $p3 pts',
+                  style: AppTypography.monoXs,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  'Last place ($field): $pLast pts',
+                  style: AppTypography.monoXs,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

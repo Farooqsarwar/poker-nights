@@ -309,8 +309,15 @@ class _PresetsScreenState extends State<PresetsScreen> {
                   children: [
                     Icon(Icons.casino_outlined, size: 20, color: AppColors.primary),
                     const SizedBox(width: AppSpacing.sm),
-                    Text(name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
-                    const Spacer(),
+                    Expanded(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
                     Text(
                       '${_chipsFor(app, name).length} denominations',
                       style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),

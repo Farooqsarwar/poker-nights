@@ -6,8 +6,6 @@ import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/live_game.dart';
 import '../models/tournament.dart';
-import '../models/tournament_format.dart';
-import '../providers/app_provider.dart';
 import '../utils/formatters.dart';
 import 'app_button.dart';
 import 'app_text_field.dart';
@@ -196,7 +194,7 @@ class _DashboardLevelEditDialogState extends State<DashboardLevelEditDialog> {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     DropdownButtonFormField<int>(
-                      value: _durationMins,
+                      initialValue: _durationMins,
                       dropdownColor: AppColors.card,
                       decoration: InputDecoration(
                         filled: true,

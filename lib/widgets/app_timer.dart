@@ -171,7 +171,7 @@ class _TimerDigit extends StatelessWidget {
             alignment: Alignment.center,
             children: <Widget>[
               ...previousChildren,
-              if (currentChild != null) currentChild,
+              ?currentChild,
             ],
           );
         },

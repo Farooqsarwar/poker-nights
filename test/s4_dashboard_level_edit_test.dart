@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/chip_color.dart';
-import 'package:poker_night/models/game.dart';
 import 'package:poker_night/models/group.dart';
 import 'package:poker_night/models/live_game.dart';
 import 'package:poker_night/models/tournament.dart';
@@ -9,8 +8,6 @@ import 'package:poker_night/models/user.dart';
 import 'package:poker_night/providers/app_provider.dart';
 import 'package:poker_night/services/recovery_service.dart';
 import 'package:poker_night/screens/tournament/player_live_screen.dart';
-import 'package:poker_night/widgets/dashboard_level_edit_dialog.dart';
-import 'package:provider/provider.dart';
 
 const _chips = [
   ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 25, quantity: 100),

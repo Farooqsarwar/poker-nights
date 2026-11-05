@@ -29,6 +29,7 @@ import '../../widgets/chip_token.dart';
 import '../../services/entitlements.dart';
 import '../../widgets/app_tag.dart';
 import '../../widgets/premium_gate.dart';
+import '../../widgets/app_tabs.dart';
 
 /// Tournament preset manager (checklist §9.1): create, edit, delete and use
 /// saved tournament templates. Presets store inputs only — the blind structure
@@ -41,6 +42,9 @@ class PresetsScreen extends StatefulWidget {
 }
 
 class _PresetsScreenState extends State<PresetsScreen> {
+  // DECISION: Presets hub organized strictly in order: chip stacks -> tournament presets -> tournament styles (spec P1, P3 / S5).
+  String _activeTab = 'stacks';
+
   void _editPreset(AppProvider app, TournamentPreset? preset) {
     // D4: 3 saved templates free, unlimited on Premium. Editing/using an
     // existing preset is never capped — only creating a new one past the
@@ -247,17 +251,87 @@ class _PresetsScreenState extends State<PresetsScreen> {
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.md),
+          AppTabs(
+            tabs: const [
+              AppTabItem(id: 'stacks', label: 'Chip stacks'),
+              AppTabItem(id: 'presets', label: 'Tournament presets'),
+              AppTabItem(id: 'styles', label: 'Tournament styles'),
+            ],
+            active: _activeTab,
+            onChanged: (tab) => setState(() => _activeTab = tab),
+          ),
           const SizedBox(height: AppSpacing.lg),
-          if (presets.isEmpty)
-            const AppEmptyState(
-              icon: Icons.list_alt_outlined,
-              title: 'No presets yet',
-              description: 'Save a tournament configuration to reuse it later.',
-            )
-          else
-            Column(
-              children: [
-                for (final p in presets)
+
+          // 1. CHIP STACKS SECTION (P1/P3)
+          if (_activeTab == 'stacks') ...[
+            Text(
+              'Starting chip stacks',
+              style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Playable starting stack configurations calibrated for tournament depth.',
+              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _buildStackCard(
+              title: 'Standard stack (100 BB)',
+              depth: '100 big blinds',
+              blurb: '1,000 chips at 5/10 blinds. The recommended default for home tournaments.',
+              badge: 'RECOMMENDED',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _buildStackCard(
+              title: 'Deep stack (150 BB)',
+              depth: '150 big blinds',
+              blurb: '1,500 chips at 5/10 blinds. Deeper play with extra room for post-flop strategy.',
+              badge: 'DEEP',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _buildStackCard(
+              title: 'Turbo stack (50 BB)',
+              depth: '50 big blinds',
+              blurb: '500 chips at 5/10 blinds. Fast-paced action for quicker games.',
+              badge: 'TURBO',
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Available chip sets',
+              style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            for (final name in _chipSetNames(app))
+              AppCard(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Row(
+                  children: [
+                    Icon(Icons.casino_outlined, size: 20, color: AppColors.primary),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    Text(
+                      '${_chipsFor(app, name).length} denominations',
+                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+
+          // 2. GENERAL TOURNAMENT PRESETS (P1/P3)
+          if (_activeTab == 'presets') ...[
+            if (presets.isEmpty)
+              const AppEmptyState(
+                icon: Icons.list_alt_outlined,
+                title: 'No presets yet',
+                description: 'Save a tournament configuration to reuse it later.',
+              )
+            else
+              Column(
+                children: [
+                  for (final p in presets)
                   AppCard(
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     margin: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -418,6 +492,131 @@ class _PresetsScreenState extends State<PresetsScreen> {
                   ),
               ],
             ),
+          ],
+
+          // 3. TOURNAMENT STYLES (P1/P3)
+          if (_activeTab == 'styles') ...[
+            Text(
+              'Tournament styles & formats',
+              style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Structure templates based on standard tournament formats.',
+              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _buildStyleCard(
+              title: 'Freezeout',
+              blurb: 'Single buy-in, single stack, no rebuys. When a player loses their chips they are out.',
+              format: TournamentFormat.freezeOut,
+              app: app,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _buildStyleCard(
+              title: 'Rebuy & Add-on',
+              blurb: 'Unlimited rebuys through rebuy close, followed by an optional add-on during the break.',
+              format: TournamentFormat.rebuy,
+              app: app,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _buildStyleCard(
+              title: 'Knockout / Bounty',
+              blurb: 'A portion of each buy-in forms a direct bounty awarded to the eliminator.',
+              format: TournamentFormat.freezeOut, isBounty: true,
+              app: app,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _buildStyleCard(
+              title: 'Shootout',
+              blurb: 'Multi-table play where each table plays down to 1 winner before the final table.',
+              format: TournamentFormat.shootout,
+              app: app,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStackCard({
+    required String title,
+    required String depth,
+    required String blurb,
+    required String badge,
+  }) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(AppRadius.xs),
+            ),
+            child: Text(
+              badge,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primaryText,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(blurb, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStyleCard({
+    required String title,
+    required String blurb,
+    required TournamentFormat format,
+    bool isBounty = false,
+    required AppProvider app,
+  }) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.military_tech_outlined, size: 22, color: AppColors.primary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(blurb, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              final draft = app.defaultGamePreset.copyWith(
+                name: title,
+                format: format,
+                rebuys: format == TournamentFormat.rebuy,
+                koEnabled: isBounty,
+              );
+              _editPreset(app, draft);
+            },
+            child: const Text('Use style'),
+          ),
         ],
       ),
     );

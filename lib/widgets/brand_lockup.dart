@@ -31,12 +31,15 @@ class PokerNightLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Theme.of(context);
-    return Image.asset(
-      brandLogoAssetPath(),
-      width: size,
-      height: size,
-      color: color,
-      fit: BoxFit.contain,
+    // DECISION: G2/S1 - Round vector mark with no square edges
+    return ClipOval(
+      child: Image.asset(
+        brandLogoAssetPath(),
+        width: size,
+        height: size,
+        color: color,
+        fit: BoxFit.contain,
+      ),
     );
   }
 }

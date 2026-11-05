@@ -156,46 +156,48 @@ class _TimerDigit extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    // DECISION: T2/S2 - Short crossfade, tabular fixed-width digits, respect reduce-motion without ghosting
     return Container(
       margin: EdgeInsets.symmetric(horizontal: isColon ? size * 0.05 : 0),
       width: isColon ? null : size * 0.6,
       alignment: Alignment.center,
       child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        switchInCurve: Curves.easeOutBack,
+        duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 150),
+        switchInCurve: Curves.easeOut,
         switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, animation) {
-          final isNew = child.key == ValueKey(char);
-          return ClipRect(
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: isNew ? const Offset(0, -1) : const Offset(0, 1),
-                end: Offset.zero,
-              ).animate(animation),
-              child: FadeTransition(opacity: animation, child: child),
-            ),
+        layoutBuilder: (currentChild, previousChildren) {
+          return Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              ...previousChildren,
+              if (currentChild != null) currentChild,
+            ],
           );
+        },
+        transitionBuilder: (child, animation) {
+          return FadeTransition(opacity: animation, child: child);
         },
         child: Text(
           char,
           key: ValueKey<String>(char),
-          style:
-              AppTypography.mono(
-                size: size,
-                weight: FontWeight.w400,
-                color: color,
-                height: 1,
-              ).copyWith(
-                letterSpacing: size * -0.05,
-                shadows: glow
-                    ? [
-                        Shadow(
-                          color: color.withValues(alpha: 0.5),
-                          blurRadius: 8,
-                        ),
-                      ]
-                    : null,
-              ),
+          style: AppTypography.mono(
+            size: size,
+            weight: FontWeight.w400,
+            color: color,
+            height: 1,
+          ).copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
+            letterSpacing: size * -0.05,
+            shadows: glow
+                ? [
+                    Shadow(
+                      color: color.withValues(alpha: 0.5),
+                      blurRadius: 8,
+                    ),
+                  ]
+                : null,
+          ),
         ),
       ),
     );

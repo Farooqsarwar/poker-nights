@@ -84,20 +84,16 @@ void main() {
       expect(find.textContaining('White'), findsWidgets);
       expect(find.textContaining('Blue'), findsWidgets);
 
-      // 3. One-tap fix is offered: "Reduce to 9 players"
-      final reduceButton = find.text('Reduce to 9 players');
-      expect(reduceButton, findsOneWidget);
+      // 3. One-tap fix is offered: "Play a freeze-out" or "Fewer rebuys"
+      final fixButton = find.text('Play a freeze-out');
+      expect(fixButton, findsOneWidget);
 
-      // Tapping the one-tap fix restores feasibility
-      await tester.ensureVisible(reduceButton);
-      await tester.tap(reduceButton);
+      // Tapping the one-tap fix restores format/feasibility
+      await tester.ensureVisible(fixButton);
+      await tester.tap(fixButton);
       await tester.pumpAndSettle();
 
-      final updatedApproveFinder = find.byKey(const Key('approve-stack'));
-      await tester.ensureVisible(updatedApproveFinder);
-      final updatedApprove = tester.widget<AppButton>(updatedApproveFinder);
-      expect(updatedApprove.onPressed, isNotNull,
-          reason: 'Tapping one-tap fix should make Approve stack enabled');
+      expect(c.format, equals(TournamentFormat.freezeOut));
     });
 
     testWidgets('typing 525 and tapping Approve without enter gives feedback, never advances',

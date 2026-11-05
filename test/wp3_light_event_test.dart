@@ -57,7 +57,7 @@ Group _group({int members = 7}) => Group(
 
 GameSettings _settings({List<ChipColor> chips = const []}) => GameSettings(
   name: 'Poker Night',
-  date: '2026-10-20',
+  date: '2026-12-20',
   time: '20:00',
   location: 'The den',
   players: 3,

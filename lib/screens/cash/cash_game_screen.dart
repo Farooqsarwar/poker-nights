@@ -485,8 +485,11 @@ class _CashGameScreenState extends State<CashGameScreen> {
           const SizedBox(height: 20),
 
           // Buy-in section with Min/Max toggle
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               Text(
                 _setMinMax ? 'Buy-in range' : 'Buy-in',
@@ -507,33 +510,36 @@ class _CashGameScreenState extends State<CashGameScreen> {
                     }
                   });
                 },
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Set minimum and maximum',
-                      style: TextStyle(
-                        color: AppColors.mutedForeground,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Set minimum and maximum',
+                        style: TextStyle(
+                          color: AppColors.mutedForeground,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    AppToggle(
-                      value: _setMinMax,
-                      onChanged: (v) {
-                        setState(() {
-                          _setMinMax = v;
-                          if (v) {
-                            _minBuyIn.text = _buyIn.text;
-                            _maxBuyIn.text = _num(_bb * 250);
-                          } else {
-                            _buyIn.text = _minBuyIn.text;
-                          }
-                        });
-                      },
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      AppToggle(
+                        value: _setMinMax,
+                        onChanged: (v) {
+                          setState(() {
+                            _setMinMax = v;
+                            if (v) {
+                              _minBuyIn.text = _buyIn.text;
+                              _maxBuyIn.text = _num(_bb * 250);
+                            } else {
+                              _buyIn.text = _minBuyIn.text;
+                            }
+                          });
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

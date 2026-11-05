@@ -253,12 +253,12 @@ void main() {
 
     expect(find.text('New cash game'), findsOneWidget);
     expect(find.text('CASH GAME'), findsOneWidget);
-    expect(find.text('Stakes'), findsOneWidget);
+    expect(find.text('Blinds'), findsOneWidget);
     expect(find.text('0.5 / 1'), findsOneWidget);
     expect(find.text('1 / 2'), findsOneWidget);
     expect(find.text('2 / 5'), findsOneWidget);
-    expect(find.text('Min buy-in'), findsOneWidget);
-    expect(find.text('Max buy-in'), findsOneWidget);
+    expect(find.text('Buy-in'), findsOneWidget);
+    // Min/Max appears when toggled
     expect(find.text('Chip set'), findsOneWidget);
     expect(find.text('Track settlement'), findsOneWidget);
     expect(find.text('Start session'), findsOneWidget);
@@ -287,7 +287,7 @@ void main() {
     await mountScreen(tester, const CashGameLiveScreen());
 
     expect(find.text('Cash session'), findsOneWidget);
-    expect(find.text('LIVE · 1 / 2'), findsOneWidget);
+    expect(find.text('BLINDS · 1 / 2'), findsOneWidget);
     expect(find.text('players'), findsOneWidget);
     expect(find.text('in play'), findsOneWidget);
     expect(find.text('elapsed'), findsOneWidget);

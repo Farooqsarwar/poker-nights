@@ -319,8 +319,7 @@ class GameSettings {
   int get effectiveOrganizerPct => organizerPct.clamp(0, maxOrganizerPct);
 
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
-  // DECISION: Default add-on cost is half the buy-in (fixes Dani B15 / M4).
-  int get effectiveAddOnCost => addOnCost ?? (buyIn / 2).round();
+  int get effectiveAddOnCost => addOnCost ?? buyIn;
 
   /// §C1 step 1. The KO bounty's domain: 5–50 in steps of 5, default 5. The
   /// stepper in the creation wizard is held to it; a stored figure is not

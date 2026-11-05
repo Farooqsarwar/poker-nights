@@ -51,8 +51,7 @@ extension AppProviderPlayers on AppProvider {
           active: false,
           eliminationPos: pos,
           eliminatedAtLevel: _currentGame!.currentLevel,
-          table: 0,
-          seat: 0,
+          // DECISION: Preserve table and seat on elimination so rebuy keeps the seat (fixes Dani B3 / M4).
         );
       }
       var next = p;
@@ -225,7 +224,8 @@ extension AppProviderPlayers on AppProvider {
     if (rev == null) return; // replayed action — already applied
     if (!game.settings.rebuys || game.rebuysClosed) return;
     final player = game.players.where((p) => p.id == playerId).firstOrNull;
-    if (player == null || !player.eliminated) return;
+    // DECISION: Allow rebuy on active or eliminated player; keeps seat (fixes Dani B3, B4, M4).
+    if (player == null) return;
     final rebuyLimit = game.settings.rebuyLimit;
     if (rebuyLimit != null && player.rebuys >= rebuyLimit) {
       lastRsvpError = '${player.name} has already used their $rebuyLimit '

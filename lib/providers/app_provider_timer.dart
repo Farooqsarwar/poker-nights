@@ -594,33 +594,6 @@ extension AppProviderTimer on AppProvider {
     // then advances into the next level. Without this the breaks were
     // configured, stored and counted in the duration but never actually
     // happened.
-    final scheduled = _currentGame!.structure.breakAfter(
-      _currentGame!.currentLevel,
-    );
-    if (scheduled != null &&
-        _currentGame!.status != LiveGameStatus.onBreak &&
-        next <= _currentGame!.structure.levels.length) {
-      _currentGame = _currentGame!.copyWith(
-        status: LiveGameStatus.onBreak,
-        timerRunning: true,
-        secondsRemaining: scheduled.durationMins * 60,
-        levelEndTime: _serverNow.add(Duration(minutes: scheduled.durationMins)),
-        speedRecommendation: null,
-        clearSpeedRecommendation: true,
-        revision: rev,
-        lastIdempotencyKey: idemKey,
-      );
-      addAnnouncement('Break — ${scheduled.durationMins} minutes.', true);
-      addAuditRecord(
-        'break_start',
-        'Scheduled break after level ${_currentGame!.currentLevel} '
-            '(${scheduled.durationMins} minutes).',
-      );
-      _syncGroupGame();
-      if (!_disposed) notifyListeners();
-      return;
-    }
-    // Auto-trigger rebuy pause when crossing rebuysCloseLevel (spec §1, §12 A12)
     final wasBelowRebuyClose =
         _currentGame!.currentLevel <= _currentGame!.settings.rebuysCloseLevel;
     final nowAtOrAboveRebuyClose =
@@ -629,6 +602,11 @@ extension AppProviderTimer on AppProvider {
         _currentGame!.settings.rebuys &&
         wasBelowRebuyClose &&
         nowAtOrAboveRebuyClose;
+
+    final scheduled = _currentGame!.structure.breakAfter(
+      _currentGame!.currentLevel,
+    );
+
     if (_currentGame!.settings.rebuys &&
         next == _currentGame!.settings.rebuysCloseLevel) {
       final rebKey = '${_currentGame!.id}-rebuysClosing-$next';
@@ -647,13 +625,13 @@ extension AppProviderTimer on AppProvider {
         );
       }
     }
+
     if (shouldPauseRebuy) {
-      final level = (next <= _currentGame!.structure.levels.length)
-          ? _currentGame!.structure.levels[next - 1]
-          : _currentGame!.structure.levels.last;
+      // DECISION: Rebuy pause uses structure break duration, defaults to 10 min (fixes Dani B6 / M4).
+      final breakMins = scheduled?.durationMins ?? 10;
       _currentGame = _currentGame!.copyWith(
         currentLevel: next,
-        secondsRemaining: level.durationMins * 60,
+        secondsRemaining: breakMins * 60,
         timerRunning: false,
         status: LiveGameStatus.rebuypause,
         speedRecommendation: null,
@@ -676,6 +654,33 @@ extension AppProviderTimer on AppProvider {
           timestamp: DateTime.now(),
         ),
       );
+      _syncGroupGame();
+      if (!_disposed) notifyListeners();
+      return;
+    }
+
+    if (scheduled != null &&
+        _currentGame!.status != LiveGameStatus.onBreak &&
+        next <= _currentGame!.structure.levels.length) {
+      _currentGame = _currentGame!.copyWith(
+        status: LiveGameStatus.onBreak,
+        timerRunning: true,
+        secondsRemaining: scheduled.durationMins * 60,
+        levelEndTime: _serverNow.add(Duration(minutes: scheduled.durationMins)),
+        speedRecommendation: null,
+        clearSpeedRecommendation: true,
+        revision: rev,
+        lastIdempotencyKey: idemKey,
+      );
+      addAnnouncement('Break — ${scheduled.durationMins} minutes.', true);
+      addAuditRecord(
+        'break_start',
+        'Scheduled break after level ${_currentGame!.currentLevel} '
+            '(${scheduled.durationMins} minutes).',
+      );
+      _syncGroupGame();
+      if (!_disposed) notifyListeners();
+      return;
     } else {
       // Play has run past the generated structure.
       //

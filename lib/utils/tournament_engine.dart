@@ -2037,7 +2037,7 @@ class TournamentEngine {
         // chosen composition's smallest DEALT chip (§F1.16 step 4).
         final bbProv = niceBB(s / styleD, minChip);
         if (bbProv <= 0) continue;
-        final addOnForThis = params.addOn ? (params.addOnChips ?? s) : 0;
+        final addOnForThis = params.addOn ? (params.addOnChips ?? (s ~/ 2)) : 0;
         final bonusForThis = (bonusPctForStack * s).round();
         // §F1.5 point 5: depth is judged on the composition's SMALLEST DEALT
         // chip, so a stack is evaluated on its best composition for each
@@ -2460,7 +2460,8 @@ class TournamentEngine {
         chipSet: params.chipSet,
         draws: drawsForStack,
         players: params.players,
-        addOnStack: params.addOn ? (params.addOnChips ?? stack) : 0,
+        // DECISION: Default add-on stack is half of starting stack (fixes Dani B15 / M4).
+        addOnStack: params.addOn ? (params.addOnChips ?? (stack ~/ 2)) : 0,
         bonusEach: (bonusPctForStack * stack).round(),
         openingSB: sbHint,
       );
@@ -2496,7 +2497,8 @@ class TournamentEngine {
     // who runs a bigger add-on than a starting stack can now say so, and the
     // blind curve below sees it.
     final rebuyStack = params.rebuyChips ?? stack;
-    final addOnStack = params.addOn ? (params.addOnChips ?? stack) : 0;
+    // DECISION: Default add-on stack is half of starting stack (fixes Dani B15 / M4).
+    final addOnStack = params.addOn ? (params.addOnChips ?? (stack ~/ 2)) : 0;
     final reEntryStack = params.reEntryChips ?? stack;
 
     // Expected additional money-chip volume (tech spec §6.3 step 4): rebuys,
@@ -2814,11 +2816,8 @@ class TournamentEngine {
       }
     }
 
-    final grossEligible =
-        params.buyIn * params.players +
-        params.effectiveRebuyCost * expectedRebuysTotal +
-        params.buyIn * expectedReEntriesTotal +
-        params.effectiveAddOnCost * expectedAddOnsTotal;
+    // DECISION: Initial prize pool reflects money received only (confirmed entries), not future rebuys/add-ons (fixes Dani B15 / M4).
+    final grossEligible = params.buyIn * params.players;
     // Determines which multiples payouts must be rounded to. The reference
     // schedule below (§4.1 — see §9.4/§23.1) is keyed on pools divisible by
     // 10, so decade buy-ins stay on unit 10 even when the pool is odd.

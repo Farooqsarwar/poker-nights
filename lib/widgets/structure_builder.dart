@@ -1139,8 +1139,9 @@ class _LevelRow extends StatelessWidget {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: onCloseHere,
+                  // DECISION: Action button offers 'Close rebuys here' so marker appears on close level only (fixes Dani B5 / M4).
                   child: const Text(
-                    'Rebuys close after this level',
+                    'Close rebuys here',
                     style: TextStyle(fontSize: 12),
                   ),
                 ),

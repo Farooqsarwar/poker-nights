@@ -2361,6 +2361,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             const SizedBox(width: 8),
                           ],
                           if (isAdmin) ...[
+                            // DECISION: Visible Rebuy button on player row (fixes Dani T3 / B4 / M4).
+                            if (settings.rebuys && game.currentLevel <= settings.rebuysCloseLevel) ...[
+                              Expanded(
+                                child: AppButton(
+                                  size: AppButtonSize.sm,
+                                  variant: AppButtonVariant.secondary,
+                                  onPressed: () => app.grantRebuy(
+                                    p.id,
+                                    idempotencyKey: 'rebuy-${p.id}-${DateTime.now().microsecondsSinceEpoch}',
+                                  ),
+                                  child: Text(
+                                    settings.rebuyLimit != null
+                                        ? '+ Rebuy (${p.rebuys}/${settings.rebuyLimit})'
+                                        : '+ Rebuy${p.rebuys > 0 ? ' (${p.rebuys})' : ''}',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
                             Expanded(
                               child: AppButton(
                                 size: AppButtonSize.sm,
@@ -2968,13 +2987,29 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   runSpacing: AppSpacing.xs,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    if (app.isAdmin)
+                    if (app.isAdmin) ...[
+                      // DECISION: Visible Rebuy button on player row (fixes Dani T3 / B4 / M4).
+                      if (settings.rebuys && game.currentLevel <= settings.rebuysCloseLevel)
+                        AppButton(
+                          size: AppButtonSize.sm,
+                          variant: AppButtonVariant.secondary,
+                          onPressed: () => app.grantRebuy(
+                            p.id,
+                            idempotencyKey: 'rebuy-${p.id}-${DateTime.now().microsecondsSinceEpoch}',
+                          ),
+                          child: Text(
+                            settings.rebuyLimit != null
+                                ? '+ Rebuy (${p.rebuys}/${settings.rebuyLimit})'
+                                : '+ Rebuy${p.rebuys > 0 ? ' (${p.rebuys})' : ''}',
+                          ),
+                        ),
                       AppButton(
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.destructive,
                         onPressed: () => _showEliminateModal(context, app, p),
                         child: const Text('Out'),
                       ),
+                    ],
                     if (settings.addOn &&
                         game.status == LiveGameStatus.rebuypause &&
                         !p.hasAddOn)

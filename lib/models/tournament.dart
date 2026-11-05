@@ -467,7 +467,8 @@ class TournamentParams {
   bool get usesPaceMode => pace != null;
 
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
-  int get effectiveAddOnCost => addOnCost ?? buyIn;
+  // DECISION: Default add-on cost is half the buy-in (fixes Dani B15 / M4).
+  int get effectiveAddOnCost => addOnCost ?? (buyIn / 2).round();
 
   TournamentFormat get effectiveFormat =>
       format ??

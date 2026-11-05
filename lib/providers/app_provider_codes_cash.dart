@@ -140,24 +140,46 @@ extension AppProviderCodesCash on AppProvider {
   /// Tournaments finished with no group selected, newest first (History tags them "Solo").
   List<LiveGame> get soloTournaments => List.unmodifiable(_soloTournaments);
 
+  bool get canUndoCashAction => _cashUndoSnapshot != null;
+
   void startCashGame(CashSessionSettings settings, List<String> playerNames) {
     _cashUndoSnapshot = null;
-    _cashSession = CashSession(
-      id: 'cash-${DateTime.now().millisecondsSinceEpoch}',
-      settings: settings,
-      isCompleted: false,
-      startTime: DateTime.now(),
-      players: List.generate(
-        playerNames.length,
-        (i) => CashPlayer(
-          id: 'cp-${DateTime.now().millisecondsSinceEpoch}-$i',
-          name: playerNames[i],
-          stack: settings.minBuyIn * settings.chipValue,
-          totalBuyIns: settings.minBuyIn * settings.chipValue,
+    final now = DateTime.now();
+    final initialTx = <CashTransaction>[];
+    final players = List.generate(
+      playerNames.length,
+      (i) {
+        final pid = 'cp-${now.millisecondsSinceEpoch}-$i';
+        final name = playerNames[i];
+        final val = settings.minBuyIn * settings.chipValue;
+        initialTx.add(
+          CashTransaction(
+            id: 'tx-${now.millisecondsSinceEpoch}-$i',
+            playerId: pid,
+            playerName: name,
+            type: 'buyIn',
+            amount: settings.minBuyIn,
+            timestamp: now,
+          ),
+        );
+        return CashPlayer(
+          id: pid,
+          name: name,
+          stack: val,
+          totalBuyIns: val,
           buyInCount: 1,
           cashedOut: 0,
-        ),
-      ),
+        );
+      },
+    );
+
+    _cashSession = CashSession(
+      id: 'cash-${now.millisecondsSinceEpoch}',
+      settings: settings,
+      isCompleted: false,
+      startTime: now,
+      players: players,
+      transactions: initialTx,
     );
     if (!_disposed) notifyListeners();
   }
@@ -182,12 +204,22 @@ extension AppProviderCodesCash on AppProvider {
     _cashUndoSnapshot = session;
     // Chips are typed; the ledger keeps money (chips x chip value, D1).
     final value = amount * session.settings.chipValue;
+    final now = DateTime.now();
     if (isNew) {
+      final newPid = 'cp-${now.millisecondsSinceEpoch}-${Random().nextInt(9999)}';
+      final tx = CashTransaction(
+        id: 'tx-${now.millisecondsSinceEpoch}',
+        playerId: newPid,
+        playerName: playerIdOrName,
+        type: 'buyIn',
+        amount: amount,
+        timestamp: now,
+      );
       _cashSession = session.copyWith(
         players: [
           ...session.players,
           CashPlayer(
-            id: 'cp-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}',
+            id: newPid,
             name: playerIdOrName,
             stack: value,
             totalBuyIns: value,
@@ -195,8 +227,18 @@ extension AppProviderCodesCash on AppProvider {
             cashedOut: 0,
           ),
         ],
+        transactions: [tx, ...session.transactions],
       );
     } else {
+      final playerName = session.players.where((p) => p.id == playerIdOrName).firstOrNull?.name ?? 'Player';
+      final tx = CashTransaction(
+        id: 'tx-${now.millisecondsSinceEpoch}',
+        playerId: playerIdOrName,
+        playerName: playerName,
+        type: 'buyIn',
+        amount: amount,
+        timestamp: now,
+      );
       // A buy-in for somebody who already cashed out is a rejoin: the row
       // reopens and keeps its earlier cash-out, so the whole-session net holds.
       _cashSession = session.copyWith(
@@ -212,6 +254,7 @@ extension AppProviderCodesCash on AppProvider {
                   : p,
             )
             .toList(),
+        transactions: [tx, ...session.transactions],
       );
     }
     if (!_disposed) notifyListeners();
@@ -233,6 +276,15 @@ extension AppProviderCodesCash on AppProvider {
     }
     _cashUndoSnapshot = session;
     final value = amount * session.settings.chipValue;
+    final now = DateTime.now();
+    final tx = CashTransaction(
+      id: 'tx-${now.millisecondsSinceEpoch}',
+      playerId: playerId,
+      playerName: player.name,
+      type: 'topUp',
+      amount: amount,
+      timestamp: now,
+    );
     _cashSession = session.copyWith(
       players: session.players
           .map(
@@ -244,6 +296,7 @@ extension AppProviderCodesCash on AppProvider {
                 : p,
           )
           .toList(),
+      transactions: [tx, ...session.transactions],
     );
     if (!_disposed) notifyListeners();
     return null;
@@ -318,6 +371,15 @@ extension AppProviderCodesCash on AppProvider {
 
     _cashUndoSnapshot = session;
     // Accumulates: a rejoin followed by a second cash-out adds to the first.
+    final now = DateTime.now();
+    final tx = CashTransaction(
+      id: 'tx-${now.millisecondsSinceEpoch}',
+      playerId: playerId,
+      playerName: player.name,
+      type: 'cashOut',
+      amount: amount,
+      timestamp: now,
+    );
     _cashSession = session.copyWith(
       players: session.players
           .map(
@@ -330,6 +392,7 @@ extension AppProviderCodesCash on AppProvider {
                 : p,
           )
           .toList(),
+      transactions: [tx, ...session.transactions],
     );
     if (!_disposed) notifyListeners();
     return null;

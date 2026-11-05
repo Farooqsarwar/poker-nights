@@ -990,6 +990,7 @@ Map<String, dynamic> cashSessionToMap(CashSession session) => {
   'startTime': session.startTime.toIso8601String(),
   'unresolvedNote': session.unresolvedNote,
   'players': session.players.map(cashPlayerToMap).toList(),
+  'transactions': session.transactions.map((t) => t.toMap()).toList(),
 };
 
 CashSession cashSessionFromMap(Map<String, dynamic> m) => CashSession(
@@ -1003,6 +1004,9 @@ CashSession cashSessionFromMap(Map<String, dynamic> m) => CashSession(
   players: _mapList(
     m['players'] as List? ?? const [],
   ).map(cashPlayerFromMap).toList(),
+  transactions: _mapList(
+    m['transactions'] as List? ?? const [],
+  ).map(CashTransaction.fromMap).toList(),
 );
 
 // ─────────────────────────────────────────────────────────────────────────────

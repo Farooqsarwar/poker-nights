@@ -1,3 +1,42 @@
+/// A transaction record in a cash game (buy-in, top-up, or cash-out).
+class CashTransaction {
+  const CashTransaction({
+    required this.id,
+    required this.playerId,
+    required this.playerName,
+    required this.type,
+    required this.amount,
+    required this.timestamp,
+  });
+
+  final String id;
+  final String playerId;
+  final String playerName;
+  final String type; // 'buyIn' | 'topUp' | 'cashOut'
+  final double amount;
+  final DateTime timestamp;
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'playerId': playerId,
+    'playerName': playerName,
+    'type': type,
+    'amount': amount,
+    'timestamp': timestamp.toIso8601String(),
+  };
+
+  factory CashTransaction.fromMap(Map<String, dynamic> m) => CashTransaction(
+    id: (m['id'] as String?) ?? '',
+    playerId: (m['playerId'] as String?) ?? '',
+    playerName: (m['playerName'] as String?) ?? '',
+    type: (m['type'] as String?) ?? 'topUp',
+    amount: (m['amount'] as num?)?.toDouble() ?? 0.0,
+    timestamp: m['timestamp'] != null
+        ? DateTime.tryParse(m['timestamp'] as String) ?? DateTime.now()
+        : DateTime.now(),
+  );
+}
+
 /// A participant in a cash game.
 class CashPlayer {
   const CashPlayer({
@@ -97,6 +136,7 @@ class CashSession {
     this.isCompleted = false,
     required this.startTime,
     required this.players,
+    this.transactions = const [],
     this.unresolvedNote,
   });
 
@@ -105,6 +145,7 @@ class CashSession {
   final bool isCompleted;
   final DateTime startTime;
   final List<CashPlayer> players;
+  final List<CashTransaction> transactions;
   final String? unresolvedNote;
 
   double get totalInPlay =>
@@ -123,6 +164,7 @@ class CashSession {
   CashSession copyWith({
     bool? isCompleted,
     List<CashPlayer>? players,
+    List<CashTransaction>? transactions,
     String? unresolvedNote,
   }) {
     return CashSession(
@@ -131,6 +173,7 @@ class CashSession {
       isCompleted: isCompleted ?? this.isCompleted,
       startTime: startTime,
       players: players ?? this.players,
+      transactions: transactions ?? this.transactions,
       unresolvedNote: unresolvedNote ?? this.unresolvedNote,
     );
   }

@@ -18,7 +18,7 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/cash_settlement_panel.dart';
 import '../../widgets/squircle_icon_button.dart';
 
-enum _CashActionType { buyIn, cashOut }
+enum _CashActionType { buyIn, topUp, cashOut }
 
 class _CashAction {
   const _CashAction(this.type, this.playerId);
@@ -99,7 +99,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   void _openAction(_CashAction action, {double? preset}) {
     setState(() {
       _action = action;
-      _amount.text = preset != null ? preset.toString() : '';
+      _amount.text = preset != null ? _num(preset) : '';
     });
   }
 
@@ -112,12 +112,24 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
     if (action.type == _CashActionType.buyIn && amt <= 0) return;
 
     String? error;
-    if (action.type == _CashActionType.buyIn) {
+    if (action.type == _CashActionType.topUp && action.playerId != null) {
+      error = app.cashTopUp(action.playerId!, amt);
+    } else if (action.type == _CashActionType.buyIn) {
       final pid = action.playerId;
       if (pid != null) {
         error = app.cashBuyIn(pid, amt);
-      } else if (_newPlayerName.text.trim().isNotEmpty) {
-        error = app.cashBuyIn(_newPlayerName.text.trim(), amt, isNew: true);
+      } else {
+        final name = _newPlayerName.text.trim();
+        if (name.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Please enter a player name.'),
+              backgroundColor: AppColors.destructive,
+            ),
+          );
+          return;
+        }
+        error = app.cashBuyIn(name, amt, isNew: true);
         if (error == null) _newPlayerName.clear();
       }
     } else if (action.type == _CashActionType.cashOut &&
@@ -414,6 +426,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
         _action?.type == _CashActionType.buyIn && _action?.playerId == null;
     final actionTitle = isNewPlayer
         ? 'Add new player'
+        : _action?.type == _CashActionType.topUp
+        ? 'Top-up (rebuy)'
         : _action?.type == _CashActionType.buyIn
         ? 'Buy in / rebuy'
         : _action?.type == _CashActionType.cashOut
@@ -426,7 +440,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Top bar: LIVE · 1 / 2 & Squircle ⋮ button
+          // Top bar: BLINDS · 1 / 2, Undo & Squircle ⋮ button
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -450,7 +464,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'LIVE · ${_num(settings.smallBlind)} / ${_num(settings.bigBlind)}',
+                    'BLINDS · ${_num(settings.smallBlind)} / ${_num(settings.bigBlind)}',
                     style: TextStyle(
                       color: AppColors.secondaryForeground,
                       fontSize: 13,
@@ -460,12 +474,29 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   ),
                 ],
               ),
-              SquircleIconButton(
-                icon: Icons.more_vert,
-                iconSize: 22,
-                iconColor: AppColors.mutedForeground,
-                tooltip: 'Session options',
-                onPressed: () => _showSessionMenu(context, app),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (app.canUndoCashAction)
+                    IconButton(
+                      icon: const Icon(Icons.undo, size: 20),
+                      color: AppColors.primary,
+                      tooltip: 'Undo last action',
+                      onPressed: () {
+                        app.undoCashAction();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Last cash action undone')),
+                        );
+                      },
+                    ),
+                  SquircleIconButton(
+                    icon: Icons.more_vert,
+                    iconSize: 22,
+                    iconColor: AppColors.mutedForeground,
+                    tooltip: 'Session options',
+                    onPressed: () => _showSessionMenu(context, app),
+                  ),
+                ],
               ),
             ],
           ),
@@ -482,7 +513,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
           ),
           const SizedBox(height: 20),
 
-          // 3 Metric Cards Row (players, in play, elapsed)
+          // DECISION: C4 - Prominently display "money in" and "avg stack" metric cards.
+          // Metric Cards Row: players, money in, elapsed; plus in play & avg stack
           Row(
             children: [
               Expanded(
@@ -494,8 +526,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: _buildMetricCard(
-                  value: Formatters.prize(totalInPlay.toInt()),
-                  label: 'in play',
+                  value: Formatters.prize(session.totalBuyIns.toInt()),
+                  label: 'money in',
                 ),
               ),
               const SizedBox(width: 10),
@@ -503,6 +535,28 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                 child: _buildMetricCard(
                   value: '$elapsedH:${elapsedM.toString().padLeft(2, '0')}',
                   label: 'elapsed',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMetricCard(
+                  value: Formatters.prize(totalInPlay.toInt()),
+                  label: 'in play',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildMetricCard(
+                  value: Formatters.prize(
+                    players.where((p) => !p.hasCashedOut).isNotEmpty
+                        ? (totalInPlay / players.where((p) => !p.hasCashedOut).length).round()
+                        : 0,
+                  ),
+                  label: 'avg stack',
                 ),
               ),
             ],
@@ -612,9 +666,83 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                 player: players[i],
                 currency: currency,
                 onTap: () => _showPlayerActionSheet(context, players[i], app),
+                onRebuy: () {
+                  _openAction(
+                    _CashAction(_CashActionType.topUp, players[i].id),
+                    preset: settings.minBuyIn,
+                  );
+                },
               ),
             ),
           const SizedBox(height: 24),
+
+          // DECISION: C5 - Direct "+ Rebuy" on player cards opens top-up modal supporting any custom amount, records in transaction log, and exposes Undo.
+          // Recent Activity / Rebuy Log (C5)
+          if (session.transactions.isNotEmpty) ...[
+            Text(
+              'RECENT ACTIVITY',
+              style: AppTypography.bodyXs.copyWith(
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w600,
+                color: AppColors.onSurfaceHint,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.borderSubtle),
+              ),
+              child: Column(
+                children: [
+                  for (final tx in session.transactions.take(5))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                tx.type == 'topUp'
+                                    ? Icons.add_circle_outline
+                                    : tx.type == 'buyIn'
+                                    ? Icons.login_outlined
+                                    : Icons.monetization_on_outlined,
+                                size: 16,
+                                color: tx.type == 'cashOut'
+                                    ? AppColors.warningText
+                                    : AppColors.successText,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${tx.playerName} (${tx.type == 'topUp' ? 'top-up' : tx.type == 'buyIn' ? 'buy-in' : 'cash-out'})',
+                                style: TextStyle(
+                                  color: AppColors.foreground,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            Formatters.prize(tx.amount.toInt()),
+                            style: TextStyle(
+                              color: AppColors.foreground,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
 
           // Bottom Action Button: Cash out & settle
           InkWell(
@@ -706,6 +834,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
     required CashPlayer player,
     required String currency,
     required VoidCallback onTap,
+    required VoidCallback onRebuy,
   }) {
     final net = player.net;
     final netText = net > 0
@@ -782,6 +911,34 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                 fontWeight: FontWeight.w700,
               ),
             ),
+            if (!player.isCashedOut) ...[
+              const SizedBox(width: 10),
+              Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  onTap: onRebuy,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Text(
+                      '+ Rebuy',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -820,7 +977,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: AppSpacing.md),
-          if (_action?.type == _CashActionType.buyIn) ...[
+          if (_action?.type == _CashActionType.buyIn || _action?.type == _CashActionType.topUp) ...[
             Row(
               children: [
                 Expanded(

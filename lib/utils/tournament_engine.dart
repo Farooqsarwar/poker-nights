@@ -871,9 +871,10 @@ class TournamentEngine {
   /// blind size.
   static int individualAnteValue(int bb, List<int> chipValuesInPlay) {
     final values = chipValuesInPlay.where((v) => v > 0).toList()..sort();
-    if (values.isEmpty) return math.max(1, (bb * 0.10).round());
+    if (values.isEmpty) return math.max(1, (bb * 0.12).round());
     final minChip = values.first;
-    final target = bb * 0.10;
+    // DECISION: Individual ante targets 12% of the big blind (fixes Dani M3).
+    final target = bb * 0.12;
     var best = minChip;
     var bestDist = (target - minChip).abs();
     for (final v in values) {
@@ -3686,14 +3687,31 @@ class TournamentEngine {
       bbEnd: existingBB.last.toDouble(),
     );
     if (!resolved.feasible) return base;
+    final sortedChips = List.of(params.chipSet)
+      ..sort((a, b) => a.value.compareTo(b.value));
+    final chipVals = sortedChips.map((c) => c.value).toList();
+
+    // DECISION: Recompute ante for recalculated BBs so antes are never stale (fixes Dani B12 / M3).
     final newLevels = [
-      for (var i = 0; i < base.levels.length; i++)
-        base.levels[i].copyWith(
-          sb: resolved.sbLadder[i],
-          bb: resolved.bbLadder[i],
-          manuallyEdited: base.levels[i].manuallyEdited ||
+      for (var i = 0; i < base.levels.length; i++) () {
+        final orig = base.levels[i];
+        final newSb = resolved.sbLadder[i];
+        final newBb = resolved.bbLadder[i];
+        int? newAnte = orig.ante;
+        if (orig.ante != null) {
+          newAnte = params.anteStyle == AnteStyle.individual
+              ? individualAnteValue(newBb, chipVals)
+              : newBb;
+        }
+        return orig.copyWith(
+          sb: newSb,
+          bb: newBb,
+          ante: newAnte,
+          clearAnte: newAnte == null,
+          manuallyEdited: orig.manuallyEdited ||
               pins.any((p) => p.levelNum == i + 1),
-        ),
+        );
+      }(),
     ];
     return base.copyWith(levels: newLevels);
   }

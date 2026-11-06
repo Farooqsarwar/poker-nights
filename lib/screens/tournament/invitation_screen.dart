@@ -1079,8 +1079,10 @@ class _StructureStatusCard extends StatelessWidget {
               children: [
                 Text(
                   hasStructure
-                      ? 'Structure generated for ${game.settings.players} players'
-                            '${game.structureConfirmed ? ' — confirmed' : ''}'
+                      ? (game.settings.players <= 0
+                            ? 'Awaiting RSVPs to generate structure'
+                            : 'Structure generated for ${game.settings.players} players'
+                                '${game.structureConfirmed ? ' — confirmed' : ''}')
                       : (reviewOpen
                             ? 'Structure ready to generate'
                             : 'Structure unlocks 30 min before start'),

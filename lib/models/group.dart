@@ -52,11 +52,11 @@ class Group {
   List<LiveGame> get upcomingGames =>
       games.where((g) => g.status.isUpcoming).toList();
 
-  List<LiveGame> get pastGames => games
-      .where((g) =>
-          g.status == LiveGameStatus.completed ||
-          g.status == LiveGameStatus.cancelled)
-      .toList();
+  List<LiveGame> get pastGames =>
+      games.where((g) => g.status == LiveGameStatus.completed).toList();
+
+  List<LiveGame> get cancelledGames =>
+      games.where((g) => g.status == LiveGameStatus.cancelled).toList();
 
   Group copyWith({
     String? name,

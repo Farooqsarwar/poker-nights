@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../app/colors.dart';
@@ -737,7 +738,7 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () => context.push(RoutePaths.upgrade),
                   showDivider: true,
                 ),
-                if (Payments.isSimulated)
+                if (Payments.isSimulated && kDebugMode)
                   _buildSettingRow(
                     title: 'Demo mode tier switcher',
                     subtitle: app.premiumTier == PremiumTier.premium

@@ -406,14 +406,13 @@ GoRouter buildAppRouter(AppProvider app) {
         ((authed && !app.isAdmin) || app.hasGuestSession)) {
       return RoutePaths.playerLive;
     }
-    // Guard: prevent admin from back-navigating to pre-game screens during live tournament (Spec C3).
+    // Guard: prevent admin from back-navigating to pre-game screens of the active tournament (Spec C3).
+    // Note: Do not block RoutePaths.quick or RoutePaths.createTournament so an admin can start a fresh game.
     if (authed &&
         app.isAdmin &&
         game != null &&
         game.status.isActiveLive &&
         (flat == RoutePaths.structureReview ||
-         flat == RoutePaths.createTournament ||
-         flat == RoutePaths.quick ||
          flat == RoutePaths.checkIn)) {
       return RoutePaths.hostDashboard;
     }

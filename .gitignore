@@ -93,6 +93,7 @@ the app's documents dir; under "flutter test" it lands in the process working
 directory, i.e. the repo root, because AppProvider mirrors a live game into
 it on every change. Test artifact only - never commit.
 recovery/
+app/
 
 # Local deploy script (contains a secret) - never commit
 deploy.ps1

@@ -332,7 +332,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                 );
               },
               child: Text(
-                'Restore purchase',
+                'Restore purchases',
                 style: AppTypography.bodySm.copyWith(
                   color: AppColors.mutedForeground,
                 ),

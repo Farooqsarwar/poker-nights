@@ -42,7 +42,6 @@ class PremiumPlan {
       name: 'Monthly',
       price: '£5',
       period: 'month',
-      saving: 'Save 40%',
     ),
     PremiumPlan(
       id: 'demo-yearly',
@@ -53,7 +52,7 @@ class PremiumPlan {
     ),
     PremiumPlan(
       id: 'demo-host',
-      name: 'Host Pass',
+      name: 'Host licence',
       price: '£60',
       period: 'once',
       oneTime: true,

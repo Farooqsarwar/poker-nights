@@ -185,11 +185,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   children: [
                     _MiniStat(label: 'Nights hosted', value: '${completedGames.length}'),
                     _MiniStat(
-                      label: 'Players seen',
+                      label: 'players hosted',
                       value: '${completedGames.expand((g) => g.players.map((p) => p.name)).toSet().length}',
                     ),
                     _MiniStat(
-                      label: 'Prizes awarded',
+                      label: 'prizes paid out',
                       value: Formatters.prize(
                         completedGames.fold<int>(0, (sum, g) => sum + g.structure.prizePool),
                       ),
@@ -945,7 +945,7 @@ class _HistoryRow extends StatelessWidget {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              if (net != null && showAmounts)
+                              if (net != null && (showAmounts || userId != null))
                                 Text(
                                   net >= 0
                                       ? '+${Formatters.prize(net.abs())}'

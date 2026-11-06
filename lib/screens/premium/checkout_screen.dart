@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -101,7 +102,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: Text(
               _processing
                   ? 'Activating…'
-                  : 'Activate Premium (demo — no payment)',
+                  : (kDebugMode
+                        ? 'Activate Premium (demo — no payment)'
+                        : 'Activate Premium'),
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -127,8 +130,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Widget _testModeBanner() {
     // Tied to which implementation is live, so it cannot be left showing on a
-    // real checkout or missing from a simulated one.
-    if (!Payments.isSimulated) return const SizedBox.shrink();
+    // real checkout or missing from a simulated one. Hidden in release mode.
+    if (!Payments.isSimulated || !kDebugMode) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -201,7 +204,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             children: [
               Expanded(
                 child: Text(
-                  'Due today (demo)',
+                  kDebugMode ? 'Due today (demo)' : 'Due today',
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w600,
                   ),

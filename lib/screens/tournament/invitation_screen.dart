@@ -1078,27 +1078,29 @@ class _StructureStatusCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  hasStructure
-                      ? (game.settings.players <= 0
-                            ? 'Awaiting RSVPs to generate structure'
-                            : 'Structure generated for ${game.settings.players} players'
-                                '${game.structureConfirmed ? ' — confirmed' : ''}')
-                      : (reviewOpen
-                            ? 'Structure ready to generate'
-                            : 'Structure unlocks 30 min before start'),
+                  game.settings.players <= 0
+                      ? 'Awaiting RSVPs to generate structure'
+                      : (hasStructure
+                            ? 'Structure generated for ${game.settings.players} players'
+                                '${game.structureConfirmed ? ' — confirmed' : ''}'
+                            : (reviewOpen
+                                  ? 'Structure ready to generate'
+                                  : 'Structure unlocks 30 min before start')),
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
-                  hasStructure
-                      ? 'Stacks, blinds, levels and chips are set. Review or edit any time before the game; stacks freeze when play starts.'
-                      : (reviewOpen
-                            ? 'Attendance is final enough — let the AI calculate stacks, blinds and levels from the Going / Going +N answers.'
-                            : (unlockAt != null
-                                  ? 'The AI will estimate the structure at ${hhmm(unlockAt)}, based on who answers the invitation.'
-                                  : 'The AI will estimate the structure 30 minutes before start, based on attendance.')),
+                  game.settings.players <= 0
+                      ? 'When players RSVP Going, the engine estimates the structure from the confirmed headcount.'
+                      : (hasStructure
+                            ? 'Stacks, blinds, levels and chips are set. Review or edit any time before the game; stacks freeze when play starts.'
+                            : (reviewOpen
+                                  ? 'Attendance is final enough — let the AI calculate stacks, blinds and levels from the Going / Going +N answers.'
+                                  : (unlockAt != null
+                                        ? 'The AI will estimate the structure at ${hhmm(unlockAt)}, based on who answers the invitation.'
+                                        : 'The AI will estimate the structure 30 minutes before start, based on attendance.'))),
                   style: AppTypography.bodyXs.copyWith(
                     color: AppColors.mutedForeground,
                   ),

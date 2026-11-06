@@ -34,14 +34,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final group = app.currentGroup;
+    final completedGames = [
+      ...group.pastGames,
+      ...app.soloTournaments.where((g) => g.status == LiveGameStatus.completed),
+    ];
     final pastGames = [
       ...group.pastGames,
+      ...group.cancelledGames,
       ...app.soloTournaments,
     ];
     final userId = app.user?.id;
     final isAdmin = app.isAdmin;
 
-    final myGames = pastGames
+    final myGames = completedGames
         .where((g) => g.players.any((p) => p.id == userId))
         .toList();
     final myStats = _computeMyStats(myGames, userId);
@@ -178,15 +183,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   crossAxisSpacing: AppSpacing.sm,
                   childAspectRatio: isMobile ? 1.4 : 2.0,
                   children: [
-                    _MiniStat(label: 'Nights hosted', value: '${pastGames.length}'),
+                    _MiniStat(label: 'Nights hosted', value: '${completedGames.length}'),
                     _MiniStat(
                       label: 'Players seen',
-                      value: '${pastGames.expand((g) => g.players.map((p) => p.name)).toSet().length}',
+                      value: '${completedGames.expand((g) => g.players.map((p) => p.name)).toSet().length}',
                     ),
                     _MiniStat(
                       label: 'Prizes awarded',
                       value: Formatters.prize(
-                        pastGames.fold<int>(0, (sum, g) => sum + g.structure.prizePool),
+                        completedGames.fold<int>(0, (sum, g) => sum + g.structure.prizePool),
                       ),
                     ),
                   ],
@@ -242,7 +247,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         else if (_tab == 'cash')
           _buildCash(app.cashHistory, app.soloHistory, isAdmin)
         else
-          SliverToBoxAdapter(child: _buildLeaderboard(pastGames, userId)),
+          SliverToBoxAdapter(child: _buildLeaderboard(completedGames, userId)),
       ],
     );
   }

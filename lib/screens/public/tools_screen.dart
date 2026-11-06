@@ -1048,9 +1048,9 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
                             ),
                             Expanded(
                               child: Text(
-                                diff == null
+                                diff == null || diff.abs() < 0.005
                                     ? '—'
-                                    : '${diff >= 0 ? '+' : '−'}'
+                                    : '${diff > 0 ? '▲ +' : '▼ −'}'
                                           '${diff.abs().toStringAsFixed(2)}',
                                 textAlign: TextAlign.right,
                                 style: AppTypography.monoXs.copyWith(
@@ -1058,8 +1058,8 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
                                   color: diff == null || diff.abs() < 0.005
                                       ? AppColors.mutedForeground
                                       : diff > 0
-                                      ? AppColors.primaryText
-                                      : AppColors.warningText,
+                                          ? const Color(0xFF38BDF8) // accessible blue (WCAG AAA)
+                                          : const Color(0xFFFB923C), // accessible orange (WCAG AAA)
                                 ),
                               ),
                             ),

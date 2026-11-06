@@ -16,6 +16,7 @@ import '../../utils/sanitization.dart';
 import '../../utils/structure_builder_controller.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_segmented_control.dart';
@@ -225,6 +226,46 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     };
   }
 
+  Future<bool> _confirmReplace(AppProvider app, LiveGame running) async {
+    var proceed = false;
+    await showAppModal(
+      context: context,
+      title: '${running.settings.name} is still running',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Starting a new event ends the running game. The levels played so '
+            'far are kept in History, marked unfinished, and it does not count '
+            'for standings.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.destructive,
+            onPressed: () {
+              proceed = true;
+              Navigator.of(context).pop();
+            },
+            child: const Text('End it and start'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.secondary,
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Keep running game'),
+          ),
+        ],
+      ),
+    );
+    return proceed;
+  }
+
   Future<void> _post(AppProvider app) async {
     final errors = _validate();
     if (errors.isNotEmpty) {
@@ -234,6 +275,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           ..addAll(errors);
       });
       return;
+    }
+
+    final running = app.currentGroup.games.where((g) => g.status.isActiveLive).firstOrNull ?? app.currentGame;
+    if (running != null && running.status.isActiveLive) {
+      final proceed = await _confirmReplace(app, running);
+      if (!mounted) return;
+      if (!proceed) return;
+      app.cancelGame('Replaced by a new event');
     }
 
     setState(() => _posting = true);

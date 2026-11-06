@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -136,8 +137,9 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
 
-          // Instant Demo Toggle Banner
-          Container(
+          // Instant Demo Toggle Banner (debug only — hidden in release)
+          if (Payments.isSimulated && kDebugMode) ...[
+            Container(
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
               color: isPremium
@@ -271,6 +273,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
+        ],
 
           // 6 Interactive Feature Cards Showcase
           _featuresShowcase(isPremium),

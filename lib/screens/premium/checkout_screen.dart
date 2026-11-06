@@ -130,8 +130,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Widget _testModeBanner() {
     // Tied to which implementation is live, so it cannot be left showing on a
-    // real checkout or missing from a simulated one. Hidden in release mode.
-    if (!Payments.isSimulated || !kDebugMode) return const SizedBox.shrink();
+    // real checkout or missing from a simulated one.
+    if (!Payments.isSimulated) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(

@@ -282,6 +282,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       final proceed = await _confirmReplace(app, running);
       if (!mounted) return;
       if (!proceed) return;
+      app.setCurrentGame(running);
       app.cancelGame('Replaced by a new event');
     }
 

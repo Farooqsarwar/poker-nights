@@ -834,6 +834,7 @@ class _HistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCancelled = game.status == LiveGameStatus.cancelled;
     final myPos = game.finishOrder.indexOf(userId ?? '');
     final placement = myPos >= 0 ? game.finishOrder.length - myPos : null;
     final me = game.players.where((p) => p.id == userId).firstOrNull;
@@ -862,17 +863,21 @@ class _HistoryRow extends StatelessWidget {
 
     // No gold, no silver, no bronze (no-gold rule): every podium finish,
     // including 1st, reads in the one accent — crimson.
-    final stripeColor = isPodium
-        ? AppColors.primary
-        : (net != null && net > 0
-              ? AppColors.successText
-              : AppColors.borderSubtle);
+    final stripeColor = isCancelled
+        ? AppColors.borderSubtle
+        : (isPodium
+            ? AppColors.primary
+            : (net != null && net > 0
+                ? AppColors.successText
+                : AppColors.borderSubtle));
 
     return InkWell(
-      onTap: () {
-        context.read<AppProvider>().setCurrentGame(game);
-        context.go(RoutePaths.resultPodium);
-      },
+      onTap: isCancelled
+          ? null
+          : () {
+              context.read<AppProvider>().setCurrentGame(game);
+              context.go(RoutePaths.resultPodium);
+            },
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
@@ -913,7 +918,13 @@ class _HistoryRow extends StatelessWidget {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    if (solo) ...[
+                                    if (isCancelled) ...[
+                                      const SizedBox(width: 8),
+                                      const AppBadge(
+                                        label: 'Cancelled',
+                                        variant: AppBadgeVariant.muted,
+                                      ),
+                                    ] else if (solo) ...[
                                       const SizedBox(width: 8),
                                       const AppBadge(label: 'Solo'),
                                     ],
@@ -1011,13 +1022,15 @@ class _HistoryRow extends StatelessWidget {
                       Row(
                         children: [
                           Text(
-                            'Winner: ${winner?.name ?? '—'}',
+                            isCancelled
+                                ? 'Cancelled before finish'
+                                : 'Winner: ${winner?.name ?? '—'}',
                             style: TextStyle(
                               color: AppColors.mutedForeground,
                               fontSize: 12,
                             ),
                           ),
-                          if (placement != null && placement <= 3) ...[
+                          if (!isCancelled && placement != null && placement <= 3) ...[
                             const SizedBox(width: 6),
                             MedalIcon(placement, size: 14),
                           ],

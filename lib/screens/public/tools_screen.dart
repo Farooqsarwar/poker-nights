@@ -1058,8 +1058,8 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
                                   color: diff == null || diff.abs() < 0.005
                                       ? AppColors.mutedForeground
                                       : diff > 0
-                                          ? const Color(0xFF38BDF8) // accessible blue (WCAG AAA)
-                                          : const Color(0xFFFB923C), // accessible orange (WCAG AAA)
+                                          ? AppColors.foreground
+                                          : AppColors.mutedForeground,
                                 ),
                               ),
                             ),

@@ -199,7 +199,7 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
     // (game, group, guest sign-in) may be created for a night the chips cannot
     // deal.
     if (approved.isBlocked) return;
-    final running = app.currentGame;
+    final running = app.currentGroup.games.where((g) => g.status.isActiveLive).firstOrNull ?? app.currentGame;
     if (running != null && running.status.isActiveLive) {
       final proceed = await _confirmReplace(app, running);
       if (!mounted) return;
@@ -207,6 +207,7 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
         context.go(RoutePaths.hostDashboard);
         return;
       }
+      app.setCurrentGame(running);
       app.cancelGame('Replaced by a quick game');
     }
 

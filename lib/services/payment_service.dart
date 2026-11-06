@@ -39,21 +39,21 @@ class PremiumPlan {
   static const placeholders = [
     PremiumPlan(
       id: 'demo-monthly',
-      name: 'Demo Monthly',
+      name: 'Monthly',
       price: '£5',
       period: 'month',
       saving: 'Save 40%',
     ),
     PremiumPlan(
       id: 'demo-yearly',
-      name: 'Demo Yearly',
+      name: 'Yearly',
       price: '£36',
       period: 'year',
       saving: 'Save 40%',
     ),
     PremiumPlan(
       id: 'demo-host',
-      name: 'Demo Host',
+      name: 'Host Pass',
       price: '£60',
       period: 'once',
       oneTime: true,

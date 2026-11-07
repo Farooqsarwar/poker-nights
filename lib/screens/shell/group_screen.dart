@@ -18,7 +18,9 @@ import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
@@ -511,110 +513,11 @@ class _GroupScreenState extends State<GroupScreen> {
   void _showInviteModal(BuildContext context, Group group) {
     final link =
         'https://poker-night-tools.web.app/join-group?code=${group.joinCode}';
-    final messenger = ScaffoldMessenger.of(context);
-    var copiedLink = false;
     showAppModal(
       context: context,
-      maxWidth: 400,
+      maxWidth: 480,
       title: 'Invite people',
-      child: StatefulBuilder(
-        builder: (context, setState) => Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Anyone with this link or code can join in one tap.',
-              textAlign: TextAlign.center,
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                decoration: BoxDecoration(
-                  // Literal white, deliberately: a QR code needs a light quiet
-                  // zone and maximum contrast to scan. Theming this card would
-                  // make the code unreadable on the dark palettes.
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(
-                    color: AppColors.border.withValues(alpha: 0.5),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.black.withValues(alpha: 0.10),
-                      blurRadius: 18,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: QrImageView(
-                  data: link,
-                  size: 140,
-                  backgroundColor: Colors.white,
-                  padding: EdgeInsets.zero,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            // The one-lined small copy link field
-            Container(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.md,
-                right: AppSpacing.xs,
-                top: AppSpacing.xs,
-                bottom: AppSpacing.xs,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.muted,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.link, size: 16, color: AppColors.mutedForeground),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      'poker-night-tools.web.app/...',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.foreground,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  AppButton(
-                    size: AppButtonSize.sm,
-                    variant: copiedLink
-                        ? AppButtonVariant.secondary
-                        : AppButtonVariant.primary,
-                    onPressed: () async {
-                      await Clipboard.setData(ClipboardData(text: link));
-                      if (!mounted) return;
-                      setState(() => copiedLink = true);
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('Invite link copied'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                      Future.delayed(const Duration(seconds: 2), () {
-                        if (mounted) setState(() => copiedLink = false);
-                      });
-                    },
-                    child: Text(copiedLink ? 'Copied' : 'Copy link'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            CodeDisplay(code: group.joinCode, label: 'Or enter code'),
-          ],
-        ),
-      ),
+      child: _InviteModalContent(group: group, link: link),
     );
   }
 
@@ -1174,6 +1077,302 @@ class _InfoChip extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+
+class _InviteModalContent extends StatefulWidget {
+  const _InviteModalContent({
+    required this.group,
+    required this.link,
+  });
+
+  final Group group;
+  final String link;
+
+  @override
+  State<_InviteModalContent> createState() => _InviteModalContentState();
+}
+
+class _InviteModalContentState extends State<_InviteModalContent> {
+  String _searchQuery = '';
+  bool _copiedLink = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
+    final currentUid = app.user?.id;
+    final currentName = app.user?.name.toLowerCase().trim();
+    final messenger = ScaffoldMessenger.of(context);
+
+    // Extract past opponents across all groups (Spec §B13, T124)
+    final opponentsMap = <String, ({String id, String name, DateTime lastPlayed, bool isMember})>{};
+
+    for (final g in app.groups) {
+      for (final game in g.pastGames) {
+        final gameDate = DateTime.tryParse(game.settings.date) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        for (final p in game.players) {
+          if (p.isGuest) continue;
+          if (currentUid != null && p.id == currentUid) continue;
+          if (currentName != null && p.name.toLowerCase().trim() == currentName) continue;
+          final key = p.name.toLowerCase().trim();
+          final isMember = widget.group.members.any(
+            (m) => m.id == p.id || m.name.toLowerCase().trim() == key,
+          );
+          final existing = opponentsMap[key];
+          if (existing == null || gameDate.isAfter(existing.lastPlayed)) {
+            opponentsMap[key] = (
+              id: p.id,
+              name: p.name,
+              lastPlayed: gameDate,
+              isMember: isMember,
+            );
+          }
+        }
+      }
+    }
+
+    final opponents = opponentsMap.values.toList()
+      ..sort((a, b) => b.lastPlayed.compareTo(a.lastPlayed));
+
+    final filtered = _searchQuery.isEmpty
+        ? opponents
+        : opponents
+            .where((o) => o.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+            .toList();
+
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Anyone with this link or code can join in one tap.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(
+                  color: AppColors.border.withValues(alpha: 0.5),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.black.withValues(alpha: 0.10),
+                    blurRadius: 18,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: QrImageView(
+                data: widget.link,
+                size: 130,
+                backgroundColor: Colors.white,
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  size: AppButtonSize.md,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () async {
+                    try {
+                      await SharePlus.instance.share(
+                        ShareParams(
+                          text: widget.link,
+                          subject: 'Join my poker group: ${widget.group.name}',
+                        ),
+                      );
+                    } catch (_) {
+                      await Clipboard.setData(ClipboardData(text: widget.link));
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Invite link copied'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.share, size: 16),
+                      SizedBox(width: AppSpacing.xs),
+                      Text('Share link'),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: AppButton(
+                  size: AppButtonSize.md,
+                  variant: _copiedLink
+                      ? AppButtonVariant.secondary
+                      : AppButtonVariant.primary,
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: widget.link));
+                    if (!mounted) return;
+                    setState(() => _copiedLink = true);
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Invite link copied'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    Future.delayed(const Duration(seconds: 2), () {
+                      if (mounted) setState(() => _copiedLink = false);
+                    });
+                  },
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _copiedLink ? Icons.check : Icons.copy,
+                        size: 16,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(_copiedLink ? 'Copied' : 'Copy link'),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          CodeDisplay(code: widget.group.joinCode, label: 'Or enter code'),
+          const SizedBox(height: AppSpacing.lg),
+          const Divider(),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            "People you've played with",
+            style: AppTypography.bodySm.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.foreground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Invite past opponents to this group in one tap.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            onChanged: (val) => setState(() => _searchQuery = val),
+            style: AppTypography.bodySm,
+            decoration: InputDecoration(
+              hintText: 'Search past opponents...',
+              hintStyle: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              prefixIcon: const Icon(Icons.search, size: 18),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.sm,
+              ),
+              filled: true,
+              fillColor: AppColors.muted,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (filtered.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              child: Text(
+                opponents.isEmpty
+                    ? 'No past opponents found yet.'
+                    : 'No matches found.',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            )
+          else
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: filtered.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, i) {
+                  final opponent = filtered[i];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                    child: Row(
+                      children: [
+                        AppAvatar(name: opponent.name, size: AppAvatarSize.sm),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                opponent.name,
+                                style: AppTypography.bodySm.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                opponent.lastPlayed.millisecondsSinceEpoch == 0
+                                    ? 'Played recently'
+                                    : 'Last played ${Formatters.relativeTime(opponent.lastPlayed)}',
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (opponent.isMember)
+                          const AppBadge(
+                            label: 'Member',
+                            variant: AppBadgeVariant.muted,
+                          )
+                        else
+                          AppButton(
+                            size: AppButtonSize.sm,
+                            variant: AppButtonVariant.secondary,
+                            onPressed: () async {
+                              await Clipboard.setData(ClipboardData(text: widget.link));
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text('Invite link copied for ${opponent.name}'),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            child: const Text('Invite'),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

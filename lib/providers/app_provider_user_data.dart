@@ -290,23 +290,34 @@ extension AppProviderUserData on AppProvider {
         .firstOrNull
         ?.amount ?? 0;
     unawaited(
-      _repo
-          .saveGameResult(
-            uid,
-            game.id,
-            GameResultRow(
-              gameId: game.id,
-              groupId: game.groupId,
-              position: position,
-              playerCount: game.finishOrder.length,
-              knockouts: me.knockouts,
-              finishedAt: DateTime.now(),
-              eliminatedAtLevel: me.eliminatedAtLevel,
-              prize: prize,
-              buyInsPaid: buyInsPaid,
-            ),
-          )
-          .catchError((Object e) => debugPrint('saveGameResult failed: $e')),
+      () async {
+        try {
+          GameResultRow row = GameResultRow(
+            gameId: game.id,
+            groupId: game.groupId,
+            position: position,
+            playerCount: game.finishOrder.length,
+            knockouts: me.knockouts,
+            finishedAt: DateTime.now(),
+            eliminatedAtLevel: me.eliminatedAtLevel,
+            prize: prize,
+            buyInsPaid: buyInsPaid,
+          );
+          if (game.groupId.isNotEmpty) {
+            final authoritative = await _repo.fetchMySettlement(
+              game.groupId,
+              game.id,
+              uid,
+            );
+            if (authoritative != null) {
+              row = authoritative;
+            }
+          }
+          await _repo.saveGameResult(uid, game.id, row);
+        } catch (e) {
+          debugPrint('saveGameResult failed: $e');
+        }
+      }(),
     );
   }
 

@@ -2686,6 +2686,65 @@ extension AppProviderTournament on AppProvider {
     // can be forecast from it rather than from a constant. Gated on the D9
     // consent inside [recordCalibration].
     recordCalibration(_currentGame!);
+
+    // Host authoritative settlement: write each member's private settlement row
+    // (Build Spec §B7, §E14) so members can adopt their unscrubbed financial
+    // result without anyone reading another player's private counters.
+    if (_backendUp && hasCurrentGroup && _currentGroup.id.isNotEmpty) {
+      final settlements = <String, GameResultRow>{};
+      final finishOrder = _currentGame!.finishOrder;
+      for (final p in _currentGame!.players) {
+        if (p.isGuest) continue;
+        final index = finishOrder.indexOf(p.id);
+        if (index == -1) continue;
+        final position = finishPositionFromIndex(
+          index: index,
+          listLength: finishOrder.length,
+        );
+        final myPayments = _currentGame!.payments.where(
+          (pay) => pay.playerId == p.id && pay.status == PaymentStatus.paid,
+        );
+        final int buyInsPaid;
+        if (myPayments.isNotEmpty) {
+          buyInsPaid = myPayments.fold<int>(0, (sum, pay) => sum + pay.amount);
+        } else {
+          buyInsPaid = _currentGame!.settings.buyIn +
+              (p.rebuys *
+                  (_currentGame!.settings.rebuyCost ??
+                      _currentGame!.settings.buyIn)) +
+              (p.reEntries * _currentGame!.settings.buyIn) +
+              (p.hasAddOn
+                  ? (_currentGame!.settings.addOnCost ??
+                      _currentGame!.settings.buyIn)
+                  : 0);
+        }
+        final prize = _currentGame!.structure.prizes
+            .where((pr) => pr.place == position)
+            .firstOrNull
+            ?.amount ?? 0;
+        settlements[p.id] = GameResultRow(
+          gameId: _currentGame!.id,
+          groupId: _currentGame!.groupId,
+          position: position,
+          playerCount: finishOrder.length,
+          knockouts: p.knockouts,
+          finishedAt: DateTime.now(),
+          eliminatedAtLevel: p.eliminatedAtLevel,
+          prize: prize,
+          buyInsPaid: buyInsPaid,
+        );
+      }
+      if (settlements.isNotEmpty) {
+        unawaited(
+          _repo
+              .saveGameSettlements(_currentGroup.id, _currentGame!.id, settlements)
+              .catchError(
+                (Object e) => debugPrint('saveGameSettlements failed: $e'),
+              ),
+        );
+      }
+    }
+
     // This device settled the game — write my own result now (other members'
     // devices record theirs when the completed doc reaches them).
     if (_backendUp) {

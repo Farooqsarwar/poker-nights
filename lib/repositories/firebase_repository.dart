@@ -2018,6 +2018,7 @@ class FirebaseRepository {
       'addOnRequests': fullDoc['addOnRequests'],
       'prizes': fullDoc['structure']['prizes'],
       'organizerAmount': fullDoc['structure']['organizerAmount'],
+      'payments': game.payments.map(paymentRecordToMap).toList(),
     };
   }
 
@@ -2030,9 +2031,8 @@ class FirebaseRepository {
     publicDoc['auditHistory'] = const <Map<String, dynamic>>[];
     publicDoc['rebuyRequests'] = const <String>[];
     publicDoc['addOnRequests'] = const <String>[];
-    // A2-1: who declined an add-on is per-person financial intent, so it sits
-    // with the request queues rather than in the member-readable document.
     publicDoc['addOnDeclined'] = const <String>[];
+    publicDoc['payments'] = const <Map<String, dynamic>>[];
 
     final publicSettings = Map<String, dynamic>.from(
       publicDoc['settings'] as Map? ?? {},
@@ -2146,6 +2146,56 @@ class FirebaseRepository {
         .doc('privateData')
         .get();
     return snap.data();
+  }
+
+  /// Writes authoritative per-player settlement records when a tournament completes.
+  /// Each participant's document can only be read by that participant and the group admin.
+  Future<void> saveGameSettlements(
+    String groupId,
+    String gameId,
+    Map<String, GameResultRow> settlements,
+  ) async {
+    final batch = _db.batch();
+    final gameRef = _db
+        .collection('groups')
+        .doc(groupId)
+        .collection('games')
+        .doc(gameId)
+        .collection('settlements');
+    for (final entry in settlements.entries) {
+      batch.set(
+        gameRef.doc(entry.key),
+        entry.value.toMap(),
+        SetOptions(merge: true),
+      );
+    }
+    await batch.commit();
+  }
+
+  /// Fetches the authenticated player's own authoritative settlement record.
+  Future<GameResultRow?> fetchMySettlement(
+    String groupId,
+    String gameId,
+    String uid,
+  ) async {
+    try {
+      final snap = await _db
+          .collection('groups')
+          .doc(groupId)
+          .collection('games')
+          .doc(gameId)
+          .collection('settlements')
+          .doc(uid)
+          .get();
+      if (!snap.exists || snap.data() == null) return null;
+      return GameResultRow.fromMap(
+        snap.id,
+        Map<String, dynamic>.from(snap.data()!),
+      );
+    } catch (e) {
+      debugPrint('fetchMySettlement failed: $e');
+      return null;
+    }
   }
 
   Map<String, dynamic> _unflatten(Map<String, dynamic> flat) {

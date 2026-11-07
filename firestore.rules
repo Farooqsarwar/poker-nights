@@ -204,8 +204,11 @@ service cloud.firestore {
       // be absent here exactly as `organizerPct` is.
       let overtimeSafe = !data.keys().hasAll(['settings'])
           || !data.settings.keys().hasAny(['addOnOvertime']);
+      // Spec §B7, §E6, §E14: the full payment ledger is private to the host.
+      // Individual payments must not be published on the shared game document.
+      let paymentsSafe = data.get('payments', []).size() == 0;
       return settingsSafe && structureSafe && auditSafe && requestsSafe
-          && overtimeSafe;
+          && overtimeSafe && paymentsSafe;
     }
 
     // ---------- server-side value validation ----------
@@ -756,6 +759,16 @@ service cloud.firestore {
           allow create, update: if isGroupAdmin(gid)
               && privateGameDocSafe(gid, gameId);
           allow delete: if isGroupAdmin(gid);
+        }
+
+        // Per-player settlement rows (Build Spec §B7, §E14). The host writes
+        // the authoritative unscrubbed result (prize, buyInsPaid, place) for
+        // each participant at settlement; each player reads ONLY their own
+        // document. No other member can read another player's settlement.
+        match /settlements/{playerId} {
+          allow read: if isMember(gid)
+              && (isGroupAdmin(gid) || (signedIn() && request.auth.uid == playerId));
+          allow write: if isGroupAdmin(gid);
         }
 
         // ---------- player index ----------

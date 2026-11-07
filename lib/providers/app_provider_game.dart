@@ -96,6 +96,12 @@ extension AppProviderGame on AppProvider {
                 addOnRequests: privateData['addOnRequests'] is List
                     ? List<String>.from(privateData['addOnRequests'] as List)
                     : _currentGame!.addOnRequests,
+                payments: privateData['payments'] is List
+                    ? [
+                        for (final e in privateData['payments'] as List)
+                          paymentRecordFromMap(Map<String, dynamic>.from(e as Map)),
+                      ]
+                    : _currentGame!.payments,
                 structure: _currentGame!.structure.copyWith(
                   prizes: privateData['prizes'] != null
                       ? (privateData['prizes'] as List)

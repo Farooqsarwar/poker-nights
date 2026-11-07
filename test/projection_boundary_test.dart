@@ -261,6 +261,20 @@ void main() {
       );
     });
 
+    test('publicGameDocSafe requires empty payments array to prevent payment ledger leakage', () {
+      final rules = File('firestore.rules').readAsStringSync();
+      final start = rules.indexOf('function publicGameDocSafe()');
+      final body = rules.substring(
+        start,
+        rules.indexOf('function publicGameDocSafe()') + 1500,
+      );
+      expect(
+        body,
+        contains("data.get('payments', []).size() == 0"),
+        reason: 'payments array must be required to be empty in publicGameDocSafe',
+      );
+    });
+
     test('D2: the payout ladder is visible to everyone, organiser take is not', () {
       // D2: "Everyone - players, guests, the TV - sees the prize pool and the
       // payouts. Only the host's organiser contribution stays hidden." The

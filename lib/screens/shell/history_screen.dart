@@ -245,7 +245,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         else if (_tab == 'tournaments')
           _buildGames(pastGames, userId, isAdmin)
         else if (_tab == 'cash')
-          _buildCash(app.cashHistory, app.soloHistory, isAdmin)
+          _buildCash(app.cashHistory, app.soloHistory, userId, isAdmin)
         else
           SliverToBoxAdapter(child: _buildLeaderboard(completedGames, userId)),
       ],
@@ -345,6 +345,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             // A solo game has no other host: its owner always sees the money.
             showAmounts: isAdmin || isSolo,
             solo: isSolo,
+            userId: userId,
           ),
         );
       },
@@ -383,6 +384,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget _buildCash(
     List<CashSession> groupSessions,
     List<CashSession> soloSessions,
+    String? userId,
     bool isAdmin,
   ) {
     if (groupSessions.isEmpty && soloSessions.isEmpty) {
@@ -405,6 +407,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 : groupSessions[i],
             showAmounts: isAdmin || isSolo,
             solo: isSolo,
+            userId: userId,
           ),
         );
       },
@@ -700,16 +703,36 @@ class _CashHistoryRow extends StatelessWidget {
     required this.session,
     required this.showAmounts,
     this.solo = false,
+    this.userId,
   });
 
   final CashSession session;
   final bool showAmounts;
+  final String? userId;
 
   /// Finished with no group selected — tagged "Solo" (Addendum 1).
   final bool solo;
 
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
+    final currentUid = userId ?? app.user?.id;
+    final currentName = app.user?.name;
+    final me = session.players.where((p) {
+      if (currentUid != null && p.id == currentUid) return true;
+      if (currentName != null &&
+          p.name.trim().toLowerCase() == currentName.trim().toLowerCase()) {
+        return true;
+      }
+      return false;
+    }).firstOrNull;
+
+    final double? net = me == null
+        ? null
+        : (me.hasCashedOut
+            ? (me.cashedOut - me.totalBuyIns)
+            : (me.stack - me.totalBuyIns));
+
     final currency = session.settings.currency;
     final elapsedMins = session.elapsed.inMinutes;
 
@@ -724,7 +747,12 @@ class _CashHistoryRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(width: 4, color: AppColors.borderSubtle),
+            Container(
+              width: 4,
+              color: net != null && net > 0
+                  ? AppColors.successText
+                  : AppColors.borderSubtle,
+            ),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -772,7 +800,21 @@ class _CashHistoryRow extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        if (showAmounts)
+                        if (net != null)
+                          Text(
+                            net >= 0
+                                ? '+${Formatters.prize(net.round().abs())}'
+                                : '-${Formatters.prize(net.round().abs())}',
+                            style: TextStyle(
+                              color: net >= 0
+                                  ? AppColors.successText
+                                  : AppColors.redText,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: AppTypography.numericFeatures,
+                            ),
+                          )
+                        else if (showAmounts)
                           Text(
                             Formatters.money(currency, session.totalBuyIns),
                             style: TextStyle(
@@ -834,32 +876,41 @@ class _HistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
     final isCancelled = game.status == LiveGameStatus.cancelled;
+    final myResult = app.resultForGame(game.id);
     final myPos = game.finishOrder.indexOf(userId ?? '');
-    final placement = myPos >= 0 ? game.finishOrder.length - myPos : null;
+    final placement = myResult != null && myResult.position > 0
+        ? myResult.position
+        : (myPos >= 0 ? game.finishOrder.length - myPos : null);
     final me = game.players.where((p) => p.id == userId).firstOrNull;
     final winnerId = game.finishOrder.isNotEmpty ? game.finishOrder.last : null;
     final winner = game.players.where((p) => p.id == winnerId).firstOrNull;
     final playersCount = game.players.where((p) => !p.isGuest).length;
     final isPodium = placement != null && placement <= 3;
-    final prizeForPlacement = placement == null
-        ? 0
-        : game.structure.prizes.isEmpty
-        ? 0
-        : game.structure.prizes
-                  .where((pr) => pr.place == placement)
-                  .firstOrNull
-                  ?.amount ??
-              0;
-    final net = placement == null
-        ? null
-        : prizeForPlacement -
-              game.settings.buyIn -
-              ((me?.rebuys ?? 0) *
-                  (game.settings.rebuyCost ?? game.settings.buyIn)) -
-              ((me?.hasAddOn ?? false)
-                  ? (game.settings.addOnCost ?? game.settings.buyIn)
-                  : 0);
+    final int? net;
+    if (myResult != null &&
+        myResult.position > 0 &&
+        (myResult.prize > 0 || myResult.buyInsPaid > 0)) {
+      net = myResult.net;
+    } else if (placement != null) {
+      final prizeForPlacement = game.structure.prizes.isEmpty
+          ? 0
+          : game.structure.prizes
+                    .where((pr) => pr.place == placement)
+                    .firstOrNull
+                    ?.amount ??
+                0;
+      net = prizeForPlacement -
+          game.settings.buyIn -
+          ((me?.rebuys ?? 0) *
+              (game.settings.rebuyCost ?? game.settings.buyIn)) -
+          ((me?.hasAddOn ?? false)
+              ? (game.settings.addOnCost ?? game.settings.buyIn)
+              : 0);
+    } else {
+      net = null;
+    }
 
     // No gold, no silver, no bronze (no-gold rule): every podium finish,
     // including 1st, reads in the one accent — crimson.

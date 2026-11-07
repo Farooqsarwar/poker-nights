@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/payment_record.dart';
+import 'package:poker_night/repositories/firebase_repository.dart';
+import 'package:poker_night/services/payment_service.dart';
 import 'package:poker_night/utils/model_codec.dart';
 
 /// QA section 12 — simulated payments.
@@ -120,6 +122,68 @@ void main() {
       expect(paid.idempotencyKey, failed.idempotencyKey);
       expect(paid.playerId, failed.playerId);
       expect(paid.amount, failed.amount);
+    });
+  });
+
+  group('Spec §G1: Yearly savings percentage is computed from the two prices', () {
+    test('computes savings correctly from monthly and yearly prices', () {
+      // £5/mo * 12 = £60/yr vs £36/yr -> save £24 (40%)
+      expect(
+        PremiumPlan.computeYearlySavingsPct(monthlyPrice: 5, yearlyPrice: 36),
+        40,
+      );
+      // £10/mo * 12 = £120/yr vs £90/yr -> save £30 (25%)
+      expect(
+        PremiumPlan.computeYearlySavingsPct(monthlyPrice: 10, yearlyPrice: 90),
+        25,
+      );
+      // If yearly is equal or greater than 12x monthly, savings is 0%
+      expect(
+        PremiumPlan.computeYearlySavingsPct(monthlyPrice: 5, yearlyPrice: 60),
+        0,
+      );
+      expect(
+        PremiumPlan.computeYearlySavingsPct(monthlyPrice: 5, yearlyPrice: 70),
+        0,
+      );
+    });
+
+    test('placeholder Yearly plan carries the dynamically computed savings pill', () {
+      final yearly = PremiumPlan.placeholders.firstWhere((p) => p.id == 'demo-yearly');
+      expect(yearly.saving, 'Save 40%');
+
+      final monthly = PremiumPlan.placeholders.firstWhere((p) => p.id == 'demo-monthly');
+      expect(monthly.saving, isNull);
+
+      final host = PremiumPlan.placeholders.firstWhere((p) => p.id == 'demo-host');
+      expect(host.saving, isNull);
+    });
+  });
+
+  group('Spec §E14: GameResultRow persists prize and buyInsPaid and derives net P&L', () {
+    test('survives round trip to and from map', () {
+      const row = GameResultRow(
+        gameId: 'g1',
+        groupId: 'grp1',
+        position: 2,
+        playerCount: 18,
+        knockouts: 3,
+        finishedAt: null,
+        eliminatedAtLevel: 8,
+        prize: 120,
+        buyInsPaid: 40,
+      );
+      expect(row.net, 80);
+
+      final map = row.toMap();
+      expect(map['prize'], 120);
+      expect(map['buyInsPaid'], 40);
+
+      final back = GameResultRow.fromMap('g1', map);
+      expect(back.gameId, 'g1');
+      expect(back.prize, 120);
+      expect(back.buyInsPaid, 40);
+      expect(back.net, 80);
     });
   });
 }

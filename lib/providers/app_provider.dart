@@ -471,6 +471,10 @@ class AppProvider extends ChangeNotifier {
 
   /// This player's lifetime results — aggregated into [_user.stats].
   List<GameResultRow> _myResults = const [];
+  List<GameResultRow> get myResults => _myResults;
+
+  GameResultRow? resultForGame(String gameId) =>
+      _myResults.where((r) => r.gameId == gameId).firstOrNull;
 
   /// Signature of the last stats summary pushed to roster rows (dedupe).
   String? _lastPushedStatsKey;

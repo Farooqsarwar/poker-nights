@@ -120,7 +120,8 @@ class GameRequest {
 
 /// One settled tournament from the signed-in player's point of view, mirrored
 /// under `users/{uid}/results/{gameId}` so every device can aggregate the same
-/// lifetime stats (played / wins / podium / avgFinish / knockouts).
+/// lifetime stats (played / wins / podium / avgFinish / knockouts) and own
+/// lifetime P&L (§E14: place, entries, knockouts, bustLevel, prize, buyInsPaid).
 class GameResultRow {
   const GameResultRow({
     required this.gameId,
@@ -130,6 +131,8 @@ class GameResultRow {
     required this.knockouts,
     required this.finishedAt,
     this.eliminatedAtLevel,
+    this.prize = 0,
+    this.buyInsPaid = 0,
   });
 
   final String gameId;
@@ -141,6 +144,10 @@ class GameResultRow {
   final int knockouts;
   final DateTime? finishedAt;
   final int? eliminatedAtLevel;
+  final int prize;
+  final int buyInsPaid;
+
+  int get net => prize - buyInsPaid;
 
   Map<String, dynamic> toMap() => {
     'gameId': gameId,
@@ -150,6 +157,8 @@ class GameResultRow {
     'knockouts': knockouts,
     'finishedAt': finishedAt,
     'eliminatedAtLevel': eliminatedAtLevel,
+    'prize': prize,
+    'buyInsPaid': buyInsPaid,
   };
 
   static GameResultRow fromMap(String id, Map<String, dynamic> m) =>
@@ -164,6 +173,8 @@ class GameResultRow {
           _ => null,
         },
         eliminatedAtLevel: (m['eliminatedAtLevel'] as num?)?.toInt(),
+        prize: (m['prize'] as num?)?.toInt() ?? 0,
+        buyInsPaid: (m['buyInsPaid'] as num?)?.toInt() ?? 0,
       );
 }
 

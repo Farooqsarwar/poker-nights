@@ -33,31 +33,51 @@ class PremiumPlan {
   final String? saving;
   final bool oneTime;
 
+  /// Computes the saving percentage between a monthly price and a yearly price,
+  /// as required by Spec §G1 ("computed from the two prices").
+  static int computeYearlySavingsPct({
+    required num monthlyPrice,
+    required num yearlyPrice,
+  }) {
+    if (monthlyPrice <= 0) return 0;
+    final annualized = monthlyPrice * 12;
+    if (yearlyPrice >= annualized) return 0;
+    return (((annualized - yearlyPrice) / annualized) * 100).round();
+  }
+
   /// Demo plans are intentionally fake and local-only. They are not used for a
   /// real store purchase; they only let the product design and QA flow test the
   /// premium upgrade path without charging anything.
-  static const placeholders = [
-    PremiumPlan(
-      id: 'demo-monthly',
-      name: 'Monthly',
-      price: '£5',
-      period: 'month',
-    ),
-    PremiumPlan(
-      id: 'demo-yearly',
-      name: 'Yearly',
-      price: '£36',
-      period: 'year',
-      saving: 'Save 40%',
-    ),
-    PremiumPlan(
-      id: 'demo-host',
-      name: 'Host licence',
-      price: '£60',
-      period: 'once',
-      oneTime: true,
-    ),
-  ];
+  static List<PremiumPlan> get placeholders {
+    const monthlyNum = 5.0;
+    const yearlyNum = 36.0;
+    final savePct = computeYearlySavingsPct(
+      monthlyPrice: monthlyNum,
+      yearlyPrice: yearlyNum,
+    );
+    return [
+      const PremiumPlan(
+        id: 'demo-monthly',
+        name: 'Monthly',
+        price: '£5',
+        period: 'month',
+      ),
+      PremiumPlan(
+        id: 'demo-yearly',
+        name: 'Yearly',
+        price: '£36',
+        period: 'year',
+        saving: savePct > 0 ? 'Save $savePct%' : null,
+      ),
+      const PremiumPlan(
+        id: 'demo-host',
+        name: 'Host licence',
+        price: '£60',
+        period: 'once',
+        oneTime: true,
+      ),
+    ];
+  }
 }
 
 /// The result of attempting a purchase.

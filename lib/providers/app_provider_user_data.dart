@@ -216,19 +216,29 @@ extension AppProviderUserData on AppProvider {
     final index = game.finishOrder.indexOf(uid);
     if (index == -1) return;
     _resultsRecorded.add(game.id);
+    final position = finishPositionFromIndex(
+      index: index,
+      listLength: game.finishOrder.length,
+    );
+    final buyInsPaid = game.settings.buyIn +
+        (me.rebuys * (game.settings.rebuyCost ?? game.settings.buyIn)) +
+        (me.hasAddOn ? (game.settings.addOnCost ?? game.settings.buyIn) : 0);
+    final prize = game.structure.prizes
+        .where((pr) => pr.place == position)
+        .firstOrNull
+        ?.amount ?? 0;
     _myResults = [
       ..._myResults.where((r) => r.gameId != game.id),
       GameResultRow(
         gameId: game.id,
         groupId: game.groupId,
-        position: finishPositionFromIndex(
-          index: index,
-          listLength: game.finishOrder.length,
-        ),
+        position: position,
         playerCount: game.finishOrder.length,
         knockouts: me.knockouts,
         finishedAt: DateTime.now(),
         eliminatedAtLevel: me.eliminatedAtLevel,
+        prize: prize,
+        buyInsPaid: buyInsPaid,
       ),
     ];
     _user = _user?.copyWith(stats: _statsFromResults(_myResults));
@@ -250,6 +260,17 @@ extension AppProviderUserData on AppProvider {
     final index = game.finishOrder.indexOf(uid);
     if (index == -1) return;
     _resultsRecorded.add(game.id);
+    final position = finishPositionFromIndex(
+      index: index,
+      listLength: game.finishOrder.length,
+    );
+    final buyInsPaid = game.settings.buyIn +
+        (me.rebuys * (game.settings.rebuyCost ?? game.settings.buyIn)) +
+        (me.hasAddOn ? (game.settings.addOnCost ?? game.settings.buyIn) : 0);
+    final prize = game.structure.prizes
+        .where((pr) => pr.place == position)
+        .firstOrNull
+        ?.amount ?? 0;
     unawaited(
       _repo
           .saveGameResult(
@@ -258,14 +279,13 @@ extension AppProviderUserData on AppProvider {
             GameResultRow(
               gameId: game.id,
               groupId: game.groupId,
-              position: finishPositionFromIndex(
-                index: index,
-                listLength: game.finishOrder.length,
-              ),
+              position: position,
               playerCount: game.finishOrder.length,
               knockouts: me.knockouts,
               finishedAt: DateTime.now(),
               eliminatedAtLevel: me.eliminatedAtLevel,
+              prize: prize,
+              buyInsPaid: buyInsPaid,
             ),
           )
           .catchError((Object e) => debugPrint('saveGameResult failed: $e')),

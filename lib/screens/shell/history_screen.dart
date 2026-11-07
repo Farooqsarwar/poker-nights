@@ -8,6 +8,7 @@ import '../../app/route_paths.dart';
 import '../../constants/app_constants.dart';
 import '../../models/cash_game.dart';
 import '../../models/live_game.dart';
+import '../../models/payment_record.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../services/payment_service.dart';
@@ -717,15 +718,9 @@ class _CashHistoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final currentUid = userId ?? app.user?.id;
-    final currentName = app.user?.name;
-    final me = session.players.where((p) {
-      if (currentUid != null && p.id == currentUid) return true;
-      if (currentName != null &&
-          p.name.trim().toLowerCase() == currentName.trim().toLowerCase()) {
-        return true;
-      }
-      return false;
-    }).firstOrNull;
+    final me = currentUid == null
+        ? null
+        : session.players.where((p) => p.id == currentUid).firstOrNull;
 
     final double? net = me == null
         ? null
@@ -800,11 +795,9 @@ class _CashHistoryRow extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        if (net != null)
+                        if (net != null) ...[
                           Text(
-                            net >= 0
-                                ? '+${Formatters.prize(net.round().abs())}'
-                                : '-${Formatters.prize(net.round().abs())}',
+                            Formatters.signedMoney(currency, net),
                             style: TextStyle(
                               color: net >= 0
                                   ? AppColors.successText
@@ -813,18 +806,9 @@ class _CashHistoryRow extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                               fontFeatures: AppTypography.numericFeatures,
                             ),
-                          )
-                        else if (showAmounts)
-                          Text(
-                            Formatters.money(currency, session.totalBuyIns),
-                            style: TextStyle(
-                              color: AppColors.foreground,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              fontFeatures: AppTypography.numericFeatures,
-                            ),
                           ),
-                        const SizedBox(height: 4),
+                          const SizedBox(height: 4),
+                        ],
                         if (solo) ...[
                           const AppBadge(label: 'Solo'),
                           const SizedBox(height: 4),
@@ -894,6 +878,21 @@ class _HistoryRow extends StatelessWidget {
         (myResult.prize > 0 || myResult.buyInsPaid > 0)) {
       net = myResult.net;
     } else if (placement != null) {
+      final myPayments = game.payments.where(
+        (p) => p.playerId == userId && p.status == PaymentStatus.paid,
+      );
+      final int totalPaid;
+      if (myPayments.isNotEmpty) {
+        totalPaid = myPayments.fold<int>(0, (sum, p) => sum + p.amount);
+      } else {
+        totalPaid = game.settings.buyIn +
+            ((me?.rebuys ?? 0) *
+                (game.settings.rebuyCost ?? game.settings.buyIn)) +
+            ((me?.reEntries ?? 0) * game.settings.buyIn) +
+            ((me?.hasAddOn ?? false)
+                ? (game.settings.addOnCost ?? game.settings.buyIn)
+                : 0);
+      }
       final prizeForPlacement = game.structure.prizes.isEmpty
           ? 0
           : game.structure.prizes
@@ -901,13 +900,7 @@ class _HistoryRow extends StatelessWidget {
                     .firstOrNull
                     ?.amount ??
                 0;
-      net = prizeForPlacement -
-          game.settings.buyIn -
-          ((me?.rebuys ?? 0) *
-              (game.settings.rebuyCost ?? game.settings.buyIn)) -
-          ((me?.hasAddOn ?? false)
-              ? (game.settings.addOnCost ?? game.settings.buyIn)
-              : 0);
+      net = prizeForPlacement - totalPaid;
     } else {
       net = null;
     }

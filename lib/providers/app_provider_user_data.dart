@@ -220,9 +220,18 @@ extension AppProviderUserData on AppProvider {
       index: index,
       listLength: game.finishOrder.length,
     );
-    final buyInsPaid = game.settings.buyIn +
-        (me.rebuys * (game.settings.rebuyCost ?? game.settings.buyIn)) +
-        (me.hasAddOn ? (game.settings.addOnCost ?? game.settings.buyIn) : 0);
+    final myPayments = game.payments.where(
+      (p) => p.playerId == uid && p.status == PaymentStatus.paid,
+    );
+    final int buyInsPaid;
+    if (myPayments.isNotEmpty) {
+      buyInsPaid = myPayments.fold<int>(0, (sum, p) => sum + p.amount);
+    } else {
+      buyInsPaid = game.settings.buyIn +
+          (me.rebuys * (game.settings.rebuyCost ?? game.settings.buyIn)) +
+          (me.reEntries * game.settings.buyIn) +
+          (me.hasAddOn ? (game.settings.addOnCost ?? game.settings.buyIn) : 0);
+    }
     final prize = game.structure.prizes
         .where((pr) => pr.place == position)
         .firstOrNull
@@ -264,9 +273,18 @@ extension AppProviderUserData on AppProvider {
       index: index,
       listLength: game.finishOrder.length,
     );
-    final buyInsPaid = game.settings.buyIn +
-        (me.rebuys * (game.settings.rebuyCost ?? game.settings.buyIn)) +
-        (me.hasAddOn ? (game.settings.addOnCost ?? game.settings.buyIn) : 0);
+    final myPayments = game.payments.where(
+      (p) => p.playerId == uid && p.status == PaymentStatus.paid,
+    );
+    final int buyInsPaid;
+    if (myPayments.isNotEmpty) {
+      buyInsPaid = myPayments.fold<int>(0, (sum, p) => sum + p.amount);
+    } else {
+      buyInsPaid = game.settings.buyIn +
+          (me.rebuys * (game.settings.rebuyCost ?? game.settings.buyIn)) +
+          (me.reEntries * game.settings.buyIn) +
+          (me.hasAddOn ? (game.settings.addOnCost ?? game.settings.buyIn) : 0);
+    }
     final prize = game.structure.prizes
         .where((pr) => pr.place == position)
         .firstOrNull

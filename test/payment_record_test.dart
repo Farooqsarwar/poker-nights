@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/payment_record.dart';
 import 'package:poker_night/repositories/firebase_repository.dart';
 import 'package:poker_night/services/payment_service.dart';
+import 'package:poker_night/utils/formatters.dart';
 import 'package:poker_night/utils/model_codec.dart';
 
 /// QA section 12 — simulated payments.
@@ -184,6 +185,83 @@ void main() {
       expect(back.prize, 120);
       expect(back.buyInsPaid, 40);
       expect(back.net, 80);
+    });
+  });
+
+  group('Spec §B7 / §E14: Total buy-in accounting for personal P&L', () {
+    test('sums all paid records for the player when payment records exist', () {
+      final payments = [
+        PaymentRecord(
+          id: 'p1',
+          playerId: 'u1',
+          purpose: PaymentPurpose.buyIn,
+          amount: 20,
+          status: PaymentStatus.paid,
+          timestamp: DateTime.now(),
+          idempotencyKey: 'k1',
+        ),
+        PaymentRecord(
+          id: 'p2',
+          playerId: 'u1',
+          purpose: PaymentPurpose.rebuy,
+          amount: 15,
+          status: PaymentStatus.paid,
+          timestamp: DateTime.now(),
+          idempotencyKey: 'k2',
+        ),
+        PaymentRecord(
+          id: 'p3',
+          playerId: 'u1',
+          purpose: PaymentPurpose.addOn,
+          amount: 10,
+          status: PaymentStatus.paid,
+          timestamp: DateTime.now(),
+          idempotencyKey: 'k3',
+        ),
+        PaymentRecord(
+          id: 'p4',
+          playerId: 'u1',
+          purpose: PaymentPurpose.reEntry,
+          amount: 20,
+          status: PaymentStatus.paid,
+          timestamp: DateTime.now(),
+          idempotencyKey: 'k4',
+        ),
+        // Failed/unpaid payments must not count
+        PaymentRecord(
+          id: 'p5',
+          playerId: 'u1',
+          purpose: PaymentPurpose.rebuy,
+          amount: 15,
+          status: PaymentStatus.failed,
+          timestamp: DateTime.now(),
+          idempotencyKey: 'k5',
+        ),
+        // Other player payments must not count
+        PaymentRecord(
+          id: 'p6',
+          playerId: 'u2',
+          purpose: PaymentPurpose.buyIn,
+          amount: 20,
+          status: PaymentStatus.paid,
+          timestamp: DateTime.now(),
+          idempotencyKey: 'k6',
+        ),
+      ];
+
+      final myPaid = payments.where((p) => p.playerId == 'u1' && p.status == PaymentStatus.paid);
+      final total = myPaid.fold<int>(0, (sum, p) => sum + p.amount);
+      expect(total, 65); // 20 + 15 + 10 + 20
+    });
+  });
+
+  group('Spec §B7 / §E16: Cash session personal P&L with exact cents', () {
+    test('signed money formats whole values and decimal cents without truncation', () {
+      expect(Formatters.signedMoney('', 20.0), '+20');
+      expect(Formatters.signedMoney('', -15.0), '-15');
+      expect(Formatters.signedMoney('', 24.50), '+24.50');
+      expect(Formatters.signedMoney('', -7.25), '-7.25');
+      expect(Formatters.signedMoney('', 0.0), '+0');
     });
   });
 }

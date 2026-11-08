@@ -319,6 +319,62 @@ class AppProvider extends ChangeNotifier {
 
   /// Pending settlement documents to be pushed to Firestore when online (Spec §B7, §E14).
   final Map<String, Map<String, GameResultRow>> _pendingSettlements = {};
+  AppNotification? _lastPushedNotification;
+  AppNotification? get lastPushedNotification => _lastPushedNotification;
+
+  void _persistPendingSettlements() {
+    try {
+      final serialized = <String, dynamic>{};
+      for (final entry in _pendingSettlements.entries) {
+        serialized[entry.key] = entry.value.map(
+          (k, v) => MapEntry(k, {
+            ...v.toMap(),
+            if (v.finishedAt != null)
+              'finishedAt': v.finishedAt!.toIso8601String(),
+          }),
+        );
+      }
+      Localstore.instance.collection('app').doc('pending_settlements').set({
+        'settlements': serialized,
+      });
+    } catch (e) {
+      debugPrint('Failed to save pending settlements: $e');
+    }
+  }
+
+  Future<void> _hydratePendingSettlements() async {
+    try {
+      final doc = await Localstore.instance
+          .collection('app')
+          .doc('pending_settlements')
+          .get();
+      final raw = doc?['settlements'];
+      if (raw is! Map) return;
+      for (final gameEntry in raw.entries) {
+        final gameId = gameEntry.key.toString();
+        final rowsMap = gameEntry.value;
+        if (rowsMap is Map) {
+          final rowMap = <String, GameResultRow>{};
+          for (final rowEntry in rowsMap.entries) {
+            if (rowEntry.value is Map) {
+              rowMap[rowEntry.key.toString()] = GameResultRow.fromMap(
+                rowEntry.key.toString(),
+                (rowEntry.value as Map).map((k, v) => MapEntry('$k', v)),
+              );
+            }
+          }
+          if (rowMap.isNotEmpty) {
+            _pendingSettlements[gameId] = rowMap;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to hydrate pending settlements: $e');
+    }
+  }
+
+  Future<void> maybeBackfillAuthoritativeResult(LiveGame game) =>
+      AppProviderUserData(this).maybeBackfillAuthoritativeResult(game);
 
   /// Last member-RSVP patch failure, surfaced on the invitation screen so
   /// backend rejections are never invisible (vs silent optimistic state that
@@ -1258,6 +1314,7 @@ class AppProvider extends ChangeNotifier {
     _currentGame = null;
     AppProviderTimer(this)._startTick();
     AppProviderUserData(this)._loadRecovery();
+    _hydratePendingSettlements();
     _initConnectivity();
     // Firebase may be unavailable (widget tests run before initializeApp);
     // degrade gracefully by marking auth resolved so route guards open up.

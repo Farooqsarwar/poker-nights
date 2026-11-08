@@ -278,16 +278,17 @@ extension AppProviderUserData on AppProvider {
         try {
           GameResultRow? authoritative;
           if (game.groupId.isNotEmpty) {
-            for (var attempt = 0; attempt < 3; attempt++) {
+            for (var attempt = 0; attempt < 5; attempt++) {
               authoritative = await _repo.fetchMySettlement(
                 game.groupId,
                 game.id,
                 uid,
               );
               if (authoritative != null) break;
-              if (attempt < 2) {
+              if (attempt < 4) {
+                // Exponential backoff: 250ms, 500ms, 1000ms, 2000ms
                 await Future<void>.delayed(
-                  Duration(milliseconds: 300 * (attempt + 1)),
+                  Duration(milliseconds: 250 * (1 << attempt)),
                 );
               }
             }
@@ -323,6 +324,34 @@ extension AppProviderUserData on AppProvider {
         }
       }(),
     );
+  }
+
+  static final Set<String> _backfillAttempted = {};
+
+  /// Asynchronously fetches the unscrubbed authoritative settlement for legacy
+  /// results that were recorded with estimated or scrubbed fallback amounts.
+  Future<void> maybeBackfillAuthoritativeResult(LiveGame game) async {
+    final uid = _repo.currentUid;
+    if (!_backendUp || uid == null || game.groupId.isEmpty) return;
+    if (!_backfillAttempted.add(game.id)) return;
+    final existing = resultForGame(game.id);
+    if (existing != null && existing.hasExplicitBuyIns) return;
+
+    try {
+      final settlement =
+          await _repo.fetchMySettlement(game.groupId, game.id, uid);
+      if (settlement != null && settlement.hasExplicitBuyIns) {
+        _myResults = [
+          ..._myResults.where((r) => r.gameId != game.id),
+          settlement,
+        ];
+        _user = _user?.copyWith(stats: _statsFromResults(_myResults));
+        if (!_disposed) notifyListeners();
+        await _repo.saveGameResult(uid, game.id, settlement);
+      }
+    } catch (e) {
+      debugPrint('maybeBackfillAuthoritativeResult failed: $e');
+    }
   }
 
   /// Cancels all user/group-scoped subscriptions and clears derived state.

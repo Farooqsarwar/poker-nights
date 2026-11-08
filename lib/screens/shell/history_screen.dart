@@ -863,6 +863,11 @@ class _HistoryRow extends StatelessWidget {
     final app = context.watch<AppProvider>();
     final isCancelled = game.status == LiveGameStatus.cancelled;
     final myResult = app.resultForGame(game.id);
+    if (!solo && (myResult == null || !myResult.hasExplicitBuyIns)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        app.maybeBackfillAuthoritativeResult(game);
+      });
+    }
     final myPos = game.finishOrder.indexOf(userId ?? '');
     final placement = myResult != null && myResult.position > 0
         ? myResult.position

@@ -673,6 +673,17 @@ extension AppProviderTimer on AppProvider {
         lastIdempotencyKey: idemKey,
       );
       addAnnouncement('Break — ${scheduled.durationMins} minutes.', true);
+      pushNotification(
+        AppNotification(
+          id: 'break-${_currentGame!.id}-${_currentGame!.currentLevel}-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Break time',
+          body: '${_currentGame!.settings.name} — ${scheduled.durationMins} minute break.',
+          type: NotificationType.game,
+          link: '/player-live',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
       addAuditRecord(
         'break_start',
         'Scheduled break after level ${_currentGame!.currentLevel} '
@@ -901,6 +912,32 @@ extension AppProviderTimer on AppProvider {
                 ),
               );
             }
+          }
+        }
+
+        // "Check-in is open"
+        final checkInOpens = game.settings.checkInOpensAt;
+        if (checkInOpens != null &&
+            !game.checkInClosed &&
+            _serverNow.isAfter(checkInOpens) &&
+            _serverNow.isBefore(
+              game.settings.scheduledStart ??
+                  _serverNow.add(const Duration(minutes: 10)),
+            )) {
+          final key = '${game.id}-checkInOpen';
+          if (!_hasFiredReminder(key)) {
+            _sentReminderKeys.add(key);
+            pushNotification(
+              AppNotification(
+                id: 'remind-checkin-${game.id}-${DateTime.now().millisecondsSinceEpoch}',
+                title: 'Check-in is open',
+                body: 'Check-in is now open for ${game.settings.name}.',
+                type: NotificationType.game,
+                link: '/check-in',
+                read: false,
+                timestamp: DateTime.now(),
+              ),
+            );
           }
         }
 

@@ -127,14 +127,12 @@ extension AppProviderNotificationsSettings on AppProvider {
     final forMe = me == null || notification.isFor(me);
     if (forMe) {
       _notifications = [notification, ..._notifications];
-      if (_notificationsEnabled &&
-          !PushService.instance.suppressesInAppWebBanners) {
-        BrowserNotify.show(notification.title, notification.body);
-      }
+      // Originator does not banner itself on send; incoming notifications banner via _deliverBrowserNotifications
     }
     // This device originated the event — never re-banner it on itself when
     // the mirrored inbox copy arrives.
     _seenNotificationIds.add(notification.id);
+    _lastPushedNotification = notification;
     if (!_disposed) notifyListeners();
     if (_backendUp) {
       final gid = _currentGroup.id;

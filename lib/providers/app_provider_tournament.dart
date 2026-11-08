@@ -2708,25 +2708,41 @@ extension AppProviderTournament on AppProvider {
         unawaited(
           _repo
               .saveGameSettlements(_currentGroup.id, _currentGame!.id, settlements)
-              .then((_) {
-                _maybeRecordOwnResult(_currentGame!);
-              })
               .catchError((Object e) {
                 debugPrint('saveGameSettlements failed: $e');
               }),
         );
       } else {
         _pendingSettlements[_currentGame!.id] = settlements;
+        _persistPendingSettlements();
       }
     }
 
-    // This device settled the game — write my own result now (other members'
-    // devices record theirs when the completed doc reaches them).
-    if (_backendUp) {
-      _maybeRecordOwnResult(_currentGame!);
+    // This device settled the game — record my authoritative row directly from
+    // settlements[uid] so there is zero race against the network write/read.
+    final uid = _repo.currentUid;
+    final myRow = uid != null ? settlements[uid] : null;
+    if (uid != null && myRow != null) {
+      _resultsRecorded.add(_currentGame!.id);
+      _myResults = [
+        ..._myResults.where((r) => r.gameId != _currentGame!.id),
+        myRow,
+      ];
+      _user = _user?.copyWith(stats: _statsFromResults(_myResults));
+      if (!_disposed) notifyListeners();
+      if (_backendUp) {
+        unawaited(
+          _repo.saveGameResult(uid, _currentGame!.id, myRow).catchError(
+            (Object e) => debugPrint('saveGameResult failed: $e'),
+          ),
+        );
+      }
     } else {
-      // Offline fallback: aggregate locally so stats still move in demo mode.
-      _recordOwnResultOffline(_currentGame!);
+      if (_backendUp) {
+        _maybeRecordOwnResult(_currentGame!);
+      } else {
+        _recordOwnResultOffline(_currentGame!);
+      }
     }
     addAnnouncement('We have a winner!', true);
     pushNotification(

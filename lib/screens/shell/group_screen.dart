@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +11,7 @@ import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
+import '../../models/app_notification.dart';
 import '../../models/group.dart';
 import '../../models/live_game.dart';
 import '../../models/table_settings.dart';
@@ -1235,6 +1237,7 @@ class _InviteModalContentState extends State<InviteModalContent> {
                   size: AppButtonSize.md,
                   variant: AppButtonVariant.secondary,
                   onPressed: () async {
+                              
                     try {
                       await SharePlus.instance.share(
                         ShareParams(
@@ -1416,7 +1419,22 @@ class _InviteModalContentState extends State<InviteModalContent> {
                             onPressed: () async {
                               final oneTapLink =
                                   'https://poker-night-tools.web.app/join-group?code=${currentGroup.joinCode}&to=${Uri.encodeComponent(opponent.id)}';
-                              await Clipboard.setData(ClipboardData(text: oneTapLink));
+                              unawaited(
+                                Clipboard.setData(ClipboardData(text: oneTapLink))
+                                    .catchError((_) {}),
+                              );
+                              app.pushNotification(
+                                AppNotification(
+                                  id: 'invite-${currentGroup.id}-${opponent.id}-${DateTime.now().millisecondsSinceEpoch}',
+                                  title: 'Group invitation',
+                                  body: '${app.user?.name ?? "A host"} invited you to join ${currentGroup.name}.',
+                                  type: NotificationType.invite,
+                                  link: '/join-group?code=${currentGroup.joinCode}&to=${Uri.encodeComponent(opponent.id)}',
+                                  audience: [opponent.id],
+                                  read: false,
+                                  timestamp: DateTime.now(),
+                                ),
+                              );
                               messenger.showSnackBar(
                                 SnackBar(
                                   content: Text('One-tap invite link copied for ${opponent.name}'),

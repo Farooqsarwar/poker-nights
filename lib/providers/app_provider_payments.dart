@@ -42,12 +42,36 @@ extension AppProviderPayments on AppProvider {
   /// at all. Only [PaymentStatus.paid] reaches the prize pool.
   ///
   /// Returns the record — existing one included, when the key was a replay.
+  /// Records a comped entry (0 buy-in cost for the player).
+  PaymentRecord? recordComp({
+    required String playerId,
+    PaymentPurpose purpose = PaymentPurpose.buyIn,
+  }) {
+    return recordPayment(
+      playerId: playerId,
+      purpose: purpose,
+      idempotencyKey: 'comp-$playerId-${purpose.name}-${DateTime.now().millisecondsSinceEpoch}',
+      comped: true,
+    );
+  }
+
+  /// Records one payment attempt against the current tournament.
+  ///
+  /// Idempotent on [idempotencyKey]: re-submitting with the same key returns
+  /// the row already recorded without writing a second line.
+  ///
+  /// [outcome] lets the caller simulate a failure or cancellation, which is
+  /// what the dummy checkout sheet offers so the unhappy paths can be tested
+  /// at all. Only [PaymentStatus.paid] reaches the prize pool.
+  ///
+  /// Returns the record — existing one included, when the key was a replay.
   PaymentRecord? recordPayment({
     required String playerId,
     required PaymentPurpose purpose,
     required String idempotencyKey,
     PaymentStatus outcome = PaymentStatus.paid,
     String? failureReason,
+    bool comped = false,
   }) {
     final game = _currentGame;
     if (game == null || idempotencyKey.isEmpty) return null;
@@ -86,11 +110,11 @@ extension AppProviderPayments on AppProvider {
       id: 'pay-$idempotencyKey',
       playerId: playerId,
       purpose: purpose,
-      amount: amountFor(purpose),
+      amount: comped ? 0 : amountFor(purpose),
       status: outcome,
       timestamp: DateTime.now(),
       idempotencyKey: idempotencyKey,
-      failureReason: failureReason,
+      failureReason: comped ? 'comp' : failureReason,
     );
 
     _pushUndo();

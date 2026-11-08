@@ -3,6 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/tournament.dart';
 import 'package:poker_night/widgets/structure_editor.dart';
 import 'package:poker_night/widgets/dashboard_level_edit_dialog.dart';
+import 'package:poker_night/screens/tournament/player_live_screen.dart' show LevelsTableCard;
+import 'package:poker_night/widgets/app_modal.dart';
+import 'package:poker_night/widgets/app_button.dart';
+import 'package:poker_night/app/typography.dart';
+import 'package:poker_night/constants/app_constants.dart';
 import 'package:poker_night/models/live_game.dart';
 import 'package:poker_night/utils/tournament_engine.dart';
 
@@ -240,6 +245,187 @@ void main() {
       // Recalculation option is hidden when isPlayed: true
       expect(find.text('Recalculation option'), findsNothing);
       expect(find.text('Recalculate after this'), findsNothing);
+    });
+
+    testWidgets('T13: LevelsTableCard reflects dynamically renumbered sequence', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      // Structure with 6 levels: 1..6
+      final initialLevels = makeLevels(6);
+      final structure6 = testStructure.copyWith(levels: initialLevels);
+
+      final game6 = LiveGame(
+        id: 'g6',
+        groupId: 'grp1',
+        settings: const GameSettings(name: 'Test', date: '2026-11-01', time: '19:00', location: 'Home', players: 6, durationHours: 3, buyIn: 20, chipSet: [], chipSetName: 'Std', koEnabled: false, koAmount: 0, rebuys: true, rebuysCloseLevel: 4, addOn: false, anteEnabled: false, anteAfterLevel: 1, organizerPct: 0),
+        structure: structure6,
+        status: LiveGameStatus.running,
+        publicCode: 'C6',
+        tvCode: 'TV6',
+        currentLevel: 2,
+        timerRunning: true,
+        secondsRemaining: 600,
+        players: const [],
+        chat: const [],
+        announcements: const [],
+        totalChipsInPlay: 6000,
+        pendingGuests: const [],
+        finishOrder: const [],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: LevelsTableCard(game: game6, onEditLevel: (_) {}),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // All 6 levels are present
+      for (int i = 1; i <= 6; i++) {
+        expect(find.bySemanticsLabel('Edit Level $i'), findsOneWidget);
+      }
+
+      // Now simulate deleting Level 4: levels 5 and 6 become levels 4 and 5
+      final renumbered = <BlindLevel>[
+        initialLevels[0],
+        initialLevels[1],
+        initialLevels[2],
+        initialLevels[4].copyWith(level: 4),
+        initialLevels[5].copyWith(level: 5),
+      ];
+      final gameRenumbered = game6.copyWith(
+        structure: structure6.copyWith(levels: renumbered),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: LevelsTableCard(game: gameRenumbered, onEditLevel: (_) {}),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Levels 1..5 are present sequentially without gaps
+      for (int i = 1; i <= 5; i++) {
+        expect(find.bySemanticsLabel('Edit Level $i'), findsOneWidget);
+      }
+      expect(find.bySemanticsLabel('Edit Level 6'), findsNothing);
+    });
+
+    testWidgets('T8/T12: Played level modal gate blocks deletion and warns host', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      bool editFormOpened = false;
+      bool wasPlayedPassed = false;
+
+      void showLevelEdit(BuildContext context, LiveGame game, BlindLevel level) {
+        if (level.level < game.currentLevel) {
+          showAppModal(
+            context: context,
+            title: 'Played level',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'L${level.level} was already played. Edit it only to correct the record — the clock won\'t replay it, and it can\'t be deleted.',
+                  style: AppTypography.bodySm,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    editFormOpened = true;
+                    wasPlayedPassed = true;
+                  },
+                  child: const Text('Correct the record'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+        editFormOpened = true;
+        wasPlayedPassed = false;
+      }
+
+      final mockGame = LiveGame(
+        id: 'game1',
+        groupId: 'g1',
+        settings: const GameSettings(
+          name: 'Friday Game',
+          date: '2026-12-18',
+          time: '20:00',
+          location: 'Kitchen table',
+          players: 6,
+          durationHours: 4,
+          buyIn: 20,
+          chipSet: [],
+          chipSetName: 'Standard',
+          koEnabled: false,
+          koAmount: 0,
+          rebuys: true,
+          rebuysCloseLevel: 6,
+          addOn: true,
+          anteEnabled: true,
+          anteAfterLevel: 1,
+          organizerPct: 10,
+        ),
+        structure: testStructure,
+        status: LiveGameStatus.running,
+        publicCode: 'CODE1',
+        tvCode: 'TV1',
+        currentLevel: 4,
+        timerRunning: false,
+        secondsRemaining: 600,
+        players: const [],
+        chat: const [],
+        announcements: const [],
+        totalChipsInPlay: 6000,
+        pendingGuests: const [],
+        finishOrder: const [],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => LevelsTableCard(
+                game: mockGame,
+                onEditLevel: (l) => showLevelEdit(context, mockGame, l),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tap on Level 2 (2 < 4 => played level)
+      await tester.tap(find.bySemanticsLabel('Edit Level 2'));
+      await tester.pumpAndSettle();
+
+      // Verify the Played level warning modal is shown
+      expect(find.text('Played level'), findsOneWidget);
+      expect(
+        find.textContaining('was already played. Edit it only to correct the record — the clock won\'t replay it, and it can\'t be deleted.'),
+        findsOneWidget,
+      );
+
+      // Tap 'Correct the record'
+      await tester.tap(find.text('Correct the record'));
+      await tester.pumpAndSettle();
+
+      expect(editFormOpened, isTrue);
+      expect(wasPlayedPassed, isTrue);
     });
   });
 }

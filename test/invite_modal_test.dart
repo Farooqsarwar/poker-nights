@@ -9,6 +9,7 @@ import 'package:poker_night/models/user.dart';
 import 'package:poker_night/providers/app_provider.dart';
 import 'package:poker_night/screens/shell/group_screen.dart';
 import 'package:poker_night/services/recovery_service.dart';
+import 'package:poker_night/widgets/app_button.dart';
 
 Player _player(String id, String name, {bool isGuest = false}) => Player(
   id: id,
@@ -233,6 +234,18 @@ void main() {
     // 5. Opponent Only is NOT a member of Group 1 -> has Invite button
     expect(find.widgetWithText(ElevatedButton, 'Invite'), findsNothing);
     expect(find.text('Invite'), findsOneWidget);
+
+    // Tap Invite on Opponent Only
+    final inviteFinder = find.text('Invite');
+    final btn = tester.widget<AppButton>(find.ancestor(of: inviteFinder, matching: find.byType(AppButton)));
+    btn.onPressed!();
+    await tester.pump();
+
+    // Verify targeted notification was pushed with audience: ['opp_uid']
+    final note = app.lastPushedNotification;
+    expect(note, isNotNull);
+    expect(note!.link, contains('to=opp_uid'));
+    expect(note.audience, equals(['opp_uid']));
 
     app.dispose();
     await tester.pumpAndSettle();

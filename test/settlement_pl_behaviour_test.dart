@@ -209,5 +209,84 @@ void main() {
       expect(settlements['p2']!.buyInsPaid, 0);
       expect(settlements['p2']!.hasExplicitBuyIns, true);
     });
+
+    test('Real Comp Path: comped player in a paid game (buyIn: 25) records 0 buyInsPaid while normal player pays 25', () {
+      final compedPlayer = _player('p_comped', rebuys: 0, hasAddOn: false);
+      final normalPlayer = _player('p_normal', rebuys: 0, hasAddOn: false);
+
+      final game = LiveGame(
+        id: 'game_comp',
+        groupId: 'g1',
+        settings: const GameSettings(
+          name: 'Paid Tourney with Comped Guest',
+          date: '2026-11-01',
+          time: '19:00',
+          location: 'Home',
+          players: 2,
+          durationHours: 2,
+          buyIn: 25,
+          chipSet: [],
+          chipSetName: 'Standard',
+          koEnabled: false,
+          koAmount: 0,
+          rebuys: false,
+          rebuysCloseLevel: 6,
+          addOn: false,
+          anteEnabled: false,
+          anteAfterLevel: 1,
+          organizerPct: 0,
+        ),
+        structure: const TournamentStructure(
+          startingStack: 1000,
+          chipPlan: [],
+          rebuyStack: 1000,
+          rebuyChipPlan: [],
+          addOnStack: 1000,
+          addOnChipPlan: [],
+          levels: [],
+          breaks: [],
+          levelDuration: 15,
+          expectedFinishMins: 60,
+          prizes: [Prize(place: 1, amount: 50)],
+          prizePool: 25,
+          organizerAmount: 0,
+          colorUpInstructions: [],
+          warnings: [],
+        ),
+        status: LiveGameStatus.running,
+        publicCode: 'C3',
+        tvCode: 'TV3',
+        currentLevel: 1,
+        timerRunning: false,
+        secondsRemaining: 600,
+        players: [compedPlayer, normalPlayer],
+        chat: const [],
+        announcements: const [],
+        totalChipsInPlay: 2000,
+        pendingGuests: const [],
+        finishOrder: const [],
+      );
+
+      final app = AppProvider();
+      app.setCurrentGame(game);
+
+      // Record comp for p_comped
+      final compRecord = app.recordComp(playerId: 'p_comped');
+      expect(compRecord, isNotNull);
+      expect(compRecord!.amount, 0);
+      expect(compRecord.failureReason, 'comp');
+
+      // Finish the tournament with p_comped 1st, p_normal 2nd
+      final finishedGame = app.currentGame!.copyWith(
+        status: LiveGameStatus.completed,
+        finishOrder: const ['p_normal', 'p_comped'],
+      );
+
+      final settlements = app.buildSettlementsForGame(finishedGame);
+      expect(settlements['p_comped']!.buyInsPaid, 0);
+      expect(settlements['p_comped']!.hasExplicitBuyIns, true);
+      expect(settlements['p_normal']!.buyInsPaid, 25);
+      expect(settlements['p_normal']!.hasExplicitBuyIns, true);
+    });
   });
 }

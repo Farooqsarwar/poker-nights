@@ -672,7 +672,11 @@ GoRouter buildAppRouter(AppProvider app) {
     GoRoute(
       path: RoutePaths.joinGroup,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
-        JoinGroupScreen(code: state.uri.queryParameters['code'] ?? ''), path: RoutePaths.joinGroup,
+        JoinGroupScreen(
+          code: state.uri.queryParameters['code'] ?? '',
+          to: state.uri.queryParameters['to'],
+        ),
+        path: RoutePaths.joinGroup,
       )),
     ),
 
@@ -687,6 +691,7 @@ GoRouter buildAppRouter(AppProvider app) {
         child: shell(
           JoinGroupScreen(
             code: state.pathParameters[SpecRoutes.codeParam] ?? '',
+            to: state.uri.queryParameters['to'],
           ),
           path: RoutePaths.joinGroup,
         ),

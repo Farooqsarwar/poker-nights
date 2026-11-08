@@ -4,17 +4,21 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-/// Fans an app event out to group members as REAL push notifications by
-/// calling the OneSignal REST API from the originating device.
+/// Fans an app event out to group members as push notifications.
 ///
-/// This is the free-plan replacement for a Cloud Function fan-out: the sender
-/// targets member uids through `include_aliases: {external_id: [...]}` — the
-/// same ids devices register with `OneSignal.login(uid)` in [PushService].
-///
-/// Security note: the REST API key ships inside the app (there is no server).
-/// Create a key scoped to **Send messages only** (OneSignal → Settings →
-/// Keys & IDs) so a leaked key can only send notifications for your own app
-/// and never read user data or change settings.
+/// PUSH NOTIFICATION ARCHITECTURAL BOUNDARY (Spec §E10):
+/// 1. True background push notifications to locked/closed devices require a trusted
+///    backend server or Cloud Function (e.g. on Firebase Blaze plan) holding a private
+///    server key, triggered by Firestore writes.
+/// 2. Under Firebase Spark (free tier, without Cloud Functions), this client operates via:
+///    a) Peer-to-peer Firestore document replication (`groups/{gid}/outbox` / inboxes),
+///       which syncs notifications in real time to all active/foreground member devices.
+///    b) Local browser/system notifications via [BrowserNotify] for foreground/active sessions.
+///    c) Optional client-side OneSignal REST fanout when `ONESIGNAL_REST_API_KEY` is injected
+///       at build time with "Send messages only" scope.
+///    To transition to server-side push in production, deploy a Cloud Function listening on
+///    `groups/{gid}/outbox/{notificationId}` using the Firebase Blaze tier, and remove client-side
+///    REST key injection.
 class OneSignalSender {
   OneSignalSender._();
 

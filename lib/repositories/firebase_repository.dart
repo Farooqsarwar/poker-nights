@@ -17,9 +17,11 @@ import '../models/game.dart';
 import '../models/group.dart';
 import '../models/imported_night.dart';
 import '../models/live_game.dart';
+import '../models/payment_record.dart';
 import '../models/table_settings.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
+import '../utils/live_play_rules.dart';
 import '../utils/model_codec.dart';
 
 /// A membership row mirrored under [users/{uid}/groups/{groupId}] so the
@@ -176,6 +178,7 @@ class GameResultRow {
       knockouts: (m['knockouts'] as num?)?.toInt() ?? 0,
       finishedAt: switch (m['finishedAt']) {
         final DateTime dt => dt,
+        final String s => DateTime.tryParse(s),
         _ => null,
       },
       eliminatedAtLevel: (m['eliminatedAtLevel'] as num?)?.toInt(),
@@ -1626,11 +1629,21 @@ class FirebaseRepository {
               .limit(15)
               .snapshots(),
           (s) {
-            games = [for (final d in s.docs) ?tryParseGameDoc(d)];
-            for (final d in s.docs) {
-              final p = d.data()['payments'];
-              if (p is List && p.isNotEmpty) {
-                unawaited(scrubLegacyGamePayments(gid, d.id, d.data()));
+            final uid = currentUid;
+            final isOwner = meta?['ownerId'] == uid;
+            games = [
+              for (final d in s.docs)
+                ?tryParseGameDoc(d, scrubPayments: !isOwner)
+            ];
+            if (isOwner) {
+              for (final d in s.docs) {
+                final dData = d.data();
+                final p = dData['payments'];
+                final hasPayments = p is List && p.isNotEmpty;
+                final notScrubbed = dData['playersScrubbed'] != true;
+                if (hasPayments || notScrubbed) {
+                  unawaited(scrubLegacyGamePayments(gid, d.id, dData));
+                }
               }
             }
           },
@@ -1653,9 +1666,16 @@ class FirebaseRepository {
   /// Parses a group game document defensively: a single malformed doc used to
   /// blank the whole games list (hub + chat card lookups). Returns null and
   /// logs so the rest of the bundle keeps loading.
-  LiveGame? tryParseGameDoc(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+  LiveGame? tryParseGameDoc(
+    QueryDocumentSnapshot<Map<String, dynamic>> d, {
+    bool scrubPayments = false,
+  }) {
     try {
-      return liveGameFromFirestoreDoc(Map<String, dynamic>.from(d.data()));
+      final data = Map<String, dynamic>.from(d.data());
+      if (scrubPayments) {
+        data['payments'] = const <Map<String, dynamic>>[];
+      }
+      return liveGameFromFirestoreDoc(data);
     } catch (e) {
       debugPrint('groupBundle: skipping malformed game doc ${d.id}: $e');
       return null;
@@ -2092,6 +2112,9 @@ class FirebaseRepository {
         scrubbed[e.key] = value;
       }
       publicDoc['players'] = scrubbed;
+      publicDoc['playersScrubbed'] = true;
+    } else {
+      publicDoc['playersScrubbed'] = true;
     }
     return publicDoc;
   }
@@ -2215,9 +2238,96 @@ class FirebaseRepository {
     }
   }
 
+  Map<String, GameResultRow> _buildSettlementsForLegacyGame(LiveGame game) {
+    final settlements = <String, GameResultRow>{};
+    final finishOrder = game.finishOrder;
+    if (finishOrder.isEmpty) return settlements;
+
+    for (final p in game.players) {
+      if (p.isGuest) continue;
+      final index = finishOrder.indexOf(p.id);
+      if (index == -1) continue;
+      final position = finishPositionFromIndex(
+        index: index,
+        listLength: finishOrder.length,
+      );
+      final myPayments = game.payments
+          .where((pay) => pay.playerId == p.id && pay.status == PaymentStatus.paid)
+          .toList();
+
+      final rebuyUnit = game.settings.rebuyCost ?? game.settings.buyIn;
+      final addOnUnit = game.settings.addOnCost ?? game.settings.buyIn;
+      final buyInUnit = game.settings.buyIn;
+
+      int buyInsPaid;
+      if (game.payments.isEmpty) {
+        buyInsPaid = buyInUnit +
+            (p.rebuys * rebuyUnit) +
+            (p.reEntries * buyInUnit) +
+            (p.hasAddOn ? addOnUnit : 0);
+      } else {
+        int paidTotal = 0;
+        for (final pay in myPayments) {
+          paidTotal += pay.amount;
+        }
+        final hasBuyInPayment = myPayments.any(
+          (pay) => pay.purpose == PaymentPurpose.buyIn,
+        );
+        final paidRebuysCount = myPayments
+            .where((pay) => pay.purpose == PaymentPurpose.rebuy)
+            .length;
+        final paidReEntriesCount = myPayments
+            .where((pay) => pay.purpose == PaymentPurpose.reEntry)
+            .length;
+        final hasAddOnPayment = myPayments.any(
+          (pay) => pay.purpose == PaymentPurpose.addOn,
+        );
+
+        final unrecordedRebuys = (p.rebuys - paidRebuysCount).clamp(0, 999);
+        final unrecordedReEntries =
+            (p.reEntries - paidReEntriesCount).clamp(0, 999);
+        final unrecordedAddOn = (p.hasAddOn && !hasAddOnPayment) ? 1 : 0;
+
+        int unrecordedTotal = (unrecordedRebuys * rebuyUnit) +
+            (unrecordedReEntries * buyInUnit) +
+            (unrecordedAddOn * addOnUnit);
+
+        final isComped = game.payments.any(
+          (pay) =>
+              pay.playerId == p.id &&
+              (pay.amount == 0 || pay.failureReason == 'comp'),
+        );
+
+        if (!hasBuyInPayment && !isComped) {
+          unrecordedTotal += buyInUnit;
+        }
+        buyInsPaid = paidTotal + unrecordedTotal;
+      }
+
+      final prize = game.structure.prizes
+          .where((pr) => pr.place == position)
+          .firstOrNull
+          ?.amount ?? 0;
+
+      settlements[p.id] = GameResultRow(
+        gameId: game.id,
+        groupId: game.groupId,
+        position: position,
+        playerCount: finishOrder.length,
+        knockouts: p.knockouts,
+        finishedAt: game.endedAt ?? DateTime.now(),
+        eliminatedAtLevel: p.eliminatedAtLevel,
+        prize: prize,
+        buyInsPaid: buyInsPaid,
+        hasExplicitBuyIns: true,
+      );
+    }
+    return settlements;
+  }
+
   /// Automatically backfills/scrubs legacy game documents that still hold
   /// payment ledgers in their public document (Spec §B7, §E6, §E14).
-  /// Preserves payments into admin privateData sidecar before clearing them.
+  /// Preserves payments, audit, and requests into admin privateData sidecar before clearing them.
   Future<void> scrubLegacyGamePayments(
     String gid,
     String gameId,
@@ -2225,17 +2335,100 @@ class FirebaseRepository {
   ) async {
     try {
       final paymentsRaw = docData['payments'];
-      if (paymentsRaw is! List || paymentsRaw.isEmpty) return;
-      final gameRef = _db.collection('groups').doc(gid).collection('games').doc(gameId);
+      final auditRaw = docData['auditHistory'];
+      final rebuyReqRaw = docData['rebuyRequests'];
+      final addOnReqRaw = docData['addOnRequests'];
+      final playersRaw = docData['players'];
+
+      final gameRef =
+          _db.collection('groups').doc(gid).collection('games').doc(gameId);
       final privateRef = gameRef.collection('admin').doc('privateData');
       final privateSnap = await privateRef.get();
-      if (!privateSnap.exists ||
-          (privateSnap.data()?['payments'] as List?)?.isEmpty == true) {
-        await privateRef.set({
-          'payments': paymentsRaw,
-        }, SetOptions(merge: true));
+
+      // Backup unscrubbed private data into admin privateData sidecar
+      final backup = <String, dynamic>{};
+      if (paymentsRaw is List && paymentsRaw.isNotEmpty) {
+        backup['payments'] = paymentsRaw;
       }
-      await gameRef.update({'payments': const <Map<String, dynamic>>[]});
+      if (auditRaw is List && auditRaw.isNotEmpty) {
+        backup['auditHistory'] = auditRaw;
+      }
+      if (rebuyReqRaw is List && rebuyReqRaw.isNotEmpty) {
+        backup['rebuyRequests'] = rebuyReqRaw;
+      }
+      if (addOnReqRaw is List && addOnReqRaw.isNotEmpty) {
+        backup['addOnRequests'] = addOnReqRaw;
+      }
+      if (playersRaw is Map) {
+        backup['players'] = playersRaw;
+      }
+      if (backup.isNotEmpty &&
+          (!privateSnap.exists || privateSnap.data()?.isEmpty == true)) {
+        await privateRef.set(backup, SetOptions(merge: true));
+      }
+
+      // Ensure authoritative settlements exist in groups/{gid}/settlements/{gameId}
+      // before scrubbing public document financial data
+      final settRef = _db
+          .collection('groups')
+          .doc(gid)
+          .collection('settlements')
+          .doc(gameId);
+      final settSnap = await settRef.get();
+      if (!settSnap.exists) {
+        try {
+          final legacyGame = liveGameFromFirestoreDoc(docData);
+          if (legacyGame.finishOrder.isNotEmpty) {
+            final settlements = _buildSettlementsForLegacyGame(legacyGame);
+            if (settlements.isNotEmpty) {
+              await saveGameSettlements(gid, gameId, settlements);
+            }
+          }
+        } catch (e) {
+          debugPrint('Legacy settlements backfill failed: $e');
+        }
+      }
+
+      // Prepare fully scrubbed doc satisfying publicGameDocSafe()
+      final scrubbedPlayers = <String, dynamic>{};
+      if (playersRaw is Map) {
+        for (final e in playersRaw.entries) {
+          if (e.value is Map) {
+            final pMap = Map<String, dynamic>.from(e.value as Map);
+            pMap['rebuys'] = 0;
+            pMap['reEntries'] = 0;
+            pMap['hasAddOn'] = false;
+            pMap['knockouts'] = 0;
+            scrubbedPlayers[e.key] = pMap;
+          }
+        }
+      }
+
+      final updates = <String, dynamic>{
+        'payments': const <Map<String, dynamic>>[],
+        'auditHistory': const <Map<String, dynamic>>[],
+        'rebuyRequests': const <Map<String, dynamic>>[],
+        'addOnRequests': const <Map<String, dynamic>>[],
+        'addOnDeclined': const <String>[],
+        'players': scrubbedPlayers,
+        'playersScrubbed': true,
+      };
+
+      if (docData['structure'] is Map &&
+          (docData['structure'] as Map).containsKey('organizerAmount')) {
+        final struct = Map<String, dynamic>.from(docData['structure'] as Map);
+        struct.remove('organizerAmount');
+        updates['structure'] = struct;
+      }
+
+      if (docData['settings'] is Map &&
+          (docData['settings'] as Map).containsKey('organizerPct')) {
+        final stg = Map<String, dynamic>.from(docData['settings'] as Map);
+        stg.remove('organizerPct');
+        updates['settings'] = stg;
+      }
+
+      await gameRef.update(updates);
     } catch (e) {
       debugPrint('scrubLegacyGamePayments failed: $e');
     }

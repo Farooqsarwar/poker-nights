@@ -207,8 +207,18 @@ service cloud.firestore {
       // Spec §B7, §E6, §E14: the full payment ledger is private to the host.
       // Individual payments must not be published on the shared game document.
       let paymentsSafe = data.get('payments', []).size() == 0;
+      // Spec §B7, §E14: per-player financial counters must be scrubbed on
+      // public game documents.
+      let players = data.get('players', {});
+      let callerPlayer = players.get(request.auth.uid, null);
+      let playersSafe = (callerPlayer == null || (
+          callerPlayer.get('rebuys', 0) == 0
+          && callerPlayer.get('reEntries', 0) == 0
+          && callerPlayer.get('hasAddOn', false) == false
+          && callerPlayer.get('knockouts', 0) == 0))
+          && (data.get('playersScrubbed', false) == true || players.size() == 0);
       return settingsSafe && structureSafe && auditSafe && requestsSafe
-          && overtimeSafe && paymentsSafe;
+          && overtimeSafe && paymentsSafe && playersSafe;
     }
 
     // ---------- server-side value validation ----------

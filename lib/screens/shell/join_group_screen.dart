@@ -26,9 +26,10 @@ import '../../widgets/app_toast.dart';
 /// name, host, member count and games played, and nothing happens until the
 /// person taps "Join group". "Not now" goes home without joining.
 class JoinGroupScreen extends StatefulWidget {
-  const JoinGroupScreen({super.key, required this.code});
+  const JoinGroupScreen({super.key, required this.code, this.to});
 
   final String code;
+  final String? to;
 
   @override
   State<JoinGroupScreen> createState() => _JoinGroupScreenState();
@@ -85,8 +86,9 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
     // Signed out: previewing was free, joining needs an account. Register (or
     // sign in) and come straight back to this invite.
     if (!app.isAuthenticated) {
+      final toParam = widget.to != null ? '&to=${Uri.encodeComponent(widget.to!)}' : '';
       final next = Uri.encodeComponent(
-        '${RoutePaths.joinGroup}?code=${Uri.encodeComponent(widget.code)}',
+        '${RoutePaths.joinGroup}?code=${Uri.encodeComponent(widget.code)}$toParam',
       );
       router.go('${RoutePaths.register}?next=$next');
       return;
@@ -207,10 +209,18 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
     final memberNames = [
       if (hostName != null && hostName.isNotEmpty) hostName,
     ];
+    final isAddressedToMe = widget.to != null && app.user?.id == widget.to;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Center(child: AppTag('Group invite', tone: AppTagTone.primary)),
+        Center(
+          child: AppTag(
+            isAddressedToMe
+                ? 'Personal invite for ${app.user?.name ?? "you"}'
+                : (widget.to != null ? 'Personal invite' : 'Group invite'),
+            tone: AppTagTone.primary,
+          ),
+        ),
         const SizedBox(height: AppSpacing.xl),
         FormScreenHeader(
           centered: true,

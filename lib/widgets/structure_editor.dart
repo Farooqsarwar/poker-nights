@@ -30,6 +30,7 @@ class StructureEditor extends StatefulWidget {
     required this.onSpeedUp,
     required this.onSlowDown,
     required this.onApply,
+    this.onApplyWithBreaks,
     this.readOnly = false,
   });
 
@@ -51,6 +52,8 @@ class StructureEditor extends StatefulWidget {
   /// Receives the full future-level list (from the current level onward),
   /// already renumbered, so inserting/removing levels is supported.
   final void Function(List<BlindLevel> levels) onApply;
+  final void Function(List<BlindLevel> levels, List<ScheduledBreak> breaks)?
+  onApplyWithBreaks;
 
   @override
   State<StructureEditor> createState() => _StructureEditorState();
@@ -65,7 +68,17 @@ class _StructureEditorState extends State<StructureEditor> {
     final future = widget.structure.levels.length > widget.currentLevel
         ? widget.structure.levels.sublist(widget.currentLevel)
         : <BlindLevel>[];
-    _levels = [for (final l in future) _EditableLevel(level: l)];
+    final breaks = widget.structure.breaks;
+    _levels = [
+      for (final l in future)
+        _EditableLevel(
+          level: l,
+          breakDurationMins: breaks
+              .where((b) => b.afterLevel == l.level)
+              .firstOrNull
+              ?.durationMins,
+        ),
+    ];
   }
 
   @override
@@ -94,6 +107,27 @@ class _StructureEditorState extends State<StructureEditor> {
     });
   }
 
+  void _deleteAt(int index) {
+    if (widget.readOnly || _levels.length <= 1) return;
+    setState(() {
+      _levels.removeAt(index);
+    });
+  }
+
+  void _insertBreakAfter(int index) {
+    if (widget.readOnly) return;
+    setState(() {
+      _levels[index].breakDurationMins = 15;
+    });
+  }
+
+  void _deleteBreakAfter(int index) {
+    if (widget.readOnly) return;
+    setState(() {
+      _levels[index].breakDurationMins = null;
+    });
+  }
+
   List<BlindLevel> _build() {
     final result = <BlindLevel>[];
     for (final l in _levels) {
@@ -117,7 +151,24 @@ class _StructureEditorState extends State<StructureEditor> {
 
   void _apply() {
     if (widget.readOnly) return;
-    widget.onApply(_build());
+    final levels = _build();
+    final futureBreaks = <ScheduledBreak>[];
+    for (var i = 0; i < _levels.length; i++) {
+      final bMins = _levels[i].breakDurationMins;
+      if (bMins != null && bMins > 0) {
+        futureBreaks.add(
+          ScheduledBreak(
+            afterLevel: widget.currentLevel + 1 + i,
+            durationMins: bMins,
+          ),
+        );
+      }
+    }
+    if (widget.onApplyWithBreaks != null) {
+      widget.onApplyWithBreaks!(levels, futureBreaks);
+    } else {
+      widget.onApply(levels);
+    }
   }
 
   @override
@@ -198,7 +249,9 @@ class _StructureEditorState extends State<StructureEditor> {
 
   Widget _buildRow(int index) {
     final l = _levels[index];
+    final displayLevel = widget.currentLevel + 1 + index;
     return Container(
+      key: Key('level-row-$displayLevel'),
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
@@ -211,7 +264,8 @@ class _StructureEditorState extends State<StructureEditor> {
               SizedBox(
                 width: 48,
                 child: Text(
-                  'Lv ${l.level.level}',
+                  'Lv $displayLevel',
+                  key: Key('level-label-$displayLevel'),
                   style: AppTypography.monoXs.copyWith(
                     color: AppColors.mutedForeground,
                   ),
@@ -258,6 +312,7 @@ class _StructureEditorState extends State<StructureEditor> {
                 ),
               ),
               IconButton(
+                key: Key('insert-level-$displayLevel'),
                 tooltip: 'Insert level',
                 icon: Icon(
                   Icons.add_circle_outline,
@@ -267,6 +322,18 @@ class _StructureEditorState extends State<StructureEditor> {
                 // D15: a co-host reads the ladder, so the control is not merely
                 // refused on tap -- it is not offered.
                 onPressed: widget.readOnly ? null : () => _insertAfter(index),
+              ),
+              IconButton(
+                key: Key('delete-level-$displayLevel'),
+                tooltip: 'Delete level $displayLevel',
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: 18,
+                  color: AppColors.destructive,
+                ),
+                onPressed: widget.readOnly
+                    ? null
+                    : () => _deleteAt(index),
               ),
             ],
           ),
@@ -320,6 +387,59 @@ class _StructureEditorState extends State<StructureEditor> {
               ),
             ],
           ),
+          if (l.breakDurationMins != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Container(
+              key: Key('break-row-$displayLevel'),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xxs,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '— Break · ${l.breakDurationMins} min —',
+                    key: Key('break-text-$displayLevel'),
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  IconButton(
+                    key: Key('delete-break-$displayLevel'),
+                    tooltip: 'Delete break',
+                    icon: const Icon(Icons.close, size: 16),
+                    onPressed: widget.readOnly
+                        ? null
+                        : () => _deleteBreakAfter(index),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (!widget.readOnly) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: Key('insert-break-$displayLevel'),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 24),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () => _insertBreakAfter(index),
+                icon: const Icon(Icons.coffee_outlined, size: 14),
+                label: const Text(
+                  'Insert break',
+                  style: TextStyle(fontSize: 11),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -329,7 +449,7 @@ class _StructureEditorState extends State<StructureEditor> {
 /// Local editable copy of one future level, owning its field controllers so
 /// edits survive rebuilds.
 class _EditableLevel {
-  _EditableLevel({required BlindLevel level})
+  _EditableLevel({required BlindLevel level, this.breakDurationMins})
     : level = level,
       sbValue = level.sb,
       bbValue = level.bb,
@@ -339,12 +459,14 @@ class _EditableLevel {
     : level = other.level,
       sbValue = other.sbValue,
       bbValue = other.bbValue,
-      durationMins = other.durationMins;
+      durationMins = other.durationMins,
+      breakDurationMins = other.breakDurationMins;
 
   final BlindLevel level;
   int sbValue;
   int bbValue;
   int durationMins;
+  int? breakDurationMins;
   late bool anteOn = level.ante != null;
 
   void dispose() {}

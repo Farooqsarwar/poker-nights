@@ -220,18 +220,7 @@ extension AppProviderUserData on AppProvider {
       index: index,
       listLength: game.finishOrder.length,
     );
-    final myPayments = game.payments.where(
-      (p) => p.playerId == uid && p.status == PaymentStatus.paid,
-    );
-    final int buyInsPaid;
-    if (myPayments.isNotEmpty) {
-      buyInsPaid = myPayments.fold<int>(0, (sum, p) => sum + p.amount);
-    } else {
-      buyInsPaid = game.settings.buyIn +
-          (me.rebuys * (game.settings.rebuyCost ?? game.settings.buyIn)) +
-          (me.reEntries * game.settings.buyIn) +
-          (me.hasAddOn ? (game.settings.addOnCost ?? game.settings.buyIn) : 0);
-    }
+    final buyInsPaid = _calculatePlayerBuyInsPaid(game, me);
     final prize = game.structure.prizes
         .where((pr) => pr.place == position)
         .firstOrNull
@@ -244,10 +233,11 @@ extension AppProviderUserData on AppProvider {
         position: position,
         playerCount: game.finishOrder.length,
         knockouts: me.knockouts,
-        finishedAt: DateTime.now(),
+        finishedAt: game.endedAt ?? DateTime.now(),
         eliminatedAtLevel: me.eliminatedAtLevel,
         prize: prize,
         buyInsPaid: buyInsPaid,
+        hasExplicitBuyIns: true,
       ),
     ];
     _user = _user?.copyWith(stats: _statsFromResults(_myResults));
@@ -263,57 +253,71 @@ extension AppProviderUserData on AppProvider {
     if (game.status != LiveGameStatus.completed || game.finishOrder.isEmpty) {
       return;
     }
-    if (_resultsRecorded.contains(game.id)) return;
     final me = game.players.where((p) => p.id == uid && !p.isGuest).firstOrNull;
     if (me == null) return;
     final index = game.finishOrder.indexOf(uid);
     if (index == -1) return;
-    _resultsRecorded.add(game.id);
+
+    final existing = _myResults.where((r) => r.gameId == game.id).firstOrNull;
+    if (existing != null && existing.hasExplicitBuyIns && _resultsRecorded.contains(game.id)) {
+      return;
+    }
+
     final position = finishPositionFromIndex(
       index: index,
       listLength: game.finishOrder.length,
     );
-    final myPayments = game.payments.where(
-      (p) => p.playerId == uid && p.status == PaymentStatus.paid,
-    );
-    final int buyInsPaid;
-    if (myPayments.isNotEmpty) {
-      buyInsPaid = myPayments.fold<int>(0, (sum, p) => sum + p.amount);
-    } else {
-      buyInsPaid = game.settings.buyIn +
-          (me.rebuys * (game.settings.rebuyCost ?? game.settings.buyIn)) +
-          (me.reEntries * game.settings.buyIn) +
-          (me.hasAddOn ? (game.settings.addOnCost ?? game.settings.buyIn) : 0);
-    }
+    final buyInsPaid = _calculatePlayerBuyInsPaid(game, me);
     final prize = game.structure.prizes
         .where((pr) => pr.place == position)
         .firstOrNull
         ?.amount ?? 0;
+
     unawaited(
       () async {
         try {
-          GameResultRow row = GameResultRow(
+          GameResultRow? authoritative;
+          if (game.groupId.isNotEmpty) {
+            for (var attempt = 0; attempt < 3; attempt++) {
+              authoritative = await _repo.fetchMySettlement(
+                game.groupId,
+                game.id,
+                uid,
+              );
+              if (authoritative != null) break;
+              if (attempt < 2) {
+                await Future<void>.delayed(
+                  Duration(milliseconds: 300 * (attempt + 1)),
+                );
+              }
+            }
+          }
+          if (authoritative != null) {
+            _resultsRecorded.add(game.id);
+            await _repo.saveGameResult(uid, game.id, authoritative);
+            return;
+          }
+
+          // If an existing authoritative exact result is already present, never overwrite it with a fallback
+          if (existing != null && existing.hasExplicitBuyIns) {
+            _resultsRecorded.add(game.id);
+            return;
+          }
+
+          final fallback = GameResultRow(
             gameId: game.id,
             groupId: game.groupId,
             position: position,
             playerCount: game.finishOrder.length,
             knockouts: me.knockouts,
-            finishedAt: DateTime.now(),
+            finishedAt: game.endedAt ?? DateTime.now(),
             eliminatedAtLevel: me.eliminatedAtLevel,
             prize: prize,
             buyInsPaid: buyInsPaid,
+            hasExplicitBuyIns: true,
           );
-          if (game.groupId.isNotEmpty) {
-            final authoritative = await _repo.fetchMySettlement(
-              game.groupId,
-              game.id,
-              uid,
-            );
-            if (authoritative != null) {
-              row = authoritative;
-            }
-          }
-          await _repo.saveGameResult(uid, game.id, row);
+          _resultsRecorded.add(game.id);
+          await _repo.saveGameResult(uid, game.id, fallback);
         } catch (e) {
           debugPrint('saveGameResult failed: $e');
         }

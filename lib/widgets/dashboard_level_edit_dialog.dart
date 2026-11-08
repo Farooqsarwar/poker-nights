@@ -18,10 +18,12 @@ class DashboardLevelEditDialog extends StatefulWidget {
     required this.game,
     required this.level,
     required this.onApply,
+    this.isPlayed = false,
   });
 
   final LiveGame game;
   final BlindLevel level;
+  final bool isPlayed;
   final void Function({
     required int sb,
     required int bb,
@@ -45,6 +47,7 @@ class _DashboardLevelEditDialogState extends State<DashboardLevelEditDialog> {
   @override
   void initState() {
     super.initState();
+    _recalculateAfter = !widget.isPlayed;
     _sbCtrl = TextEditingController(text: widget.level.sb.toString());
     _bbCtrl = TextEditingController(text: widget.level.bb.toString());
     _anteCtrl = TextEditingController(
@@ -228,105 +231,107 @@ class _DashboardLevelEditDialogState extends State<DashboardLevelEditDialog> {
           const SizedBox(height: AppSpacing.lg),
 
           // Mode toggle: This level only vs Recalculate after this
-          Text(
-            'Recalculation option',
-            style: AppTypography.bodySm.copyWith(
-              fontWeight: FontWeight.w600,
+          if (!widget.isPlayed) ...[
+            Text(
+              'Recalculation option',
+              style: AppTypography.bodySm.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () => setState(() => _recalculateAfter = false),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Container(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: !_recalculateAfter
-                          ? AppColors.primarySoft
-                          : AppColors.secondary,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() => _recalculateAfter = false),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
                         color: !_recalculateAfter
-                            ? AppColors.primary
-                            : AppColors.border,
+                            ? AppColors.primarySoft
+                            : AppColors.secondary,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(
+                          color: !_recalculateAfter
+                              ? AppColors.primary
+                              : AppColors.border,
+                        ),
                       ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'This level only',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: !_recalculateAfter
-                                ? AppColors.primaryText
-                                : AppColors.foreground,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'This level only',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: !_recalculateAfter
+                                  ? AppColors.primaryText
+                                  : AppColors.foreground,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Only Level ${widget.level.level} is changed',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.mutedForeground,
+                          const SizedBox(height: 2),
+                          Text(
+                            'Only Level ${widget.level.level} is changed',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: InkWell(
-                  onTap: () => setState(() => _recalculateAfter = true),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Container(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: _recalculateAfter
-                          ? AppColors.primarySoft
-                          : AppColors.secondary,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() => _recalculateAfter = true),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
                         color: _recalculateAfter
-                            ? AppColors.primary
-                            : AppColors.border,
+                            ? AppColors.primarySoft
+                            : AppColors.secondary,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(
+                          color: _recalculateAfter
+                              ? AppColors.primary
+                              : AppColors.border,
+                        ),
                       ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Recalculate after this',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: _recalculateAfter
-                                ? AppColors.primaryText
-                                : AppColors.foreground,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Recalculate after this',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _recalculateAfter
+                                  ? AppColors.primaryText
+                                  : AppColors.foreground,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Subsequent levels scale smoothly',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.mutedForeground,
+                          const SizedBox(height: 2),
+                          Text(
+                            'Subsequent levels scale smoothly',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
 
           // Live Preview
           Container(

@@ -1840,7 +1840,10 @@ extension AppProviderTournament on AppProvider {
   /// with a renumbered list produced by the structure editor. Inserting or
   /// removing levels is supported because the whole future segment is swapped,
   /// not patched by level number (checklist §12.4).
-  void applyFutureLevels(List<BlindLevel> futureLevels) {
+  void applyFutureLevels(
+    List<BlindLevel> futureLevels, [
+    List<ScheduledBreak>? futureBreaks,
+  ]) {
     final game = _currentGame;
     if (game == null || !canEditStructure || futureLevels.isEmpty) return;
     for (final l in futureLevels) {
@@ -1872,8 +1875,17 @@ extension AppProviderTournament on AppProvider {
         ),
     ];
     final levels = [...prefix, ...renumbered];
+    var structure = _structureWithLevels(game.structure, levels);
+    if (futureBreaks != null) {
+      final prefixBreaks = game.structure.breaks
+          .where((b) => b.afterLevel <= game.currentLevel)
+          .toList();
+      structure = structure.copyWith(
+        breaks: [...prefixBreaks, ...futureBreaks],
+      );
+    }
     _currentGame = game.copyWith(
-      structure: _structureWithLevels(game.structure, levels),
+      structure: structure,
       secondsRemaining: game.secondsRemaining,
     );
     addAuditRecord(
@@ -2690,58 +2702,21 @@ extension AppProviderTournament on AppProvider {
     // Host authoritative settlement: write each member's private settlement row
     // (Build Spec §B7, §E14) so members can adopt their unscrubbed financial
     // result without anyone reading another player's private counters.
-    if (_backendUp && hasCurrentGroup && _currentGroup.id.isNotEmpty) {
-      final settlements = <String, GameResultRow>{};
-      final finishOrder = _currentGame!.finishOrder;
-      for (final p in _currentGame!.players) {
-        if (p.isGuest) continue;
-        final index = finishOrder.indexOf(p.id);
-        if (index == -1) continue;
-        final position = finishPositionFromIndex(
-          index: index,
-          listLength: finishOrder.length,
-        );
-        final myPayments = _currentGame!.payments.where(
-          (pay) => pay.playerId == p.id && pay.status == PaymentStatus.paid,
-        );
-        final int buyInsPaid;
-        if (myPayments.isNotEmpty) {
-          buyInsPaid = myPayments.fold<int>(0, (sum, pay) => sum + pay.amount);
-        } else {
-          buyInsPaid = _currentGame!.settings.buyIn +
-              (p.rebuys *
-                  (_currentGame!.settings.rebuyCost ??
-                      _currentGame!.settings.buyIn)) +
-              (p.reEntries * _currentGame!.settings.buyIn) +
-              (p.hasAddOn
-                  ? (_currentGame!.settings.addOnCost ??
-                      _currentGame!.settings.buyIn)
-                  : 0);
-        }
-        final prize = _currentGame!.structure.prizes
-            .where((pr) => pr.place == position)
-            .firstOrNull
-            ?.amount ?? 0;
-        settlements[p.id] = GameResultRow(
-          gameId: _currentGame!.id,
-          groupId: _currentGame!.groupId,
-          position: position,
-          playerCount: finishOrder.length,
-          knockouts: p.knockouts,
-          finishedAt: DateTime.now(),
-          eliminatedAtLevel: p.eliminatedAtLevel,
-          prize: prize,
-          buyInsPaid: buyInsPaid,
-        );
-      }
-      if (settlements.isNotEmpty) {
+    final settlements = _buildSettlementsForGame(_currentGame!);
+    if (hasCurrentGroup && _currentGroup.id.isNotEmpty && settlements.isNotEmpty) {
+      if (_backendUp) {
         unawaited(
           _repo
               .saveGameSettlements(_currentGroup.id, _currentGame!.id, settlements)
-              .catchError(
-                (Object e) => debugPrint('saveGameSettlements failed: $e'),
-              ),
+              .then((_) {
+                _maybeRecordOwnResult(_currentGame!);
+              })
+              .catchError((Object e) {
+                debugPrint('saveGameSettlements failed: $e');
+              }),
         );
+      } else {
+        _pendingSettlements[_currentGame!.id] = settlements;
       }
     }
 
@@ -2865,5 +2840,99 @@ extension AppProviderTournament on AppProvider {
       auditHistory: [..._currentGame!.auditHistory, record],
     );
     if (!_disposed) notifyListeners();
+  }
+
+  /// Builds authoritative settlement rows for all non-guest participants
+  /// (Build Spec §B7, §E14).
+  Map<String, GameResultRow> buildSettlementsForGame(LiveGame game) =>
+      _buildSettlementsForGame(game);
+
+  Map<String, GameResultRow> _buildSettlementsForGame(LiveGame game) {
+    final settlements = <String, GameResultRow>{};
+    final finishOrder = game.finishOrder;
+    if (finishOrder.isEmpty) return settlements;
+
+    for (final p in game.players) {
+      if (p.isGuest) continue;
+      final index = finishOrder.indexOf(p.id);
+      if (index == -1) continue;
+      final position = finishPositionFromIndex(
+        index: index,
+        listLength: finishOrder.length,
+      );
+      final buyInsPaid = _calculatePlayerBuyInsPaid(game, p);
+      final prize = game.structure.prizes
+          .where((pr) => pr.place == position)
+          .firstOrNull
+          ?.amount ?? 0;
+      settlements[p.id] = GameResultRow(
+        gameId: game.id,
+        groupId: game.groupId,
+        position: position,
+        playerCount: finishOrder.length,
+        knockouts: p.knockouts,
+        finishedAt: game.endedAt ?? DateTime.now(),
+        eliminatedAtLevel: p.eliminatedAtLevel,
+        prize: prize,
+        buyInsPaid: buyInsPaid,
+        hasExplicitBuyIns: true,
+      );
+    }
+    return settlements;
+  }
+
+  /// Calculates buy-ins paid by a player, correctly accounting for payments
+  /// ledger records, unrecorded rebuys/add-ons taken in play, and comps.
+  int _calculatePlayerBuyInsPaid(LiveGame game, Player p) {
+    final myPayments = game.payments
+        .where((pay) => pay.playerId == p.id && pay.status == PaymentStatus.paid)
+        .toList();
+
+    final rebuyUnit = game.settings.rebuyCost ?? game.settings.buyIn;
+    final addOnUnit = game.settings.addOnCost ?? game.settings.buyIn;
+    final buyInUnit = game.settings.buyIn;
+
+    if (game.payments.isEmpty) {
+      return buyInUnit +
+          (p.rebuys * rebuyUnit) +
+          (p.reEntries * buyInUnit) +
+          (p.hasAddOn ? addOnUnit : 0);
+    }
+
+    int paidTotal = 0;
+    for (final pay in myPayments) {
+      paidTotal += pay.amount;
+    }
+
+    final hasBuyInPayment = myPayments.any(
+      (pay) => pay.purpose == PaymentPurpose.buyIn,
+    );
+    final paidRebuysCount = myPayments
+        .where((pay) => pay.purpose == PaymentPurpose.rebuy)
+        .length;
+    final paidReEntriesCount = myPayments
+        .where((pay) => pay.purpose == PaymentPurpose.reEntry)
+        .length;
+    final hasAddOnPayment = myPayments.any(
+      (pay) => pay.purpose == PaymentPurpose.addOn,
+    );
+
+    final unrecordedRebuys = (p.rebuys - paidRebuysCount).clamp(0, 999);
+    final unrecordedReEntries = (p.reEntries - paidReEntriesCount).clamp(0, 999);
+    final unrecordedAddOn = (p.hasAddOn && !hasAddOnPayment) ? 1 : 0;
+
+    int unrecordedTotal = (unrecordedRebuys * rebuyUnit) +
+        (unrecordedReEntries * buyInUnit) +
+        (unrecordedAddOn * addOnUnit);
+
+    final isComped = game.payments.any(
+      (pay) => pay.playerId == p.id && (pay.amount == 0 || pay.failureReason == 'comp'),
+    );
+
+    if (!hasBuyInPayment && !isComped) {
+      unrecordedTotal += buyInUnit;
+    }
+
+    return paidTotal + unrecordedTotal;
   }
 }

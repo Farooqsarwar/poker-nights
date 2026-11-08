@@ -95,8 +95,6 @@ it on every change. Test artifact only - never commit.
 recovery/
 app/
 
-# Local deploy script (contains a secret) - never commit
-deploy.ps1
 
 # Android release signing — keystore and its passwords never enter the repo.
 android/key.properties

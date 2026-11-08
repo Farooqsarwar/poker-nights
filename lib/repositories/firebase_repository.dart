@@ -133,6 +133,7 @@ class GameResultRow {
     this.eliminatedAtLevel,
     this.prize = 0,
     this.buyInsPaid = 0,
+    this.hasExplicitBuyIns = true,
   });
 
   final String gameId;
@@ -146,6 +147,10 @@ class GameResultRow {
   final int? eliminatedAtLevel;
   final int prize;
   final int buyInsPaid;
+
+  /// False for older legacy result rows written before buyInsPaid was tracked,
+  /// preventing them from defaulting to 0 and overstating P&L.
+  final bool hasExplicitBuyIns;
 
   int get net => prize - buyInsPaid;
 
@@ -161,21 +166,24 @@ class GameResultRow {
     'buyInsPaid': buyInsPaid,
   };
 
-  static GameResultRow fromMap(String id, Map<String, dynamic> m) =>
-      GameResultRow(
-        gameId: m['gameId'] as String? ?? id,
-        groupId: (m['groupId'] as String?) ?? '',
-        position: (m['position'] as num?)?.toInt() ?? 0,
-        playerCount: (m['playerCount'] as num?)?.toInt() ?? 0,
-        knockouts: (m['knockouts'] as num?)?.toInt() ?? 0,
-        finishedAt: switch (m['finishedAt']) {
-          final DateTime dt => dt,
-          _ => null,
-        },
-        eliminatedAtLevel: (m['eliminatedAtLevel'] as num?)?.toInt(),
-        prize: (m['prize'] as num?)?.toInt() ?? 0,
-        buyInsPaid: (m['buyInsPaid'] as num?)?.toInt() ?? 0,
-      );
+  static GameResultRow fromMap(String id, Map<String, dynamic> m) {
+    final hasBuyIns = m.containsKey('buyInsPaid');
+    return GameResultRow(
+      gameId: m['gameId'] as String? ?? id,
+      groupId: (m['groupId'] as String?) ?? '',
+      position: (m['position'] as num?)?.toInt() ?? 0,
+      playerCount: (m['playerCount'] as num?)?.toInt() ?? 0,
+      knockouts: (m['knockouts'] as num?)?.toInt() ?? 0,
+      finishedAt: switch (m['finishedAt']) {
+        final DateTime dt => dt,
+        _ => null,
+      },
+      eliminatedAtLevel: (m['eliminatedAtLevel'] as num?)?.toInt(),
+      prize: (m['prize'] as num?)?.toInt() ?? 0,
+      buyInsPaid: (m['buyInsPaid'] as num?)?.toInt() ?? 0,
+      hasExplicitBuyIns: hasBuyIns,
+    );
+  }
 }
 
 /// A document that lives OUTSIDE `groups/{gid}`, named without a Firestore
@@ -1252,6 +1260,7 @@ class FirebaseRepository {
       'chat',
       'admin',
       'meta',
+      'settlements',
     ], onDoc: (doc) {
       external.addAll(externalGameRefs(
         gameId: doc.id,
@@ -1616,7 +1625,15 @@ class FirebaseRepository {
               .orderBy('settings.date', descending: true)
               .limit(15)
               .snapshots(),
-          (s) => games = [for (final d in s.docs) ?tryParseGameDoc(d)],
+          (s) {
+            games = [for (final d in s.docs) ?tryParseGameDoc(d)];
+            for (final d in s.docs) {
+              final p = d.data()['payments'];
+              if (p is List && p.isNotEmpty) {
+                unawaited(scrubLegacyGamePayments(gid, d.id, d.data()));
+              }
+            }
+          },
           () => gamesLoaded = true,
         );
       },
@@ -2195,6 +2212,32 @@ class FirebaseRepository {
     } catch (e) {
       debugPrint('fetchMySettlement failed: $e');
       return null;
+    }
+  }
+
+  /// Automatically backfills/scrubs legacy game documents that still hold
+  /// payment ledgers in their public document (Spec §B7, §E6, §E14).
+  /// Preserves payments into admin privateData sidecar before clearing them.
+  Future<void> scrubLegacyGamePayments(
+    String gid,
+    String gameId,
+    Map<String, dynamic> docData,
+  ) async {
+    try {
+      final paymentsRaw = docData['payments'];
+      if (paymentsRaw is! List || paymentsRaw.isEmpty) return;
+      final gameRef = _db.collection('groups').doc(gid).collection('games').doc(gameId);
+      final privateRef = gameRef.collection('admin').doc('privateData');
+      final privateSnap = await privateRef.get();
+      if (!privateSnap.exists ||
+          (privateSnap.data()?['payments'] as List?)?.isEmpty == true) {
+        await privateRef.set({
+          'payments': paymentsRaw,
+        }, SetOptions(merge: true));
+      }
+      await gameRef.update({'payments': const <Map<String, dynamic>>[]});
+    } catch (e) {
+      debugPrint('scrubLegacyGamePayments failed: $e');
     }
   }
 

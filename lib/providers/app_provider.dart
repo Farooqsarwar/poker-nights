@@ -317,6 +317,9 @@ class AppProvider extends ChangeNotifier {
   final Map<String, String> _pendingCheckIn = {};
   final Map<String, bool> _checkInLanded = {};
 
+  /// Pending settlement documents to be pushed to Firestore when online (Spec §B7, §E14).
+  final Map<String, Map<String, GameResultRow>> _pendingSettlements = {};
+
   /// Last member-RSVP patch failure, surfaced on the invitation screen so
   /// backend rejections are never invisible (vs silent optimistic state that
   /// vanishes on refresh). Debug aid for the persistence audit.

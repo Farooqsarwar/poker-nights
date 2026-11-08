@@ -20,6 +20,7 @@ import '../../widgets/app_avatar.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_select.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
@@ -517,7 +518,7 @@ class _GroupScreenState extends State<GroupScreen> {
       context: context,
       maxWidth: 480,
       title: 'Invite people',
-      child: _InviteModalContent(group: group, link: link),
+      child: InviteModalContent(group: group, link: link),
     );
   }
 
@@ -1082,8 +1083,9 @@ class _InfoChip extends StatelessWidget {
 }
 
 
-class _InviteModalContent extends StatefulWidget {
-  const _InviteModalContent({
+class InviteModalContent extends StatefulWidget {
+  const InviteModalContent({
+    super.key,
     required this.group,
     required this.link,
   });
@@ -1092,12 +1094,19 @@ class _InviteModalContent extends StatefulWidget {
   final String link;
 
   @override
-  State<_InviteModalContent> createState() => _InviteModalContentState();
+  State<InviteModalContent> createState() => _InviteModalContentState();
 }
 
-class _InviteModalContentState extends State<_InviteModalContent> {
+class _InviteModalContentState extends State<InviteModalContent> {
+  late Group _selectedGroup;
   String _searchQuery = '';
   bool _copiedLink = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedGroup = widget.group;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1105,27 +1114,38 @@ class _InviteModalContentState extends State<_InviteModalContent> {
     final currentUid = app.user?.id;
     final currentName = app.user?.name.toLowerCase().trim();
     final messenger = ScaffoldMessenger.of(context);
+    final currentGroup = _selectedGroup;
+    final groupLink =
+        'https://poker-night-tools.web.app/join-group?code=${currentGroup.joinCode}';
 
-    // Extract past opponents across all groups (Spec §B13, T124)
+    // Extract past opponents across games the viewer actually played in (Spec §B13, T124)
     final opponentsMap = <String, ({String id, String name, DateTime lastPlayed, bool isMember})>{};
 
     for (final g in app.groups) {
       for (final game in g.pastGames) {
-        final gameDate = DateTime.tryParse(game.settings.date) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final viewerPlayed = game.players.any(
+          (p) =>
+              (currentUid != null && p.id == currentUid) ||
+              (currentName != null && p.name.toLowerCase().trim() == currentName),
+        );
+        if (!viewerPlayed) continue;
+
+        final finishDate = game.endedAt ??
+            DateTime.tryParse(game.settings.date) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+
         for (final p in game.players) {
           if (p.isGuest) continue;
           if (currentUid != null && p.id == currentUid) continue;
           if (currentName != null && p.name.toLowerCase().trim() == currentName) continue;
-          final key = p.name.toLowerCase().trim();
-          final isMember = widget.group.members.any(
-            (m) => m.id == p.id || m.name.toLowerCase().trim() == key,
-          );
+          final key = p.id.isNotEmpty ? p.id : p.name.toLowerCase().trim();
+          final isMember = currentGroup.members.any((m) => m.id == p.id);
           final existing = opponentsMap[key];
-          if (existing == null || gameDate.isAfter(existing.lastPlayed)) {
+          if (existing == null || finishDate.isAfter(existing.lastPlayed)) {
             opponentsMap[key] = (
               id: p.id,
               name: p.name,
-              lastPlayed: gameDate,
+              lastPlayed: finishDate,
               isMember: isMember,
             );
           }
@@ -1147,6 +1167,33 @@ class _InviteModalContentState extends State<_InviteModalContent> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (app.groups.length > 1) ...[
+            Text(
+              'Which group',
+              style: AppTypography.bodySm.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            AppSelect<String>(
+              value: currentGroup.id,
+              items: [
+                for (final g in app.groups)
+                  DropdownMenuItem(
+                    value: g.id,
+                    child: Text('${g.name} (${g.members.length} members)'),
+                  ),
+              ],
+              onChanged: (id) {
+                if (id == null) return;
+                final found = app.groups.where((g) => g.id == id).firstOrNull;
+                if (found != null) {
+                  setState(() => _selectedGroup = found);
+                }
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           Text(
             'Anyone with this link or code can join in one tap.',
             textAlign: TextAlign.center,
@@ -1173,7 +1220,7 @@ class _InviteModalContentState extends State<_InviteModalContent> {
                 ],
               ),
               child: QrImageView(
-                data: widget.link,
+                data: groupLink,
                 size: 130,
                 backgroundColor: Colors.white,
                 padding: EdgeInsets.zero,
@@ -1191,12 +1238,12 @@ class _InviteModalContentState extends State<_InviteModalContent> {
                     try {
                       await SharePlus.instance.share(
                         ShareParams(
-                          text: widget.link,
-                          subject: 'Join my poker group: ${widget.group.name}',
+                          text: groupLink,
+                          subject: 'Join my poker group: ${currentGroup.name}',
                         ),
                       );
                     } catch (_) {
-                      await Clipboard.setData(ClipboardData(text: widget.link));
+                      await Clipboard.setData(ClipboardData(text: groupLink));
                       messenger.showSnackBar(
                         const SnackBar(
                           content: Text('Invite link copied'),
@@ -1207,10 +1254,16 @@ class _InviteModalContentState extends State<_InviteModalContent> {
                   },
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.share, size: 16),
                       SizedBox(width: AppSpacing.xs),
-                      Text('Share link'),
+                      Flexible(
+                        child: Text(
+                          'Share link',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1223,7 +1276,7 @@ class _InviteModalContentState extends State<_InviteModalContent> {
                       ? AppButtonVariant.secondary
                       : AppButtonVariant.primary,
                   onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: widget.link));
+                    await Clipboard.setData(ClipboardData(text: groupLink));
                     if (!mounted) return;
                     setState(() => _copiedLink = true);
                     messenger.showSnackBar(
@@ -1238,13 +1291,19 @@ class _InviteModalContentState extends State<_InviteModalContent> {
                   },
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         _copiedLink ? Icons.check : Icons.copy,
                         size: 16,
                       ),
                       const SizedBox(width: AppSpacing.xs),
-                      Text(_copiedLink ? 'Copied' : 'Copy link'),
+                      Flexible(
+                        child: Text(
+                          _copiedLink ? 'Copied' : 'Copy link',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1252,7 +1311,7 @@ class _InviteModalContentState extends State<_InviteModalContent> {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          CodeDisplay(code: widget.group.joinCode, label: 'Or enter code'),
+          CodeDisplay(code: currentGroup.joinCode, label: 'Or enter code'),
           const SizedBox(height: AppSpacing.lg),
           const Divider(),
           const SizedBox(height: AppSpacing.sm),
@@ -1355,10 +1414,12 @@ class _InviteModalContentState extends State<_InviteModalContent> {
                             size: AppButtonSize.sm,
                             variant: AppButtonVariant.secondary,
                             onPressed: () async {
-                              await Clipboard.setData(ClipboardData(text: widget.link));
+                              final oneTapLink =
+                                  'https://poker-night-tools.web.app/join-group?code=${currentGroup.joinCode}&to=${Uri.encodeComponent(opponent.id)}';
+                              await Clipboard.setData(ClipboardData(text: oneTapLink));
                               messenger.showSnackBar(
                                 SnackBar(
-                                  content: Text('Invite link copied for ${opponent.name}'),
+                                  content: Text('One-tap invite link copied for ${opponent.name}'),
                                   duration: const Duration(seconds: 2),
                                 ),
                               );

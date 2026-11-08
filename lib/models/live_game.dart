@@ -948,6 +948,11 @@ class LiveGame {
   /// consistently overrun does not want the same estimate next time.
   final int? actualDurationMins;
 
+  /// Wall-clock instant the tournament actually finished.
+  DateTime? get endedAt => startedAt != null && actualDurationMins != null
+      ? startedAt!.add(Duration(minutes: actualDurationMins!))
+      : null;
+
   /// Human-readable audit of post-publication event edits (user-flow spec
   /// §10.4): "2026-08-24 14:05 · buy-in 15 → 20". Oldest first; the provider
   /// caps the list when appending. Rendered prominently on the event page.

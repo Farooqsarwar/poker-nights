@@ -190,6 +190,20 @@ extension AppProviderCloudSync on AppProvider {
               reconcile: (local, remote) =>
                   mergeMemberOwnedFields(local, remote, adminId: _user?.id),
             );
+            if (committed.status == LiveGameStatus.completed &&
+                committed.finishOrder.isNotEmpty &&
+                committed.groupId.isNotEmpty) {
+              final settlements = _pendingSettlements.remove(committed.id) ??
+                  _buildSettlementsForGame(committed);
+              if (settlements.isNotEmpty) {
+                step = 'saveGameSettlements';
+                await _repo.saveGameSettlements(
+                  committed.groupId,
+                  committed.id,
+                  settlements,
+                );
+              }
+            }
             step = 'publishProjections';
             await _publishProjections(committed);
             _adoptCommittedMemberFields(committed);

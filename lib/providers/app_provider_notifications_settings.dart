@@ -125,7 +125,13 @@ extension AppProviderNotificationsSettings on AppProvider {
     // themselves. Broadcasts (null / empty audience) are unaffected.
     final me = _user?.id;
     final forMe = me == null || notification.isFor(me);
-    if (forMe) _notifications = [notification, ..._notifications];
+    if (forMe) {
+      _notifications = [notification, ..._notifications];
+      if (_notificationsEnabled &&
+          !PushService.instance.suppressesInAppWebBanners) {
+        BrowserNotify.show(notification.title, notification.body);
+      }
+    }
     // This device originated the event — never re-banner it on itself when
     // the mirrored inbox copy arrives.
     _seenNotificationIds.add(notification.id);

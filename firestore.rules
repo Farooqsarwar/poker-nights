@@ -720,8 +720,10 @@ service cloud.firestore {
       // Do not rely on it as a boundary.
       match /games/{gameId} {
         // Because private financial data is split into the admin sidecar,
-        // all members can safely read the main public game document.
-        allow read: if isMember(gid);
+        // all members can read the public game document only if it carries no
+        // unscrubbed payment ledger (Spec §B7, §E6, §E14). Admins can always read.
+        allow read: if isMember(gid)
+            && (isGroupAdmin(gid) || resource.data.get('payments', []).size() == 0);
         allow create: if (isGroupAdmin(gid) && publicGameDocSafe() && gameValuesSafe())
             || (isMember(gid) && memberGameCreate());
         allow delete: if isGroupAdmin(gid);
@@ -766,8 +768,10 @@ service cloud.firestore {
         // each participant at settlement; each player reads ONLY their own
         // document. No other member can read another player's settlement.
         match /settlements/{playerId} {
+          // Spec §E14: visible only to its owner (the participating player).
           allow read: if isMember(gid)
-              && (isGroupAdmin(gid) || (signedIn() && request.auth.uid == playerId));
+              && signedIn()
+              && request.auth.uid == playerId;
           allow write: if isGroupAdmin(gid);
         }
 

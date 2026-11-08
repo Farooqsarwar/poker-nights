@@ -875,7 +875,7 @@ class _HistoryRow extends StatelessWidget {
     final int? net;
     if (myResult != null &&
         myResult.position > 0 &&
-        (myResult.prize > 0 || myResult.buyInsPaid > 0)) {
+        myResult.hasExplicitBuyIns) {
       net = myResult.net;
     } else if (placement != null) {
       final myPayments = game.payments.where(

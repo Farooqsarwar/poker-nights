@@ -3385,18 +3385,54 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-    void _showLevelEditDialog(
+  void _showLevelEditDialog(
     BuildContext context,
     AppProvider app,
     LiveGame game,
     BlindLevel level,
   ) {
+    if (level.level < game.currentLevel) {
+      showAppModal(
+        context: context,
+        title: 'Played level',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'L${level.level} was already played. Edit it only to correct the record — the clock won\'t replay it, and it can\'t be deleted.',
+              style: AppTypography.bodySm,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _openLevelEditForm(context, app, game, level, isPlayed: true);
+              },
+              child: const Text('Correct the record'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    _openLevelEditForm(context, app, game, level, isPlayed: false);
+  }
+
+  void _openLevelEditForm(
+    BuildContext context,
+    AppProvider app,
+    LiveGame game,
+    BlindLevel level, {
+    required bool isPlayed,
+  }) {
     showAppModal(
       context: context,
       title: 'Edit Level ${level.level}',
       child: DashboardLevelEditDialog(
         game: game,
         level: level,
+        isPlayed: isPlayed,
         onApply: ({
           required int sb,
           required int bb,
@@ -3447,6 +3483,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         },
         onApply: (levels) {
           app.applyFutureLevels(levels);
+          Navigator.pop(context);
+        },
+        onApplyWithBreaks: (levels, breaks) {
+          app.applyFutureLevels(levels, breaks);
           Navigator.pop(context);
         },
       ),

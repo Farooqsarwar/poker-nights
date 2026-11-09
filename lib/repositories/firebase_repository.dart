@@ -162,10 +162,10 @@ class GameResultRow {
     'position': position,
     'playerCount': playerCount,
     'knockouts': knockouts,
-    'finishedAt': finishedAt,
+    'finishedAt': finishedAt?.toIso8601String(),
     'eliminatedAtLevel': eliminatedAtLevel,
     'prize': prize,
-    if (hasExplicitBuyIns) 'buyInsPaid': buyInsPaid,
+    'buyInsPaid': buyInsPaid,
     'hasExplicitBuyIns': hasExplicitBuyIns,
   };
 
@@ -180,6 +180,7 @@ class GameResultRow {
       finishedAt: switch (m['finishedAt']) {
         final DateTime dt => dt,
         final String s => DateTime.tryParse(s),
+        final Timestamp ts => ts.toDate(),
         _ => null,
       },
       eliminatedAtLevel: (m['eliminatedAtLevel'] as num?)?.toInt(),
@@ -1627,7 +1628,9 @@ class FirebaseRepository {
           () {
             Query<Map<String, dynamic>> q = groupRef.collection('games');
             if (!isAdmin) {
-              q = q.where('playersScrubbed', isEqualTo: true);
+              q = q
+                  .where('playersScrubbed', isEqualTo: true)
+                  .where('payments', isEqualTo: const <dynamic>[]);
             }
             return q
                 .orderBy('settings.date', descending: true)
@@ -2399,7 +2402,10 @@ class FirebaseRepository {
       // Ensure authoritative settlements exist before scrubbing public document
       // financial data. Check groups/{gid}/games/{gameId}/settlements subcollection.
       final legacyGame = liveGameFromFirestoreDoc(docData);
-      if (legacyGame.status == LiveGameStatus.completed) {
+      final isCompleted = legacyGame.status == LiveGameStatus.completed ||
+          legacyGame.finishOrder.isNotEmpty ||
+          docData['endedAt'] != null;
+      if (isCompleted) {
         if (legacyGame.finishOrder.isEmpty) {
           // Without finishOrder, authoritative settlements cannot be computed.
           // Abort scrub so financial data is preserved on docData.
@@ -2407,8 +2413,8 @@ class FirebaseRepository {
           return;
         }
         final settCol = gameRef.collection('settlements');
-        final settSnap = await settCol.limit(1).get();
-        if (settSnap.docs.isEmpty) {
+        final settSnap = await settCol.get();
+        if (settSnap.docs.length < legacyGame.finishOrder.length) {
           final settlements = _buildSettlementsForLegacyGame(legacyGame);
           if (settlements.isNotEmpty) {
             await saveGameSettlements(gid, gameId, settlements);
@@ -2417,8 +2423,9 @@ class FirebaseRepository {
       }
 
       // Prepare fully scrubbed doc satisfying publicGameDocSafe()
-      final scrubbedPlayers = <String, dynamic>{};
+      dynamic scrubbedPlayers;
       if (playersRaw is Map) {
+        final map = <String, dynamic>{};
         for (final e in playersRaw.entries) {
           if (e.value is Map) {
             final pMap = Map<String, dynamic>.from(e.value as Map);
@@ -2426,9 +2433,23 @@ class FirebaseRepository {
             pMap['reEntries'] = 0;
             pMap['hasAddOn'] = false;
             pMap['knockouts'] = 0;
-            scrubbedPlayers[e.key] = pMap;
+            map[e.key] = pMap;
           }
         }
+        scrubbedPlayers = map;
+      } else if (playersRaw is List) {
+        final list = <Map<String, dynamic>>[];
+        for (final item in playersRaw) {
+          if (item is Map) {
+            final pMap = Map<String, dynamic>.from(item);
+            pMap['rebuys'] = 0;
+            pMap['reEntries'] = 0;
+            pMap['hasAddOn'] = false;
+            pMap['knockouts'] = 0;
+            list.add(pMap);
+          }
+        }
+        scrubbedPlayers = list;
       }
 
       final updates = <String, dynamic>{
@@ -2437,9 +2458,11 @@ class FirebaseRepository {
         'rebuyRequests': const <Map<String, dynamic>>[],
         'addOnRequests': const <Map<String, dynamic>>[],
         'addOnDeclined': const <String>[],
-        'players': scrubbedPlayers,
         'playersScrubbed': true,
       };
+      if (scrubbedPlayers != null) {
+        updates['players'] = scrubbedPlayers;
+      }
 
       if (docData['structure'] is Map &&
           (docData['structure'] as Map).containsKey('organizerAmount')) {

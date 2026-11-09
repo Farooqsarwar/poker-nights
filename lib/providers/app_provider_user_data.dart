@@ -135,30 +135,25 @@ extension AppProviderUserData on AppProvider {
         if (_groups.any((g) => g.id == gid)) continue;
         final joinCode = invite['joinCode'] as String? ?? '';
         unawaited(
-          _repo
-              .joinGroup(
+          () async {
+            try {
+              final ok = await _repo.joinGroup(
                 gid,
                 _user!,
                 groupName: invite['name'] as String? ?? '',
                 groupIcon: invite['icon'] as String? ?? '',
                 joinCode: joinCode,
-              )
-              .catchError((Object e) {
-                debugPrint('accept invite failed: $e');
-                return null;
-              }),
+              );
+              final inviteId =
+                  invite['id'] as String? ?? invite['__inviteId'] as String?;
+              if (ok != null && inviteId != null) {
+                await _repo.removePendingInvite(inviteId);
+              }
+            } catch (e) {
+              debugPrint('accept invite failed: $e');
+            }
+          }(),
         );
-        final inviteId =
-            invite['id'] as String? ?? invite['__inviteId'] as String?;
-        if (inviteId != null) {
-          unawaited(
-            _repo
-                .removePendingInvite(inviteId)
-                .catchError(
-                  (Object e) => debugPrint('remove invite failed: $e'),
-                ),
-          );
-        }
       }
       if (!_disposed) notifyListeners();
     }, onError: (Object e) => debugPrint('pendingInvites stream error: $e'));
@@ -320,7 +315,7 @@ extension AppProviderUserData on AppProvider {
             hasExplicitBuyIns: false, // Fallback from scrubbed doc: not explicit, allows future backfill!
           );
           await _repo.saveGameResult(uid, game.id, fallback);
-          // Do not lock _resultsRecorded so maybeBackfillAuthoritativeResult can backfill it later
+          _resultsRecorded.add(game.id);
         } catch (e) {
           debugPrint('saveGameResult failed: $e');
         }
@@ -522,6 +517,17 @@ extension AppProviderUserData on AppProvider {
                 subscribeBundle(true);
                 return;
               }
+              // Dynamically sync cash sessions subscription with the verified group role
+              if (bundleAdmin && _cashSub == null) {
+                _cashSub = _repo.completedCashSessionsStream(gid).listen((list) {
+                  _cashHistory = list;
+                  if (!_disposed) notifyListeners();
+                }, onError: (Object e) => debugPrint('cashSessions stream error: $e'));
+              } else if (!bundleAdmin && _cashSub != null) {
+                _cashSub?.cancel();
+                _cashSub = null;
+                _cashHistory = const [];
+              }
               // _setGroup (not a bare `_currentGroup = g`) so the full group — members,
               // games, code — is also written into `_groups`, which backs the sidebar
               // / drawer / orderedGroups (they'd otherwise show the lightweight index
@@ -617,7 +623,7 @@ extension AppProviderUserData on AppProvider {
     id: r.groupId,
     name: r.name,
     joinCode: '',
-    ownerId: r.role == 'admin' ? (_user?.id ?? '') : '',
+    ownerId: '', // Never fabricate ownerId = self for generic admin membership
     members: r.role == 'admin' && _user != null
         ? [
             _user!.copyWith(isAdmin: true),

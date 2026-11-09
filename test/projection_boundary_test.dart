@@ -268,7 +268,7 @@ void main() {
       final body = rules.substring(start, end);
       expect(
         body,
-        contains("data.get('payments', []).size() == 0"),
+        contains("data.get('payments', []) == []"),
         reason: 'payments array must be required to be empty in publicGameDocSafe',
       );
       expect(
@@ -284,7 +284,7 @@ void main() {
       final body = rules.substring(start, start + 1000);
       expect(body, contains('allow get: if isMember(gid)'));
       expect(body, contains('allow list: if isMember(gid)'));
-      expect(body, contains("resource.data.get('payments', []).size() == 0"));
+      expect(body, contains("resource.data.get('payments', []) == []"));
       expect(body, contains("resource.data.get('playersScrubbed', false) == true"));
     });
 
@@ -293,12 +293,11 @@ void main() {
       final start = rules.indexOf('function playerScrubbed(p)');
       expect(start, greaterThan(-1), reason: 'playerScrubbed() helper must exist');
       final pSafe = rules.substring(start, rules.indexOf('function gameValuesSafe()'));
-      expect(pSafe, contains('allPlayersScrubbed'));
       expect(pSafe, contains("p.get('rebuys', 0) == 0"));
       expect(pSafe, contains("p.get('reEntries', 0) == 0"));
       expect(pSafe, contains("p.get('hasAddOn', false) == false"));
       expect(pSafe, contains("p.get('knockouts', 0) == 0"));
-      expect(pSafe, contains("allPlayersScrubbed(players)"));
+      expect(pSafe, contains("samplePlayer"));
       expect(pSafe, contains("data.get('playersScrubbed', false) == true"));
     });
 

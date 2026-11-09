@@ -1427,30 +1427,43 @@ class _InviteModalContentState extends State<InviteModalContent> {
                                   Clipboard.setData(ClipboardData(text: oneTapLink))
                                       .catchError((_) {}),
                                 );
-                                unawaited(
-                                  app.stagePendingGroupInvite(
+                                var stagedOk = false;
+                                try {
+                                  await app.stagePendingGroupInvite(
                                     uid: opponent.id,
                                     name: opponent.name,
-                                  ),
-                                );
-                                app.pushNotification(
-                                  AppNotification(
-                                    id: 'invite-${currentGroup.id}-${opponent.id}-${DateTime.now().millisecondsSinceEpoch}',
-                                    title: 'Group invitation',
-                                    body: '${app.user?.name ?? "A host"} invited you to join ${currentGroup.name}.',
-                                    type: NotificationType.invite,
-                                    link: '/join-group?code=${currentGroup.joinCode}&to=${Uri.encodeComponent(opponent.id)}',
-                                    audience: [opponent.id],
-                                    read: false,
-                                    timestamp: DateTime.now(),
-                                  ),
-                                );
-                                messenger.showSnackBar(
-                                  SnackBar(
-                                    content: Text('One-tap invite link copied and sent for ${opponent.name}'),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
+                                  );
+                                  stagedOk = true;
+                                } catch (e) {
+                                  debugPrint('stagePendingGroupInvite failed: $e');
+                                }
+                                if (stagedOk) {
+                                  app.pushNotification(
+                                    AppNotification(
+                                      id: 'invite-${currentGroup.id}-${opponent.id}-${DateTime.now().millisecondsSinceEpoch}',
+                                      title: 'Group invitation',
+                                      body: '${app.user?.name ?? "A host"} invited you to join ${currentGroup.name}.',
+                                      type: NotificationType.invite,
+                                      link: '/join-group?code=${currentGroup.joinCode}&to=${Uri.encodeComponent(opponent.id)}',
+                                      audience: [opponent.id],
+                                      read: false,
+                                      timestamp: DateTime.now(),
+                                    ),
+                                  );
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text('One-tap invite link copied and sent for ${opponent.name}'),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                } else {
+                                  messenger.showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Invite link copied to clipboard'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
                               } else {
                                 // Non-admins cannot stage targeted invites (Firestore rules require isGroupAdmin).
                                 // Copy the standard group join link instead without staging an invite.

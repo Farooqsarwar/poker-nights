@@ -188,14 +188,18 @@ extension AppProviderCloudSync on AppProvider {
                   _buildSettlementsForGame(toWrite);
               if (settlements.isNotEmpty) {
                 step = 'saveGameSettlements';
-                await _repo.saveGameSettlements(
-                  toWrite.groupId,
-                  toWrite.id,
-                  settlements,
-                );
-                // Only remove from pending and persist AFTER the remote write succeeds!
-                _pendingSettlements.remove(toWrite.id);
-                await _persistPendingSettlements();
+                try {
+                  await _repo.saveGameSettlements(
+                    toWrite.groupId,
+                    toWrite.id,
+                    settlements,
+                  );
+                  // Only remove from pending and persist AFTER the remote write succeeds!
+                  _pendingSettlements.remove(toWrite.id);
+                  await _persistPendingSettlements();
+                } catch (e) {
+                  debugPrint('saveGameSettlements failed: $e, kept in offline queue');
+                }
               }
             }
 
@@ -1025,6 +1029,29 @@ extension AppProviderCloudSync on AppProvider {
     if (thisDeviceRunsTheClock) return;
     _clockWatchOnlyGameIds.add(game.id);
     if (!_disposed) notifyListeners();
+  }
+
+  /// Drains offline pending settlement rows on reconnect, startup or login (Spec §B7, §E14).
+  Future<void> drainPendingSettlements() async {
+    if (!_backendUp || _pendingSettlements.isEmpty) return;
+    final keys = List<String>.from(_pendingSettlements.keys);
+    for (final gameId in keys) {
+      final settlements = _pendingSettlements[gameId];
+      if (settlements == null || settlements.isEmpty) {
+        _pendingSettlements.remove(gameId);
+        continue;
+      }
+      final firstRow = settlements.values.first;
+      final gid = firstRow.groupId;
+      if (gid.isEmpty) continue;
+      try {
+        await _repo.saveGameSettlements(gid, gameId, settlements);
+        _pendingSettlements.remove(gameId);
+        await _persistPendingSettlements();
+      } catch (e) {
+        debugPrint('drainPendingSettlements failed for $gameId: $e');
+      }
+    }
   }
 }
 

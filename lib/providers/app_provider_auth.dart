@@ -408,6 +408,15 @@ extension AppProviderAuth on AppProvider {
     await _repo.signOut();
     RecoveryService.clearGuestSession();
     _guestSession = null;
+    // Clear offline pending settlements on logout so they do not linger across users
+    _pendingSettlements.clear();
+    unawaited(
+      Localstore.instance
+          .collection('app')
+          .doc('pending_settlements')
+          .delete()
+          .catchError((_) => null),
+    );
     // Premium belongs to the account, not the phone: drop it with the session
     // so the next sign-in starts from its own entitlement.
     Payments.userId = null;

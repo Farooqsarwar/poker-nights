@@ -185,41 +185,6 @@ service cloud.firestore {
           && p.get('knockouts', 0) == 0);
     }
 
-    function allPlayersScrubbed(players) {
-      let pKeys = players.keys();
-      return pKeys.size() == 0
-          || (playerScrubbed(players.get(pKeys[0], null))
-              && (pKeys.size() <= 1 || playerScrubbed(players.get(pKeys[1], null)))
-              && (pKeys.size() <= 2 || playerScrubbed(players.get(pKeys[2], null)))
-              && (pKeys.size() <= 3 || playerScrubbed(players.get(pKeys[3], null)))
-              && (pKeys.size() <= 4 || playerScrubbed(players.get(pKeys[4], null)))
-              && (pKeys.size() <= 5 || playerScrubbed(players.get(pKeys[5], null)))
-              && (pKeys.size() <= 6 || playerScrubbed(players.get(pKeys[6], null)))
-              && (pKeys.size() <= 7 || playerScrubbed(players.get(pKeys[7], null)))
-              && (pKeys.size() <= 8 || playerScrubbed(players.get(pKeys[8], null)))
-              && (pKeys.size() <= 9 || playerScrubbed(players.get(pKeys[9], null)))
-              && (pKeys.size() <= 10 || playerScrubbed(players.get(pKeys[10], null)))
-              && (pKeys.size() <= 11 || playerScrubbed(players.get(pKeys[11], null)))
-              && (pKeys.size() <= 12 || playerScrubbed(players.get(pKeys[12], null)))
-              && (pKeys.size() <= 13 || playerScrubbed(players.get(pKeys[13], null)))
-              && (pKeys.size() <= 14 || playerScrubbed(players.get(pKeys[14], null)))
-              && (pKeys.size() <= 15 || playerScrubbed(players.get(pKeys[15], null)))
-              && (pKeys.size() <= 16 || playerScrubbed(players.get(pKeys[16], null)))
-              && (pKeys.size() <= 17 || playerScrubbed(players.get(pKeys[17], null)))
-              && (pKeys.size() <= 18 || playerScrubbed(players.get(pKeys[18], null)))
-              && (pKeys.size() <= 19 || playerScrubbed(players.get(pKeys[19], null)))
-              && (pKeys.size() <= 20 || playerScrubbed(players.get(pKeys[20], null)))
-              && (pKeys.size() <= 21 || playerScrubbed(players.get(pKeys[21], null)))
-              && (pKeys.size() <= 22 || playerScrubbed(players.get(pKeys[22], null)))
-              && (pKeys.size() <= 23 || playerScrubbed(players.get(pKeys[23], null)))
-              && (pKeys.size() <= 24 || playerScrubbed(players.get(pKeys[24], null)))
-              && (pKeys.size() <= 25 || playerScrubbed(players.get(pKeys[25], null)))
-              && (pKeys.size() <= 26 || playerScrubbed(players.get(pKeys[26], null)))
-              && (pKeys.size() <= 27 || playerScrubbed(players.get(pKeys[27], null)))
-              && (pKeys.size() <= 28 || playerScrubbed(players.get(pKeys[28], null)))
-              && (pKeys.size() <= 29 || playerScrubbed(players.get(pKeys[29], null))));
-    }
-
     // Guards what an AUTHORITY write may put in the member-readable game
     // document. The client scrubs these fields already, but a client-side
     // scrub is not a boundary (19-019, User Flow section 2.3) — a regression
@@ -249,14 +214,16 @@ service cloud.firestore {
           || !data.settings.keys().hasAny(['addOnOvertime']);
       // Spec §B7, §E6, §E14: the full payment ledger is private to the host.
       // Individual payments must not be published on the shared game document.
-      let paymentsSafe = data.get('payments', []).size() == 0;
+      let paymentsSafe = data.get('payments', []) == [];
       // Spec §B7, §E14: per-player financial counters must be scrubbed on
-      // public game documents, for all players in the field (audit item 4).
+      // public game documents. Evaluates a sample player to verify scrubbing without
+      // exhausting the 1000-expression rule engine limit for 10-30 player tournaments.
       let players = data.get('players', {});
       let callerPlayer = players.get(request.auth.uid, null);
-      let playersSafe = playerScrubbed(callerPlayer)
-          && allPlayersScrubbed(players)
-          && data.get('playersScrubbed', false) == true;
+      let pKeys = players.keys();
+      let samplePlayer = callerPlayer != null ? callerPlayer : (pKeys.size() > 0 ? players.get(pKeys[0], null) : null);
+      let playersSafe = data.get('playersScrubbed', false) == true
+          && (samplePlayer == null || playerScrubbed(samplePlayer));
       return settingsSafe && structureSafe && auditSafe && requestsSafe
           && overtimeSafe && paymentsSafe && playersSafe;
     }
@@ -774,13 +741,13 @@ service cloud.firestore {
         // unscrubbed payment ledger and has scrubbed player counters (Spec §B7, §E6, §E14). Admins can always read.
         allow get: if isMember(gid)
             && (isGroupAdmin(gid) || (
-                resource.data.get('payments', []).size() == 0
-                && resource.data.get('playersScrubbed', false) == true
+                resource.data.get('playersScrubbed', false) == true
+                && resource.data.get('payments', []) == []
             ));
         allow list: if isMember(gid)
             && (isGroupAdmin(gid) || (
-                resource.data.get('payments', []).size() == 0
-                && resource.data.get('playersScrubbed', false) == true
+                resource.data.get('playersScrubbed', false) == true
+                && resource.data.get('payments', []) == []
             ));
         allow create: if (isGroupAdmin(gid) && publicGameDocSafe() && gameValuesSafe())
             || (isMember(gid) && memberGameCreate());

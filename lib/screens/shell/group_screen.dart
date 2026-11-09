@@ -1423,6 +1423,12 @@ class _InviteModalContentState extends State<InviteModalContent> {
                                 Clipboard.setData(ClipboardData(text: oneTapLink))
                                     .catchError((_) {}),
                               );
+                              unawaited(
+                                app.stagePendingGroupInvite(
+                                  uid: opponent.id,
+                                  name: opponent.name,
+                                ),
+                              );
                               app.pushNotification(
                                 AppNotification(
                                   id: 'invite-${currentGroup.id}-${opponent.id}-${DateTime.now().millisecondsSinceEpoch}',
@@ -1437,7 +1443,7 @@ class _InviteModalContentState extends State<InviteModalContent> {
                               );
                               messenger.showSnackBar(
                                 SnackBar(
-                                  content: Text('One-tap invite link copied for ${opponent.name}'),
+                                  content: Text('One-tap invite link copied and sent for ${opponent.name}'),
                                   duration: const Duration(seconds: 2),
                                 ),
                               );

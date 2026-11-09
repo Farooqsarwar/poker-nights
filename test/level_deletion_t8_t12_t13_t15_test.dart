@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import 'package:poker_night/models/group.dart';
+import 'package:poker_night/models/game.dart';
 import 'package:poker_night/models/tournament.dart';
+import 'package:poker_night/models/user.dart';
+import 'package:poker_night/providers/app_provider.dart';
+import 'package:poker_night/screens/tournament/admin_dashboard_screen.dart';
+import 'package:poker_night/services/recovery_service.dart';
 import 'package:poker_night/widgets/structure_editor.dart';
 import 'package:poker_night/widgets/dashboard_level_edit_dialog.dart';
 import 'package:poker_night/screens/tournament/player_live_screen.dart' show LevelsTableCard;
@@ -426,6 +434,151 @@ void main() {
 
       expect(editFormOpened, isTrue);
       expect(wasPlayedPassed, isTrue);
+    });
+
+    testWidgets('T8/T12: AdminDashboardScreen shows Played level modal gate when tapping played level', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      RecoveryService.enabled = false;
+      addTearDown(() => RecoveryService.enabled = true);
+
+      final adminUser = const AppUser(
+        id: 'admin_1',
+        name: 'Admin Host',
+        email: 'host@test.com',
+        isAdmin: true,
+        stats: UserStats(
+          played: 0,
+          wins: 0,
+          podium: 0,
+          avgFinish: 0,
+          knockouts: 0,
+        ),
+      );
+
+      final dashboardGame = LiveGame(
+        id: 'game_dash',
+        groupId: 'g_dash',
+        settings: const GameSettings(
+          name: 'Dashboard Tournament',
+          date: '2026-12-18',
+          time: '20:00',
+          location: 'Main Room',
+          players: 4,
+          durationHours: 3,
+          buyIn: 25,
+          chipSet: [],
+          chipSetName: 'Standard',
+          koEnabled: false,
+          koAmount: 0,
+          rebuys: true,
+          rebuysCloseLevel: 4,
+          addOn: false,
+          anteEnabled: false,
+          anteAfterLevel: 1,
+          organizerPct: 0,
+        ),
+        structure: testStructure,
+        status: LiveGameStatus.running,
+        publicCode: 'DASH1',
+        tvCode: 'TVDASH',
+        currentLevel: 3,
+        timerRunning: false,
+        secondsRemaining: 500,
+        players: const [
+          Player(
+            id: 'admin_1',
+            name: 'Admin Host',
+            isGuest: false,
+            checkedIn: true,
+            confirmed: true,
+            eliminated: false,
+            rebuys: 0,
+            hasAddOn: false,
+            knockouts: 0,
+            table: 1,
+            seat: 1,
+            active: true,
+          ),
+        ],
+        chat: const [],
+        announcements: const [],
+        totalChipsInPlay: 4000,
+        pendingGuests: const [],
+        finishOrder: const [],
+      );
+
+      final group = Group(
+        id: 'g_dash',
+        name: 'Dashboard Group',
+        joinCode: 'DASHG',
+        ownerId: adminUser.id,
+        members: [adminUser],
+        games: [dashboardGame],
+        chat: const [],
+        polls: const [],
+        notifications: const [],
+      );
+
+      final app = AppProvider()
+        ..setUserForTesting(adminUser)
+        ..setCurrentGroupForTesting(group)
+        ..setCurrentGameForTesting(dashboardGame);
+
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => const Scaffold(body: AdminDashboardScreen()),
+          ),
+          GoRoute(
+            path: '/rebuy-settlement',
+            builder: (_, _) => const Scaffold(body: Text('SETTLEMENT')),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppProvider>.value(
+          value: app,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tap on 'Levels' tab in tab strip
+      final levelsTab = find.text('Levels');
+      expect(levelsTab, findsWidgets);
+      await tester.ensureVisible(levelsTab.first);
+      await tester.tap(levelsTab.first);
+      await tester.pumpAndSettle();
+
+      // Find Edit Level 1 (1 < 3 => played level)
+      final editL1 = find.bySemanticsLabel('Edit Level 1');
+      await tester.ensureVisible(editL1);
+      await tester.tap(editL1);
+      await tester.pumpAndSettle();
+
+      // Modal gate appears
+      expect(find.text('Played level'), findsOneWidget);
+      expect(find.textContaining('Edit it only to correct the record'), findsOneWidget);
+
+      // Tap Correct the record
+      await tester.tap(find.text('Correct the record'));
+      await tester.pumpAndSettle();
+
+      // Modal gate closes, DashboardLevelEditDialog opens with isPlayed: true
+      expect(find.text('Played level'), findsNothing);
+      expect(find.byType(DashboardLevelEditDialog), findsOneWidget);
+      expect(find.text('Edit Level 1'), findsWidgets);
+      expect(find.text('Recalculate after this'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      router.dispose();
+      app.dispose();
     });
   });
 }

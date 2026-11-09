@@ -264,15 +264,28 @@ void main() {
     test('publicGameDocSafe requires empty payments array to prevent payment ledger leakage', () {
       final rules = File('firestore.rules').readAsStringSync();
       final start = rules.indexOf('function publicGameDocSafe()');
-      final body = rules.substring(
-        start,
-        rules.indexOf('function publicGameDocSafe()') + 1500,
-      );
+      final end = rules.indexOf('function gameValuesSafe()');
+      final body = rules.substring(start, end);
       expect(
         body,
         contains("data.get('payments', []).size() == 0"),
         reason: 'payments array must be required to be empty in publicGameDocSafe',
       );
+      expect(
+        body,
+        contains("data.get('playersScrubbed', false) == true"),
+        reason: 'playersScrubbed flag must be required in publicGameDocSafe',
+      );
+    });
+
+    test('games collection read rules enforce scrubbed boundary for both get and list', () {
+      final rules = File('firestore.rules').readAsStringSync();
+      final start = rules.indexOf('match /games/{gameId}');
+      final body = rules.substring(start, start + 1000);
+      expect(body, contains('allow get: if isMember(gid)'));
+      expect(body, contains('allow list: if isMember(gid)'));
+      expect(body, contains("resource.data.get('payments', []).size() == 0"));
+      expect(body, contains("resource.data.get('playersScrubbed', false) == true"));
     });
 
     test('D2: the payout ladder is visible to everyone, organiser take is not', () {

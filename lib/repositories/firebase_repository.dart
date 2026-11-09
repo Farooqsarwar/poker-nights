@@ -1472,7 +1472,7 @@ class FirebaseRepository {
   /// into a single [Group]. Emits whenever any part changes. The first
   /// emission only happens once every source has delivered its initial
   /// snapshot.
-  Stream<Group> groupBundleStream(String gid) {
+  Stream<Group> groupBundleStream(String gid, {bool isAdmin = false}) {
     late StreamController<Group> controller;
     final subs = <StreamSubscription<dynamic>>[];
 
@@ -1623,19 +1623,26 @@ class FirebaseRepository {
         );
         section<QuerySnapshot<Map<String, dynamic>>>(
           'games',
-          () => groupRef
-              .collection('games')
-              .orderBy('settings.date', descending: true)
-              .limit(15)
-              .snapshots(),
+          () {
+            Query<Map<String, dynamic>> q = groupRef.collection('games');
+            if (!isAdmin) {
+              q = q.where('playersScrubbed', isEqualTo: true);
+            }
+            return q
+                .orderBy('settings.date', descending: true)
+                .limit(15)
+                .snapshots();
+          },
           (s) {
             final uid = currentUid;
             final isOwner = meta?['ownerId'] == uid;
+            final userIsAdmin =
+                isAdmin || isOwner || members.any((m) => m.id == uid && m.isAdmin);
             games = [
               for (final d in s.docs)
-                ?tryParseGameDoc(d, scrubPayments: !isOwner)
+                ?tryParseGameDoc(d, scrubPayments: !userIsAdmin)
             ];
-            if (isOwner) {
+            if (userIsAdmin) {
               for (final d in s.docs) {
                 final dData = d.data();
                 final p = dData['payments'];
@@ -2338,12 +2345,12 @@ class FirebaseRepository {
       final auditRaw = docData['auditHistory'];
       final rebuyReqRaw = docData['rebuyRequests'];
       final addOnReqRaw = docData['addOnRequests'];
+      final addOnDeclinedRaw = docData['addOnDeclined'];
       final playersRaw = docData['players'];
 
       final gameRef =
           _db.collection('groups').doc(gid).collection('games').doc(gameId);
       final privateRef = gameRef.collection('admin').doc('privateData');
-      final privateSnap = await privateRef.get();
 
       // Backup unscrubbed private data into admin privateData sidecar
       final backup = <String, dynamic>{};
@@ -2359,16 +2366,40 @@ class FirebaseRepository {
       if (addOnReqRaw is List && addOnReqRaw.isNotEmpty) {
         backup['addOnRequests'] = addOnReqRaw;
       }
-      if (playersRaw is Map) {
-        backup['players'] = playersRaw;
+      if (addOnDeclinedRaw is List && addOnDeclinedRaw.isNotEmpty) {
+        backup['addOnDeclined'] = addOnDeclinedRaw;
       }
-      if (backup.isNotEmpty &&
-          (!privateSnap.exists || privateSnap.data()?.isEmpty == true)) {
+      // Save players as a List of maps matching _restorePrivatePlayerFinancials
+      if (playersRaw is Map) {
+        backup['players'] = [
+          for (final v in playersRaw.values)
+            if (v is Map) Map<String, dynamic>.from(v)
+        ];
+      } else if (playersRaw is List) {
+        backup['players'] = [
+          for (final v in playersRaw)
+            if (v is Map) Map<String, dynamic>.from(v)
+        ];
+      }
+      if (docData['structure'] is Map &&
+          (docData['structure'] as Map).containsKey('organizerAmount')) {
+        backup['structure'] = {
+          'organizerAmount': (docData['structure'] as Map)['organizerAmount'],
+        };
+      }
+      if (docData['settings'] is Map &&
+          (docData['settings'] as Map).containsKey('organizerPct')) {
+        backup['settings'] = {
+          'organizerPct': (docData['settings'] as Map)['organizerPct'],
+        };
+      }
+      // Always merge backup into admin privateData unconditionally
+      if (backup.isNotEmpty) {
         await privateRef.set(backup, SetOptions(merge: true));
       }
 
-      // Ensure authoritative settlements exist in groups/{gid}/settlements/{gameId}
-      // before scrubbing public document financial data
+      // Ensure authoritative settlements exist before scrubbing public document
+      // financial data. If settlement backfill fails, abort to preserve data.
       final settRef = _db
           .collection('groups')
           .doc(gid)
@@ -2376,16 +2407,12 @@ class FirebaseRepository {
           .doc(gameId);
       final settSnap = await settRef.get();
       if (!settSnap.exists) {
-        try {
-          final legacyGame = liveGameFromFirestoreDoc(docData);
-          if (legacyGame.finishOrder.isNotEmpty) {
-            final settlements = _buildSettlementsForLegacyGame(legacyGame);
-            if (settlements.isNotEmpty) {
-              await saveGameSettlements(gid, gameId, settlements);
-            }
+        final legacyGame = liveGameFromFirestoreDoc(docData);
+        if (legacyGame.finishOrder.isNotEmpty) {
+          final settlements = _buildSettlementsForLegacyGame(legacyGame);
+          if (settlements.isNotEmpty) {
+            await saveGameSettlements(gid, gameId, settlements);
           }
-        } catch (e) {
-          debugPrint('Legacy settlements backfill failed: $e');
         }
       }
 
@@ -2421,10 +2448,10 @@ class FirebaseRepository {
         updates['structure'] = struct;
       }
 
-      if (docData['settings'] is Map &&
-          (docData['settings'] as Map).containsKey('organizerPct')) {
+      if (docData['settings'] is Map) {
         final stg = Map<String, dynamic>.from(docData['settings'] as Map);
         stg.remove('organizerPct');
+        stg.remove('addOnOvertime');
         updates['settings'] = stg;
       }
 

@@ -46,12 +46,16 @@ extension AppProviderPayments on AppProvider {
   PaymentRecord? recordComp({
     required String playerId,
     PaymentPurpose purpose = PaymentPurpose.buyIn,
+    String? idempotencyKey,
   }) {
     return recordPayment(
       playerId: playerId,
       purpose: purpose,
-      idempotencyKey: 'comp-$playerId-${purpose.name}-${DateTime.now().millisecondsSinceEpoch}',
+      idempotencyKey: idempotencyKey ??
+          'comp-$playerId-${purpose.name}-${DateTime.now().microsecondsSinceEpoch}',
+      outcome: PaymentStatus.paid,
       comped: true,
+      failureReason: 'comp',
     );
   }
 

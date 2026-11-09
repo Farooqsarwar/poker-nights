@@ -216,7 +216,7 @@ service cloud.firestore {
           && callerPlayer.get('reEntries', 0) == 0
           && callerPlayer.get('hasAddOn', false) == false
           && callerPlayer.get('knockouts', 0) == 0))
-          && (data.get('playersScrubbed', false) == true || players.size() == 0);
+          && data.get('playersScrubbed', false) == true;
       return settingsSafe && structureSafe && auditSafe && requestsSafe
           && overtimeSafe && paymentsSafe && playersSafe;
     }
@@ -731,9 +731,17 @@ service cloud.firestore {
       match /games/{gameId} {
         // Because private financial data is split into the admin sidecar,
         // all members can read the public game document only if it carries no
-        // unscrubbed payment ledger (Spec §B7, §E6, §E14). Admins can always read.
-        allow read: if isMember(gid)
-            && (isGroupAdmin(gid) || resource.data.get('payments', []).size() == 0);
+        // unscrubbed payment ledger and has scrubbed player counters (Spec §B7, §E6, §E14). Admins can always read.
+        allow get: if isMember(gid)
+            && (isGroupAdmin(gid) || (
+                resource.data.get('payments', []).size() == 0
+                && resource.data.get('playersScrubbed', false) == true
+            ));
+        allow list: if isMember(gid)
+            && (isGroupAdmin(gid) || (
+                resource.data.get('payments', []).size() == 0
+                && resource.data.get('playersScrubbed', false) == true
+            ));
         allow create: if (isGroupAdmin(gid) && publicGameDocSafe() && gameValuesSafe())
             || (isMember(gid) && memberGameCreate());
         allow delete: if isGroupAdmin(gid);
@@ -1032,7 +1040,7 @@ service cloud.firestore {
           && resource.data.uid == request.auth.uid;
       allow create, update: if signedIn()
           && request.resource.data.uid != request.auth.uid
-          && get(/databases/$(database)/documents/groups/$(request.resource.data.gid)/members/$(request.auth.uid)).data.role == 'admin';
+          && isGroupAdmin(request.resource.data.gid);
     }
 
     // ---------- public game projections ----------

@@ -263,6 +263,38 @@ extension AppProviderGroups on AppProvider {
     return null;
   }
 
+  /// Staged invite for past opponents (Spec §B13, T124) into the pendingInvites collection.
+  Future<void> stagePendingGroupInvite({
+    required String uid,
+    required String name,
+  }) async {
+    if (uid.isEmpty) return;
+    try {
+      await _repo.addMemberToGroup(
+        _currentGroup.id,
+        AppUser(
+          id: uid,
+          name: name,
+          email: '',
+          isAdmin: false,
+          isCoAdmin: false,
+          stats: const UserStats(
+            played: 0,
+            wins: 0,
+            podium: 0,
+            avgFinish: 0,
+            knockouts: 0,
+          ),
+        ),
+        groupName: _currentGroup.name,
+        groupIcon: _currentGroup.icon,
+        joinCode: _currentGroup.joinCode,
+      );
+    } catch (e) {
+      debugPrint('stagePendingGroupInvite failed: $e');
+    }
+  }
+
   /// Owner-only: updates the group's default table-capacity/randomization
   /// settings. Individual tournaments may still override this
   /// ([updateTournamentTableSettings]).

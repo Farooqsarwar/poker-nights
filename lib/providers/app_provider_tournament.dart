@@ -2706,15 +2706,23 @@ extension AppProviderTournament on AppProvider {
     if (hasCurrentGroup && _currentGroup.id.isNotEmpty && settlements.isNotEmpty) {
       if (_backendUp) {
         unawaited(
-          _repo
-              .saveGameSettlements(_currentGroup.id, _currentGame!.id, settlements)
-              .catchError((Object e) {
-                debugPrint('saveGameSettlements failed: $e');
-              }),
+          () async {
+            try {
+              await _repo.saveGameSettlements(
+                _currentGroup.id,
+                _currentGame!.id,
+                settlements,
+              );
+            } catch (e) {
+              debugPrint('saveGameSettlements failed: $e, enqueuing for offline sync');
+              _pendingSettlements[_currentGame!.id] = settlements;
+              await _persistPendingSettlements();
+            }
+          }(),
         );
       } else {
         _pendingSettlements[_currentGame!.id] = settlements;
-        _persistPendingSettlements();
+        unawaited(_persistPendingSettlements());
       }
     }
 
@@ -2723,7 +2731,6 @@ extension AppProviderTournament on AppProvider {
     final uid = _repo.currentUid;
     final myRow = uid != null ? settlements[uid] : null;
     if (uid != null && myRow != null) {
-      _resultsRecorded.add(_currentGame!.id);
       _myResults = [
         ..._myResults.where((r) => r.gameId != _currentGame!.id),
         myRow,
@@ -2732,10 +2739,17 @@ extension AppProviderTournament on AppProvider {
       if (!_disposed) notifyListeners();
       if (_backendUp) {
         unawaited(
-          _repo.saveGameResult(uid, _currentGame!.id, myRow).catchError(
-            (Object e) => debugPrint('saveGameResult failed: $e'),
-          ),
+          () async {
+            try {
+              await _repo.saveGameResult(uid, _currentGame!.id, myRow);
+              _resultsRecorded.add(_currentGame!.id);
+            } catch (e) {
+              debugPrint('saveGameResult failed: $e');
+            }
+          }(),
         );
+      } else {
+        _resultsRecorded.add(_currentGame!.id);
       }
     } else {
       if (_backendUp) {

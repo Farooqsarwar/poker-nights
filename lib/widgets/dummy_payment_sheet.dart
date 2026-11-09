@@ -99,6 +99,20 @@ class _DummyPaymentBodyState extends State<_DummyPaymentBody> {
     Navigator.of(context).pop();
   }
 
+  Future<void> _comp() async {
+    setState(() => _working = true);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+    final record = context.read<AppProvider>().recordComp(
+          playerId: widget.playerId,
+          purpose: widget.purpose,
+          idempotencyKey: widget.idempotencyKey,
+        );
+    if (!mounted) return;
+    widget.onSettled?.call(record);
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -176,6 +190,19 @@ class _DummyPaymentBodyState extends State<_DummyPaymentBody> {
           onPressed: _working ? null : () => _settle(PaymentStatus.paid),
           child: Text(_working ? 'Processing…' : 'Mark paid'),
         ),
+        if (context.watch<AppProvider>().isAdmin) ...[
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.secondary,
+            onPressed: _working ? null : _comp,
+            child: Text(
+              widget.purpose == PaymentPurpose.buyIn
+                  ? 'Comp entry'
+                  : 'Comp ${widget.purpose.label.toLowerCase()}',
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpacing.sm),
         // Offered deliberately: the unhappy paths have to be reachable or
         // they cannot be tested (PN-DPAY-004, PN-DPAY-005).

@@ -278,6 +278,7 @@ extension AppProviderUserData on AppProvider {
         try {
           GameResultRow? authoritative;
           if (game.groupId.isNotEmpty) {
+            final backoffDelays = const [250, 500, 1000, 2000, 4000];
             for (var attempt = 0; attempt < 5; attempt++) {
               authoritative = await _repo.fetchMySettlement(
                 game.groupId,
@@ -286,16 +287,17 @@ extension AppProviderUserData on AppProvider {
               );
               if (authoritative != null) break;
               if (attempt < 4) {
-                // Exponential backoff: 250ms, 500ms, 1000ms, 2000ms
+                // Exponential backoff with jitter (250, 500, 1000, 2000, 4000 ms)
+                final delayMs = backoffDelays[attempt] + Random().nextInt(100);
                 await Future<void>.delayed(
-                  Duration(milliseconds: 250 * (1 << attempt)),
+                  Duration(milliseconds: delayMs),
                 );
               }
             }
           }
           if (authoritative != null) {
-            _resultsRecorded.add(game.id);
             await _repo.saveGameResult(uid, game.id, authoritative);
+            _resultsRecorded.add(game.id);
             return;
           }
 
@@ -317,8 +319,8 @@ extension AppProviderUserData on AppProvider {
             buyInsPaid: buyInsPaid,
             hasExplicitBuyIns: true,
           );
-          _resultsRecorded.add(game.id);
           await _repo.saveGameResult(uid, game.id, fallback);
+          _resultsRecorded.add(game.id);
         } catch (e) {
           debugPrint('saveGameResult failed: $e');
         }
@@ -348,9 +350,12 @@ extension AppProviderUserData on AppProvider {
         _user = _user?.copyWith(stats: _statsFromResults(_myResults));
         if (!_disposed) notifyListeners();
         await _repo.saveGameResult(uid, game.id, settlement);
+      } else {
+        _backfillAttempted.remove(game.id);
       }
     } catch (e) {
       debugPrint('maybeBackfillAuthoritativeResult failed: $e');
+      _backfillAttempted.remove(game.id);
     }
   }
 
@@ -501,8 +506,10 @@ extension AppProviderUserData on AppProvider {
       markReady();
       return;
     }
+    final isGroupAdmin = row?.ownerId == _user?.id ||
+        (row?.members.any((m) => m.id == _user?.id && m.isAdmin) ?? false);
     _bundleSub = _repo
-        .groupBundleStream(gid)
+        .groupBundleStream(gid, isAdmin: isGroupAdmin)
         .listen(
           (g) {
             // _setGroup (not a bare `_currentGroup = g`) so the full group — members,

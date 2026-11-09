@@ -322,7 +322,7 @@ class AppProvider extends ChangeNotifier {
   AppNotification? _lastPushedNotification;
   AppNotification? get lastPushedNotification => _lastPushedNotification;
 
-  void _persistPendingSettlements() {
+  Future<void> _persistPendingSettlements() async {
     try {
       final serialized = <String, dynamic>{};
       for (final entry in _pendingSettlements.entries) {
@@ -334,7 +334,7 @@ class AppProvider extends ChangeNotifier {
           }),
         );
       }
-      Localstore.instance.collection('app').doc('pending_settlements').set({
+      await Localstore.instance.collection('app').doc('pending_settlements').set({
         'settlements': serialized,
       });
     } catch (e) {
@@ -373,8 +373,26 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  @visibleForTesting
+  Map<String, Map<String, GameResultRow>> get pendingSettlementsForTesting =>
+      _pendingSettlements;
+
+  @visibleForTesting
+  Future<void> persistPendingSettlementsForTesting() =>
+      _persistPendingSettlements();
+
+  @visibleForTesting
+  Future<void> hydratePendingSettlementsForTesting() =>
+      _hydratePendingSettlements();
+
   Future<void> maybeBackfillAuthoritativeResult(LiveGame game) =>
       AppProviderUserData(this).maybeBackfillAuthoritativeResult(game);
+
+  Future<void> stagePendingGroupInvite({
+    required String uid,
+    required String name,
+  }) =>
+      AppProviderGroups(this).stagePendingGroupInvite(uid: uid, name: name);
 
   /// Last member-RSVP patch failure, surfaced on the invitation screen so
   /// backend rejections are never invisible (vs silent optimistic state that

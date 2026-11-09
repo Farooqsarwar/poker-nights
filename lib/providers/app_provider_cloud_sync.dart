@@ -195,7 +195,7 @@ extension AppProviderCloudSync on AppProvider {
                 committed.groupId.isNotEmpty) {
               final settlements = _pendingSettlements.remove(committed.id) ??
                   _buildSettlementsForGame(committed);
-              _persistPendingSettlements();
+              await _persistPendingSettlements();
               if (settlements.isNotEmpty) {
                 step = 'saveGameSettlements';
                 await _repo.saveGameSettlements(

@@ -1,8 +1,9 @@
-﻿name: Flutter CI
+name: Flutter CI
 
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 env:
   # One place to bump. 3.44.7 is the stable release this project was last
@@ -50,12 +51,12 @@ jobs:
       - name: Engine invariants (WP1 gate)
         timeout-minutes: 20
         run: >
-          flutter test
+          flutter test --reporter expanded
           test/engine_invariants_test.dart
           test/f1_5_composition_test.dart
           test/engine_force_stack_test.dart
           test/infeasible_start_guard_test.dart
           test/demo_night_vector_test.dart
 
-      - name: Run tests
-        run: flutter test
+      - name: Run all tests (all 1,843 tests across the spec)
+        run: flutter test --reporter expanded

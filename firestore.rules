@@ -178,11 +178,17 @@ service cloud.firestore {
     }
 
     function playerScrubbed(p) {
-      return p == null || (
-          p.get('rebuys', 0) == 0
+      return p.get('rebuys', 0) == 0
           && p.get('reEntries', 0) == 0
           && p.get('hasAddOn', false) == false
-          && p.get('knockouts', 0) == 0);
+          && p.get('knockouts', 0) == 0;
+    }
+
+    function samplePlayerScrubbed(players, uid) {
+      let caller = players.get(uid, null);
+      let pKeys = players.keys();
+      let target = caller != null ? caller : (pKeys.size() > 0 ? players.get(pKeys[0], {}) : {});
+      return playerScrubbed(target);
     }
 
     // Guards what an AUTHORITY write may put in the member-readable game
@@ -216,14 +222,10 @@ service cloud.firestore {
       // Individual payments must not be published on the shared game document.
       let paymentsSafe = data.get('payments', []) == [];
       // Spec §B7, §E14: per-player financial counters must be scrubbed on
-      // public game documents. Evaluates a sample player to verify scrubbing without
-      // exhausting the 1000-expression rule engine limit for 10-30 player tournaments.
-      let players = data.get('players', {});
-      let callerPlayer = players.get(request.auth.uid, null);
-      let pKeys = players.keys();
-      let samplePlayer = callerPlayer != null ? callerPlayer : (pKeys.size() > 0 ? players.get(pKeys[0], null) : null);
+      // public game documents. Evaluates a sample player via helper to stay under
+      // the 10-variable and 1000-expression limits for 10-30 player tournaments.
       let playersSafe = data.get('playersScrubbed', false) == true
-          && (samplePlayer == null || playerScrubbed(samplePlayer));
+          && samplePlayerScrubbed(data.get('players', {}), request.auth.uid);
       return settingsSafe && structureSafe && auditSafe && requestsSafe
           && overtimeSafe && paymentsSafe && playersSafe;
     }

@@ -11,8 +11,8 @@ if ($LASTEXITCODE -eq 0) {
     # Rules FIRST, on their own. They take effect immediately for everyone,
     # so if the app ships expecting rules that are not live yet, writes start
     # failing mid-tournament. Verify the rules land before the client does.
-    Write-Host "Deploying Firestore rules..."
-    firebase deploy --only firestore:rules
+    Write-Host "Deploying Firestore rules and indexes..."
+    firebase deploy --only firestore:rules,firestore:indexes
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Rules deployed. Deploying hosting..."

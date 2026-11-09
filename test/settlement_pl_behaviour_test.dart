@@ -486,5 +486,41 @@ void main() {
       expect(restored.buyInsPaid, 30);
       expect(restored.hasExplicitBuyIns, isTrue);
     });
+
+    test('Fallback GameResultRow has hasExplicitBuyIns: false and can be backfilled', () {
+      final fallbackRow = GameResultRow(
+        gameId: 'game_fb',
+        groupId: 'grp_fb',
+        position: 2,
+        playerCount: 6,
+        knockouts: 1,
+        prize: 50,
+        buyInsPaid: 15,
+        finishedAt: DateTime.parse('2026-11-09T10:00:00.000'),
+        hasExplicitBuyIns: false,
+      );
+
+      expect(fallbackRow.hasExplicitBuyIns, isFalse);
+      final map = fallbackRow.toMap();
+      expect(map['hasExplicitBuyIns'], isFalse);
+
+      final decoded = GameResultRow.fromMap('game_fb', map);
+      expect(decoded.hasExplicitBuyIns, isFalse);
+
+      // When authoritative settlement arrives, it replaces the non-explicit fallback
+      final authoritativeRow = GameResultRow(
+        gameId: fallbackRow.gameId,
+        groupId: fallbackRow.groupId,
+        position: fallbackRow.position,
+        playerCount: fallbackRow.playerCount,
+        knockouts: fallbackRow.knockouts,
+        prize: fallbackRow.prize,
+        buyInsPaid: 35, // True financial amount including rebuys
+        finishedAt: fallbackRow.finishedAt,
+        hasExplicitBuyIns: true,
+      );
+      expect(authoritativeRow.hasExplicitBuyIns, isTrue);
+      expect(authoritativeRow.buyInsPaid, 35);
+    });
   });
 }

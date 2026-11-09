@@ -179,6 +179,26 @@ extension AppProviderCloudSync on AppProvider {
           if (_user == null) break;
           var step = 'saveGame';
           try {
+            // Write authoritative settlements BEFORE committing the completed status to Firestore,
+            // so members never observe a completed game before their settlement rows exist (Spec §B7, §E14).
+            if (toWrite.status == LiveGameStatus.completed &&
+                toWrite.finishOrder.isNotEmpty &&
+                toWrite.groupId.isNotEmpty) {
+              final settlements = _pendingSettlements[toWrite.id] ??
+                  _buildSettlementsForGame(toWrite);
+              if (settlements.isNotEmpty) {
+                step = 'saveGameSettlements';
+                await _repo.saveGameSettlements(
+                  toWrite.groupId,
+                  toWrite.id,
+                  settlements,
+                );
+                // Only remove from pending and persist AFTER the remote write succeeds!
+                _pendingSettlements.remove(toWrite.id);
+                await _persistPendingSettlements();
+              }
+            }
+
             // The merge runs INSIDE the write transaction, so a member
             // patch landing mid-save can no longer be overwritten. What
             // comes back is what was actually committed.
@@ -190,21 +210,6 @@ extension AppProviderCloudSync on AppProvider {
               reconcile: (local, remote) =>
                   mergeMemberOwnedFields(local, remote, adminId: _user?.id),
             );
-            if (committed.status == LiveGameStatus.completed &&
-                committed.finishOrder.isNotEmpty &&
-                committed.groupId.isNotEmpty) {
-              final settlements = _pendingSettlements.remove(committed.id) ??
-                  _buildSettlementsForGame(committed);
-              await _persistPendingSettlements();
-              if (settlements.isNotEmpty) {
-                step = 'saveGameSettlements';
-                await _repo.saveGameSettlements(
-                  committed.groupId,
-                  committed.id,
-                  settlements,
-                );
-              }
-            }
             step = 'publishProjections';
             await _publishProjections(committed);
             _adoptCommittedMemberFields(committed);

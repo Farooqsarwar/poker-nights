@@ -2704,6 +2704,8 @@ extension AppProviderTournament on AppProvider {
     // result without anyone reading another player's private counters.
     final settlements = _buildSettlementsForGame(_currentGame!);
     if (hasCurrentGroup && _currentGroup.id.isNotEmpty && settlements.isNotEmpty) {
+      _pendingSettlements[_currentGame!.id] = settlements;
+      unawaited(_persistPendingSettlements());
       if (_backendUp) {
         unawaited(
           () async {
@@ -2713,16 +2715,13 @@ extension AppProviderTournament on AppProvider {
                 _currentGame!.id,
                 settlements,
               );
-            } catch (e) {
-              debugPrint('saveGameSettlements failed: $e, enqueuing for offline sync');
-              _pendingSettlements[_currentGame!.id] = settlements;
+              _pendingSettlements.remove(_currentGame!.id);
               await _persistPendingSettlements();
+            } catch (e) {
+              debugPrint('saveGameSettlements failed: $e, kept in offline queue');
             }
           }(),
         );
-      } else {
-        _pendingSettlements[_currentGame!.id] = settlements;
-        unawaited(_persistPendingSettlements());
       }
     }
 

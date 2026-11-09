@@ -1117,6 +1117,9 @@ class _InviteModalContentState extends State<InviteModalContent> {
     final currentName = app.user?.name.toLowerCase().trim();
     final messenger = ScaffoldMessenger.of(context);
     final currentGroup = _selectedGroup;
+    final isGroupAdmin = currentGroup.ownerId == app.user?.id ||
+        currentGroup.members.any((m) => m.id == app.user?.id && m.isAdmin) ||
+        (currentGroup.id == app.currentGroup.id && app.isAdmin);
     final groupLink =
         'https://poker-night-tools.web.app/join-group?code=${currentGroup.joinCode}';
 
@@ -1417,36 +1420,51 @@ class _InviteModalContentState extends State<InviteModalContent> {
                             size: AppButtonSize.sm,
                             variant: AppButtonVariant.secondary,
                             onPressed: () async {
-                              final oneTapLink =
-                                  'https://poker-night-tools.web.app/join-group?code=${currentGroup.joinCode}&to=${Uri.encodeComponent(opponent.id)}';
-                              unawaited(
-                                Clipboard.setData(ClipboardData(text: oneTapLink))
-                                    .catchError((_) {}),
-                              );
-                              unawaited(
-                                app.stagePendingGroupInvite(
-                                  uid: opponent.id,
-                                  name: opponent.name,
-                                ),
-                              );
-                              app.pushNotification(
-                                AppNotification(
-                                  id: 'invite-${currentGroup.id}-${opponent.id}-${DateTime.now().millisecondsSinceEpoch}',
-                                  title: 'Group invitation',
-                                  body: '${app.user?.name ?? "A host"} invited you to join ${currentGroup.name}.',
-                                  type: NotificationType.invite,
-                                  link: '/join-group?code=${currentGroup.joinCode}&to=${Uri.encodeComponent(opponent.id)}',
-                                  audience: [opponent.id],
-                                  read: false,
-                                  timestamp: DateTime.now(),
-                                ),
-                              );
-                              messenger.showSnackBar(
-                                SnackBar(
-                                  content: Text('One-tap invite link copied and sent for ${opponent.name}'),
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
+                              if (isGroupAdmin) {
+                                final oneTapLink =
+                                    'https://poker-night-tools.web.app/join-group?code=${currentGroup.joinCode}&to=${Uri.encodeComponent(opponent.id)}';
+                                unawaited(
+                                  Clipboard.setData(ClipboardData(text: oneTapLink))
+                                      .catchError((_) {}),
+                                );
+                                unawaited(
+                                  app.stagePendingGroupInvite(
+                                    uid: opponent.id,
+                                    name: opponent.name,
+                                  ),
+                                );
+                                app.pushNotification(
+                                  AppNotification(
+                                    id: 'invite-${currentGroup.id}-${opponent.id}-${DateTime.now().millisecondsSinceEpoch}',
+                                    title: 'Group invitation',
+                                    body: '${app.user?.name ?? "A host"} invited you to join ${currentGroup.name}.',
+                                    type: NotificationType.invite,
+                                    link: '/join-group?code=${currentGroup.joinCode}&to=${Uri.encodeComponent(opponent.id)}',
+                                    audience: [opponent.id],
+                                    read: false,
+                                    timestamp: DateTime.now(),
+                                  ),
+                                );
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text('One-tap invite link copied and sent for ${opponent.name}'),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              } else {
+                                // Non-admins cannot stage targeted invites (Firestore rules require isGroupAdmin).
+                                // Copy the standard group join link instead without staging an invite.
+                                unawaited(
+                                  Clipboard.setData(ClipboardData(text: groupLink))
+                                      .catchError((_) {}),
+                                );
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Group invite link copied to clipboard'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
                             },
                             child: const Text('Invite'),
                           ),

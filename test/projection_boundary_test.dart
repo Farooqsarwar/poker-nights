@@ -288,6 +288,20 @@ void main() {
       expect(body, contains("resource.data.get('playersScrubbed', false) == true"));
     });
 
+    test('publicGameDocSafe and rules protect other players counters as well as caller', () {
+      final rules = File('firestore.rules').readAsStringSync();
+      final start = rules.indexOf('function playerScrubbed(p)');
+      expect(start, greaterThan(-1), reason: 'playerScrubbed() helper must exist');
+      final pSafe = rules.substring(start, rules.indexOf('function gameValuesSafe()'));
+      expect(pSafe, contains('allPlayersScrubbed'));
+      expect(pSafe, contains("p.get('rebuys', 0) == 0"));
+      expect(pSafe, contains("p.get('reEntries', 0) == 0"));
+      expect(pSafe, contains("p.get('hasAddOn', false) == false"));
+      expect(pSafe, contains("p.get('knockouts', 0) == 0"));
+      expect(pSafe, contains("allPlayersScrubbed(players)"));
+      expect(pSafe, contains("data.get('playersScrubbed', false) == true"));
+    });
+
     test('D2: the payout ladder is visible to everyone, organiser take is not', () {
       // D2: "Everyone - players, guests, the TV - sees the prize pool and the
       // payouts. Only the host's organiser contribution stays hidden." The

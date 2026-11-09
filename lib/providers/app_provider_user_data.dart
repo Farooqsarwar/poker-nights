@@ -317,10 +317,10 @@ extension AppProviderUserData on AppProvider {
             eliminatedAtLevel: me.eliminatedAtLevel,
             prize: prize,
             buyInsPaid: buyInsPaid,
-            hasExplicitBuyIns: true,
+            hasExplicitBuyIns: false, // Fallback from scrubbed doc: not explicit, allows future backfill!
           );
           await _repo.saveGameResult(uid, game.id, fallback);
-          _resultsRecorded.add(game.id);
+          // Do not lock _resultsRecorded so maybeBackfillAuthoritativeResult can backfill it later
         } catch (e) {
           debugPrint('saveGameResult failed: $e');
         }
@@ -508,31 +508,41 @@ extension AppProviderUserData on AppProvider {
     }
     final isGroupAdmin = row?.ownerId == _user?.id ||
         (row?.members.any((m) => m.id == _user?.id && m.isAdmin) ?? false);
-    _bundleSub = _repo
-        .groupBundleStream(gid, isAdmin: isGroupAdmin)
-        .listen(
-          (g) {
-            // _setGroup (not a bare `_currentGroup = g`) so the full group — members,
-            // games, code — is also written into `_groups`, which backs the sidebar
-            // / drawer / orderedGroups (they'd otherwise show the lightweight index
-            // row with 0 members).
-            // Keep the member's own not-yet-acked RSVP visible on the hub's game
-            // cards too, not just the game screen (see [_pendingOwnRsvp]).
-            final hydrated = _pendingOwnRsvp.isEmpty
-                ? g
-                : g.copyWith(
-                    games: g.games
-                        .map(
-                          (gm) => _withPendingCheckInOverlay(
-                            _withOwnRsvpOverlay(gm),
-                          ),
-                        )
-                        .toList(),
-                  );
-            _setGroup(hydrated);
 
-            // The bundle is the first place a member's role becomes known, so retire
-            // any stale local crash-resume snapshot here too.
+    void subscribeBundle(bool asAdmin) {
+      _bundleSub?.cancel();
+      _bundleSub = _repo
+          .groupBundleStream(gid, isAdmin: asAdmin)
+          .listen(
+            (g) {
+              final bundleAdmin = g.ownerId == _user?.id ||
+                  g.members.any((m) => m.id == _user?.id && m.isAdmin);
+              if (!asAdmin && bundleAdmin) {
+                // Cold start recovery: re-subscribe as admin once full group doc confirms admin status
+                subscribeBundle(true);
+                return;
+              }
+              // _setGroup (not a bare `_currentGroup = g`) so the full group — members,
+              // games, code — is also written into `_groups`, which backs the sidebar
+              // / drawer / orderedGroups (they'd otherwise show the lightweight index
+              // row with 0 members).
+              // Keep the member's own not-yet-acked RSVP visible on the hub's game
+              // cards too, not just the game screen (see [_pendingOwnRsvp]).
+              final hydrated = _pendingOwnRsvp.isEmpty
+                  ? g
+                  : g.copyWith(
+                      games: g.games
+                          .map(
+                            (gm) => _withPendingCheckInOverlay(
+                              _withOwnRsvpOverlay(gm),
+                            ),
+                          )
+                          .toList(),
+                    );
+              _setGroup(hydrated);
+
+              // The bundle is the first place a member's role becomes known, so retire
+              // any stale local crash-resume snapshot here too.
             _dropRecoveryIfNotAuthority();
             // F-001 Fix: Keep the currently viewed game screen in sync for members
             // (and admins receiving RSVPs/Check-ins) without clobbering the admin's local timer.
@@ -583,7 +593,11 @@ extension AppProviderUserData on AppProvider {
             markReady();
           },
         );
-    if (row?.ownerId == _user?.id) {
+    }
+
+    subscribeBundle(isGroupAdmin);
+
+    if (row?.ownerId == _user?.id || (row?.members.any((m) => m.id == _user?.id && m.isAdmin) ?? false)) {
       _cashSub = _repo.completedCashSessionsStream(gid).listen((list) {
         _cashHistory = list;
         if (!_disposed) notifyListeners();
@@ -603,8 +617,12 @@ extension AppProviderUserData on AppProvider {
     id: r.groupId,
     name: r.name,
     joinCode: '',
-    ownerId: '',
-    members: const [],
+    ownerId: r.role == 'admin' ? (_user?.id ?? '') : '',
+    members: r.role == 'admin' && _user != null
+        ? [
+            _user!.copyWith(isAdmin: true),
+          ]
+        : const [],
     games: const [],
     chat: const [],
     polls: const [],

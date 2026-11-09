@@ -96,6 +96,9 @@ extension AppProviderGame on AppProvider {
                 addOnRequests: privateData['addOnRequests'] is List
                     ? List<String>.from(privateData['addOnRequests'] as List)
                     : _currentGame!.addOnRequests,
+                addOnDeclined: privateData['addOnDeclined'] is List
+                    ? List<String>.from(privateData['addOnDeclined'] as List)
+                    : _currentGame!.addOnDeclined,
                 payments: privateData['payments'] is List
                     ? [
                         for (final e in privateData['payments'] as List)

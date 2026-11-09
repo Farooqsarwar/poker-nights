@@ -20,7 +20,7 @@ import 'package:poker_night/models/live_game.dart';
 import 'package:poker_night/utils/tournament_engine.dart';
 
 void main() {
-  group('Structure editor level deletion and breaks (T8, T9, T12, T13, T15)', () {
+  group('Structure editor level deletion and breaks (T8, T9, T10, T12, T13, T15)', () {
     List<BlindLevel> makeLevels(int count) {
       // Pick exactly from validBlindLevels starting at 25/50 (index 9)
       const validStartingIndex = 9; // [25, 50]
@@ -104,6 +104,73 @@ void main() {
 
       expect(appliedLevels, isNotNull);
       expect(appliedLevels!.length, 7); // 8 future levels minus 1 deleted = 7 future levels
+
+      // Explicitly assert that following levels are dynamically renumbered in appliedLevels (5..11)
+      for (var i = 0; i < appliedLevels!.length; i++) {
+        expect(appliedLevels![i].level, i + 5);
+      }
+
+      // Check that the blind amounts (sb, bb) match the shifted sequence:
+      // Original levels 5, 6, 7 (indices 4, 5, 6 in testStructure.levels) remain at indices 0, 1, 2
+      expect(appliedLevels![0].sb, testStructure.levels[4].sb);
+      expect(appliedLevels![0].bb, testStructure.levels[4].bb);
+      expect(appliedLevels![1].sb, testStructure.levels[5].sb);
+      expect(appliedLevels![1].bb, testStructure.levels[5].bb);
+      expect(appliedLevels![2].sb, testStructure.levels[6].sb);
+      expect(appliedLevels![2].bb, testStructure.levels[6].bb);
+
+      // Deleted level 8 causes levels previously 9, 10, 11, 12 (indices 8, 9, 10, 11)
+      // to dynamically become 8, 9, 10, 11 (indices 3, 4, 5, 6 in appliedLevels)
+      expect(appliedLevels![3].sb, testStructure.levels[8].sb);
+      expect(appliedLevels![3].bb, testStructure.levels[8].bb);
+      expect(appliedLevels![4].sb, testStructure.levels[9].sb);
+      expect(appliedLevels![4].bb, testStructure.levels[9].bb);
+      expect(appliedLevels![5].sb, testStructure.levels[10].sb);
+      expect(appliedLevels![5].bb, testStructure.levels[10].bb);
+      expect(appliedLevels![6].sb, testStructure.levels[11].sb);
+      expect(appliedLevels![6].bb, testStructure.levels[11].bb);
+    });
+
+    testWidgets('T10: The active/running level cannot be deleted', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: StructureEditor(
+                structure: testStructure,
+                currentLevel: 4,
+                anteStyle: AnteStyle.bigBlind,
+                onSpeedUp: () {},
+                onSlowDown: () {},
+                onApply: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Active/running level is 4; delete button must NOT exist for level 4
+      expect(find.byKey(const Key('delete-level-4')), findsNothing);
+      expect(find.byTooltip('Delete level 4'), findsNothing);
+      expect(find.bySemanticsLabel('Delete level 4'), findsNothing);
+
+      // Verify in widget tree that active level 4 is not in the editable list
+      expect(find.byKey(const Key('level-row-4')), findsNothing);
+      expect(find.byKey(const Key('level-label-4')), findsNothing);
+
+      // UI text explicitly indicates active and completed levels are locked
+      expect(
+        find.textContaining('Adjust future levels. Active and completed levels are locked.'),
+        findsOneWidget,
+      );
+
+      // Future levels (5 onwards) are present and have delete buttons
+      expect(find.byKey(const Key('delete-level-5')), findsOneWidget);
+      expect(find.byTooltip('Delete level 5'), findsOneWidget);
     });
 
     testWidgets('T15: Insert and delete break below a future level', (tester) async {

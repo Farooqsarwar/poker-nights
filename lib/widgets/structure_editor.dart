@@ -130,11 +130,12 @@ class _StructureEditorState extends State<StructureEditor> {
 
   List<BlindLevel> _build() {
     final result = <BlindLevel>[];
-    for (final l in _levels) {
+    for (var i = 0; i < _levels.length; i++) {
+      final l = _levels[i];
       final bb = l.bbValue;
       result.add(
         BlindLevel(
-          level: 0, // renumbered by the provider
+          level: widget.currentLevel + 1 + i,
           sb: l.sbValue,
           bb: bb,
           ante: l.anteOn

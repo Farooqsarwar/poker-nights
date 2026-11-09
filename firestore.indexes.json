@@ -7,6 +7,14 @@
         { "fieldPath": "gid", "order": "ASCENDING" },
         { "fieldPath": "consumed", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "games",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "playersScrubbed", "order": "ASCENDING" },
+        { "fieldPath": "settings.date", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

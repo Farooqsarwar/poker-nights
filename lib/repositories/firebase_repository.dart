@@ -165,11 +165,12 @@ class GameResultRow {
     'finishedAt': finishedAt,
     'eliminatedAtLevel': eliminatedAtLevel,
     'prize': prize,
-    'buyInsPaid': buyInsPaid,
+    if (hasExplicitBuyIns) 'buyInsPaid': buyInsPaid,
+    'hasExplicitBuyIns': hasExplicitBuyIns,
   };
 
   static GameResultRow fromMap(String id, Map<String, dynamic> m) {
-    final hasBuyIns = m.containsKey('buyInsPaid');
+    final explicit = (m['hasExplicitBuyIns'] as bool?) ?? m.containsKey('buyInsPaid');
     return GameResultRow(
       gameId: m['gameId'] as String? ?? id,
       groupId: (m['groupId'] as String?) ?? '',
@@ -184,7 +185,7 @@ class GameResultRow {
       eliminatedAtLevel: (m['eliminatedAtLevel'] as num?)?.toInt(),
       prize: (m['prize'] as num?)?.toInt() ?? 0,
       buyInsPaid: (m['buyInsPaid'] as num?)?.toInt() ?? 0,
-      hasExplicitBuyIns: hasBuyIns,
+      hasExplicitBuyIns: explicit,
     );
   }
 }
@@ -2060,6 +2061,7 @@ class FirebaseRepository {
       // 5.6 / section 22), so the queue is admin-side state.
       'rebuyRequests': fullDoc['rebuyRequests'],
       'addOnRequests': fullDoc['addOnRequests'],
+      'addOnDeclined': fullDoc['addOnDeclined'],
       'prizes': fullDoc['structure']['prizes'],
       'organizerAmount': fullDoc['structure']['organizerAmount'],
       'payments': game.payments.map(paymentRecordToMap).toList(),
@@ -2383,15 +2385,11 @@ class FirebaseRepository {
       }
       if (docData['structure'] is Map &&
           (docData['structure'] as Map).containsKey('organizerAmount')) {
-        backup['structure'] = {
-          'organizerAmount': (docData['structure'] as Map)['organizerAmount'],
-        };
+        backup['organizerAmount'] = (docData['structure'] as Map)['organizerAmount'];
       }
       if (docData['settings'] is Map &&
           (docData['settings'] as Map).containsKey('organizerPct')) {
-        backup['settings'] = {
-          'organizerPct': (docData['settings'] as Map)['organizerPct'],
-        };
+        backup['organizerPct'] = (docData['settings'] as Map)['organizerPct'];
       }
       // Always merge backup into admin privateData unconditionally
       if (backup.isNotEmpty) {
@@ -2399,16 +2397,18 @@ class FirebaseRepository {
       }
 
       // Ensure authoritative settlements exist before scrubbing public document
-      // financial data. If settlement backfill fails, abort to preserve data.
-      final settRef = _db
-          .collection('groups')
-          .doc(gid)
-          .collection('settlements')
-          .doc(gameId);
-      final settSnap = await settRef.get();
-      if (!settSnap.exists) {
-        final legacyGame = liveGameFromFirestoreDoc(docData);
-        if (legacyGame.finishOrder.isNotEmpty) {
+      // financial data. Check groups/{gid}/games/{gameId}/settlements subcollection.
+      final legacyGame = liveGameFromFirestoreDoc(docData);
+      if (legacyGame.status == LiveGameStatus.completed) {
+        if (legacyGame.finishOrder.isEmpty) {
+          // Without finishOrder, authoritative settlements cannot be computed.
+          // Abort scrub so financial data is preserved on docData.
+          debugPrint('scrubLegacyGamePayments: completed game $gameId has empty finishOrder, preserving raw document.');
+          return;
+        }
+        final settCol = gameRef.collection('settlements');
+        final settSnap = await settCol.limit(1).get();
+        if (settSnap.docs.isEmpty) {
           final settlements = _buildSettlementsForLegacyGame(legacyGame);
           if (settlements.isNotEmpty) {
             await saveGameSettlements(gid, gameId, settlements);

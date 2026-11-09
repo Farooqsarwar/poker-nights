@@ -1,55 +1,54 @@
 import 'package:flutter/material.dart';
+import '../../app/colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/colors.dart';
 import '../../app/route_paths.dart';
-import '../../app/typography.dart';
-import '../../constants/app_constants.dart';
 import '../../models/app_notification.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
-import '../../widgets/app_button.dart';
+import '../../app/typography.dart';
+import '../../constants/app_constants.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_eyebrow.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/icon_tile.dart';
+import '../../widgets/page_header.dart';
+import '../../widgets/prompt_link.dart';
 
-/// Notifications mirroring the web `NotificationsPage`.
+/// Notifications mirroring the mobile-first B6 design.
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
-  IconData _iconFor(NotificationType type) {
-    switch (type) {
-      case NotificationType.game:
-        return Icons.style_outlined;
-      case NotificationType.invite:
-        return Icons.mail_outlined;
-      case NotificationType.rsvp:
-        return Icons.check_circle_outlined;
-      case NotificationType.chat:
-        return Icons.chat_bubble_outline;
-      case NotificationType.admin:
-        return Icons.settings_outlined;
-      case NotificationType.result:
-        return Icons.emoji_events_outlined;
-      case NotificationType.system:
-        return Icons.notifications_outlined;
-    }
+  (IconTileTone, IconData) _styleFor(NotificationType type) {
+    return switch (type) {
+      NotificationType.game => (IconTileTone.soft, Icons.access_time),
+      NotificationType.invite ||
+      NotificationType.rsvp => (IconTileTone.success, Icons.person_add_alt_1),
+      NotificationType.result =>
+        (IconTileTone.warning, Icons.emoji_events_outlined),
+      NotificationType.chat ||
+      NotificationType.admin ||
+      NotificationType.system =>
+        (IconTileTone.neutral, Icons.chat_bubble_outline),
+    };
   }
 
   void _openLink(BuildContext context, String? link) {
     if (link == null) return;
-    
+
     // Parse link to separate path and query parameters
     final uri = Uri.tryParse(link.startsWith('/') ? link : '/$link');
     final pathOnly = uri?.path ?? link;
-    
+
     final target = _routeFor(pathOnly);
     if (target == null) return;
     // For game-specific screens, ensure the current game is set in the
     // provider so the destination screen has data to display.
     const gameScreens = {
-      RoutePaths.adminDashboard,
+      RoutePaths.hostDashboard,
       RoutePaths.playerLive,
       RoutePaths.checkIn,
       RoutePaths.invitation,
@@ -61,16 +60,18 @@ class NotificationsScreen extends StatelessWidget {
     if (gameScreens.contains(target)) {
       final app = context.read<AppProvider>();
       final gameId = uri?.queryParameters['gameId'];
-      
+
       LiveGame? gameToSet;
       if (gameId != null) {
-        gameToSet = app.currentGroup.games.where((g) => g.id == gameId).firstOrNull;
+        gameToSet = app.currentGroup.games
+            .where((g) => g.id == gameId)
+            .firstOrNull;
       }
       // Fallback if gameId is not found or not in link
       gameToSet ??= app.currentGroup.games
           .where((g) => g.status != LiveGameStatus.cancelled)
           .firstOrNull;
-          
+
       if (gameToSet != null) app.setCurrentGame(gameToSet);
     }
     context.go(target);
@@ -96,7 +97,7 @@ class NotificationsScreen extends StatelessWidget {
       case 'check-in':
         return RoutePaths.checkIn;
       case 'admin-dashboard':
-        return RoutePaths.adminDashboard;
+        return RoutePaths.hostDashboard;
       case 'player-live':
         return RoutePaths.playerLive;
       case 'rebuy-settlement':
@@ -127,94 +128,66 @@ class NotificationsScreen extends StatelessWidget {
     final app = context.watch<AppProvider>();
     final notifications = app.notifications;
     final unreadCount = notifications.where((n) => !n.read).length;
+    final unreadList = notifications.where((n) => !n.read).toList();
+    final readList = notifications.where((n) => n.read).toList();
 
     return AppPage(
       maxWidth: 600,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Notifications',
-                      style: AppTypography.display(
-                        size: AppFontSizes.xxxl,
-                        weight: FontWeight.w700,
-                      ),
-                    ),
-                    if (unreadCount > 0)
-                      Text(
-                        '$unreadCount unread',
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              if (unreadCount > 0)
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.ghost,
-                  onPressed: app.markAllRead,
-                  child: const Text('Mark all read'),
-                ),
-            ],
+          PageHeader(
+            onBack: () => context.go(RoutePaths.home),
+            title: 'Notifications',
+            subtitle: unreadCount > 0 ? '$unreadCount unread' : null,
+            titleAction: unreadCount > 0
+                ? PromptLink(action: 'Mark all read', onTap: app.markAllRead)
+                : null,
           ),
           const SizedBox(height: AppSpacing.lg),
           if (notifications.isEmpty)
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.xxl),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.notifications_outlined,
-                    size: AppFontSizes.display,
-                    color: AppColors.icon,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    'No notifications yet.',
-                    style: AppTypography.bodyStyle.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    "You'll see game invites, RSVP updates, and announcements here.",
-                    textAlign: TextAlign.center,
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ],
-              ),
+            const AppEmptyState(
+              icon: Icons.notifications_outlined,
+              title: 'No notifications yet.',
+              description:
+                  "You'll see game invites, RSVP updates, and announcements here.",
             )
-          else
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  for (var i = 0; i < notifications.length; i++)
-                    _NotificationRow(
-                      notification: notifications[i],
-                      showDivider: i < notifications.length - 1,
-                      icon: _iconFor(notifications[i].type),
-                      onTap: () {
-                        app.markNotificationRead(notifications[i].id);
-                        _openLink(context, notifications[i].link);
-                      },
-                    ),
-                ],
-              ),
-            ),
+          else ...[
+            if (unreadList.isNotEmpty) ...[
+              const AppEyebrow('New', muted: true),
+              const SizedBox(height: AppSpacing.sm),
+              for (final n in unreadList) ...[
+                _NotificationCard(
+                  notification: n,
+                  styleInfo: _styleFor(n.type),
+                  onTap: () {
+                    app.markNotificationRead(n.id);
+                    _openLink(context, n.link);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+              const SizedBox(height: AppSpacing.md),
+            ],
+            if (readList.isNotEmpty) ...[
+              const AppEyebrow('Earlier', muted: true),
+              const SizedBox(height: AppSpacing.sm),
+              for (final n in readList) ...[
+                _NotificationCard(
+                  notification: n,
+                  styleInfo: _styleFor(n.type),
+                  onTap: () {
+                    app.markNotificationRead(n.id);
+                    _openLink(context, n.link);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+            ],
+          ],
           if (notifications.isNotEmpty && unreadCount == 0)
             Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.lg),
+              padding: const EdgeInsets.only(top: AppSpacing.xl),
               child: Text(
                 "You're all caught up.",
                 textAlign: TextAlign.center,
@@ -229,73 +202,52 @@ class NotificationsScreen extends StatelessWidget {
   }
 }
 
-class _NotificationRow extends StatelessWidget {
-  const _NotificationRow({
+class _NotificationCard extends StatelessWidget {
+  const _NotificationCard({
     required this.notification,
-    required this.icon,
-    required this.showDivider,
+    required this.styleInfo,
     required this.onTap,
   });
 
   final AppNotification notification;
-  final IconData icon;
-  final bool showDivider;
+  final (IconTileTone, IconData) styleInfo;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final unread = !notification.read;
-    return InkWell(
+    final (tone, icon) = styleInfo;
+
+    return AppCard(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: unread
-              ? AppColors.primary.withValues(alpha: 0.04)
-              : Colors.transparent,
-          border: showDivider
-              ? Border(bottom: BorderSide(color: AppColors.border))
-              : null,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: unread ? AppColors.primarySoft : AppColors.muted,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: unread
-                      ? AppColors.primary.withValues(alpha: 0.3)
-                      : AppColors.border,
-                ),
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, size: 20, color: AppColors.icon),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          notification.title,
-                          style: AppTypography.bodySm.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: unread
-                                ? AppColors.foreground
-                                : AppColors.mutedForeground,
-                          ),
+      padding: const EdgeInsets.all(AppSpacing.md + 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconTile(icon: icon, size: 40, tone: tone, glow: false),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        notification.title,
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: unread
+                              ? AppColors.foreground
+                              : AppColors.secondaryForeground,
                         ),
                       ),
-                      if (unread) ...[
-                        const SizedBox(width: AppSpacing.sm),
-                        Container(
+                    ),
+                    if (unread) ...[
+                      const SizedBox(width: 6),
+                      Semantics(
+                        label: 'Unread',
+                        child: Container(
                           width: 8,
                           height: 8,
                           decoration: BoxDecoration(
@@ -303,39 +255,33 @@ class _NotificationRow extends StatelessWidget {
                             shape: BoxShape.circle,
                           ),
                         ),
-                      ],
+                      ),
                     ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${notification.body} · '
+                  '${Formatters.relativeTime(notification.timestamp)}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    notification.body,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    Formatters.relativeTime(notification.timestamp),
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
+                ),
+              ],
+            ),
+          ),
+          if (notification.link != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2, left: 6),
+              child: Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: AppColors.onSurfaceHint,
               ),
             ),
-            if (notification.link != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Icon(
-                  Icons.chevron_right,
-                  size: 18,
-                  color: AppColors.iconMuted.withValues(alpha: 0.6),
-                ),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }

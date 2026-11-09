@@ -1,0 +1,6 @@
+# `slow` tests (the 3,840-run engine invariant grid) always run in CI, which
+# executes a plain `flutter test`. Locally, skip them with:
+#   flutter test --exclude-tags slow
+tags:
+  slow:
+    timeout: 20m

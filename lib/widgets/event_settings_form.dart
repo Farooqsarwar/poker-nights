@@ -1,0 +1,1588 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+
+import '../app/colors.dart';
+import '../app/typography.dart';
+import '../constants/app_constants.dart';
+import '../responsive/responsive.dart';
+import '../models/chip_color.dart';
+import '../models/tournament_format.dart';
+import '../models/live_game.dart';
+import '../models/table_settings.dart';
+import '../models/tournament.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/app_provider.dart';
+import '../utils/event_settings_validation.dart';
+import '../utils/formatters.dart';
+import 'app_button.dart';
+import 'app_modal.dart';
+import 'app_text_field.dart';
+import 'app_toggle.dart';
+import 'chip_set_editor.dart';
+import 'count_stepper.dart';
+import 'legal_gate_dialog.dart';
+
+/// A section of the event settings form. Sections render in the order given
+/// in [EventSettingsForm.sections].
+enum EventFormSection {
+  details,
+  chips,
+  rules,
+  rebuys,
+  format,
+  money,
+}
+
+/// Shared event-settings editor, the union of the creation wizard's step form
+/// bodies and the edit form's field set, so one widget (and one validation
+/// function) can back every screen that edits a [GameSettings].
+///
+/// Renders only the requested [EventFormSection]s and reports every change
+/// through [EventFormSection.onChanged] as a full [GameSettings] draft built
+/// via [GameSettings.copyWith].
+class EventSettingsForm extends StatefulWidget {
+  const EventSettingsForm({
+    super.key,
+    required this.initial,
+    required this.sections,
+    required this.onChanged,
+    this.showOrganizerPct = false,
+    this.orgPctCeiling = GameSettings.maxOrganizerPct,
+    this.hideSavePresetButton = false,
+    this.freshStackAt,
+  });
+
+  /// The settings this form starts from. Seeded once; later edits are never
+  /// re-synced from a new [GameSettings], so callers must not rebuild this
+  /// widget with a draft as its own [initial] (the parent owns the draft).
+  final GameSettings initial;
+  
+  final bool hideSavePresetButton;
+
+  /// Looks up what a fresh stack is worth at a rebuy-close level, for the line
+  /// shown under the close-level picker ("Fresh stack at L6: 20 BB, M 8.3").
+  /// Supplied by a parent that knows the structure; null (or a null answer)
+  /// shows no line, so the form stays usable on its own.
+  final FreshStack? Function(int level)? freshStackAt;
+
+  /// Which sections to render, in order of iteration.
+  final Set<EventFormSection> sections;
+
+  /// Called with the latest draft on every edit. The draft reflects whatever
+  /// the fields currently hold, valid or not — validation (via
+  /// [validateEventSettings]) is the parent's call.
+  final ValueChanged<GameSettings> onChanged;
+
+  /// Whether to render the organizational-costs (org %) control. The creation
+  /// wizard hides it; the edit form shows it.
+  final bool showOrganizerPct;
+
+  /// The documented cap on the org percentage. Games created under the old
+  /// 0-100 rule may carry a higher stored figure, so the effective ceiling
+  /// is raised to whatever [initial] was saved with when that is higher — an
+  /// existing figure is never silently rewritten, it can only be reduced.
+  final int orgPctCeiling;
+
+  @override
+  State<EventSettingsForm> createState() => _EventSettingsFormState();
+}
+
+class _EventSettingsFormState extends State<EventSettingsForm> {
+  late final TextEditingController _name;
+  late final TextEditingController _date;
+  late final TextEditingController _time;
+  late final TextEditingController _location;
+  late final TextEditingController _buyIn;
+  late bool _locationPrivate;
+  late double _duration;
+  late int _expectedPlayers;
+  late bool _expectedOverridden;
+  late int _rsvpDeadlineHours;
+  late List<ChipColor> _chipSet;
+  late String _chipSetName;
+  late bool _rebuys;
+  late bool _rebuyUnlimited;
+  late int _rebuysClose;
+  late bool _rebuyCloseChosen;
+  late bool _reEntry;
+  late bool _addOn;
+  late int _addOnClose;
+  late bool _koEnabled;
+  late final TextEditingController _koAmount;
+  late AntePreference _antePreference;
+  late int _anteAfterLevel;
+  late List<ScheduledBreak> _breaks;
+  late bool _overrideTableSettings;
+  late int _maxPerTable;
+  late bool _randomizeSeating;
+  late int _orgPct;
+  bool _legalAccepted = false;
+  late final TextEditingController _rebuyLimit;
+  late final TextEditingController _rebuyCost;
+  late final TextEditingController _addOnCost;
+  late TournamentFormat _format;
+  late final TextEditingController _maxReEntries;
+  late final TextEditingController _shootoutTables;
+  late final TextEditingController _shootoutTableTargetMins;
+  late bool _earlyArrivalBonus;
+  late final TextEditingController _earlyArrivalCutoff;
+
+  /// Holds a PERCENT (12.5), not the fraction the model stores (0.125).
+  /// See [_pctLabel] / [_earlyArrivalPctFraction].
+  late final TextEditingController _earlyArrivalPct;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.initial;
+    _name = TextEditingController(text: s.name);
+    _date = TextEditingController(text: s.date);
+    _time = TextEditingController(text: s.time);
+    _location = TextEditingController(text: s.location);
+    _buyIn = TextEditingController(text: '${s.buyIn}');
+    _locationPrivate = s.locationPrivate;
+    _duration = s.durationHours;
+    _expectedOverridden = s.expectedPlayersOverride != null;
+    // Chips plan from the RSVPs unless the host has overridden the figure.
+    _expectedPlayers = s.expectedPlayersOverride ?? s.players;
+    _rsvpDeadlineHours = s.effectiveRsvpDeadlineHours;
+    _chipSet = List.of(s.chipSet);
+    _chipSetName = s.chipSetName;
+    _rebuys = s.rebuys;
+    // `rebuyLimit == null` is how "unlimited" is stored, so it doubles as the
+    // unlimited flag — same rule the wizard's Off/Limited/Unlimited uses.
+    _rebuyUnlimited = s.rebuyLimit == null;
+    _rebuysClose = s.rebuysCloseLevel;
+    _rebuyCloseChosen = s.rebuyCloseChosenByOrganizer;
+    _reEntry = s.reEntry;
+    _addOn = s.addOn;
+    _addOnClose = s.addOnCloseLevel;
+    _koEnabled = s.koEnabled;
+    _koAmount = TextEditingController(text: '${s.koAmount}');
+    _antePreference = s.antePreference;
+    _anteAfterLevel = s.anteAfterLevel;
+    _breaks = List.of(s.breaks);
+    _overrideTableSettings = s.tableSettingsOverride != null;
+    _maxPerTable = (s.tableSettingsOverride?.maxPerTable ?? 9).clamp(4, 10);
+    _randomizeSeating = s.tableSettingsOverride?.randomizeByDefault ?? false;
+    _orgPct = s.organizerPct;
+    // Only shown when rebuys are Limited; defaults to 1 per player.
+    _rebuyLimit = TextEditingController(text: s.rebuyLimit?.toString() ?? '1');
+    final initialRebuy = s.rebuyCost != null
+        ? s.rebuyCost.toString()
+        : (s.buyIn > 0 ? s.buyIn.toString() : '');
+    _rebuyCost = TextEditingController(text: initialRebuy);
+    _addOnCost = TextEditingController(text: s.addOnCost?.toString() ?? '');
+    _format = s.effectiveFormat;
+    _maxReEntries = TextEditingController(text: s.maxReEntries?.toString() ?? '');
+    // §11.4 / §25.1a overrides. Empty means "engine decides", the same
+    // nullable-override idiom the rebuy limit and max re-entries already use.
+    _shootoutTables =
+        TextEditingController(text: s.shootoutTables?.toString() ?? '');
+    _shootoutTableTargetMins = TextEditingController(
+      text: s.shootoutTableTargetMins?.toString() ?? '',
+    );
+    _earlyArrivalBonus = s.earlyArrivalBonusEnabled;
+    _earlyArrivalCutoff =
+        TextEditingController(text: s.earlyArrivalCutoffMins?.toString() ?? '');
+    _earlyArrivalPct = TextEditingController(
+      text: s.earlyArrivalBonusPctOverride == null
+          ? ''
+          : _pctLabel(s.earlyArrivalBonusPctOverride!),
+    );
+  }
+
+  /// The model stores the early-arrival bonus as a FRACTION of the starting
+  /// stack (0.125); the host reads and types a PERCENT (12.5). The conversion
+  /// lives in exactly two places — here on the way in and
+  /// [_earlyArrivalPctFraction] on the way out — because getting it wrong by a
+  /// factor of 100 ships a 1250% bonus that nothing downstream would catch.
+  static String _pctLabel(double fraction) {
+    // Via a fixed 2dp string, not `fraction * 100` straight: 0.1 * 100 is
+    // 10.000000000000002 in binary floating point and the host would be shown
+    // exactly that.
+    var s = (fraction * 100).toStringAsFixed(2);
+    if (s.contains('.')) {
+      s = s.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+    }
+    return s;
+  }
+
+  /// The typed percent as the fraction the model wants. Null (blank field)
+  /// leaves the documented 12.5% default in charge.
+  double? get _earlyArrivalPctFraction {
+    final pct = double.tryParse(_earlyArrivalPct.text.trim());
+    return pct == null ? null : pct / 100;
+  }
+
+  @override
+  void dispose() {
+    for (final c in [
+      _name,
+      _date,
+      _time,
+      _location,
+      _buyIn,
+      _koAmount,
+      _rebuyLimit,
+      _rebuyCost,
+      _addOnCost,
+      _maxReEntries,
+      _shootoutTables,
+      _shootoutTableTargetMins,
+      _earlyArrivalCutoff,
+      _earlyArrivalPct,
+    ]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  /// Legit ceiling for the org % stepper: the documented cap, raised to the
+  /// stored legacy figure when the game was created under the old 0-100 rule.
+  int get _orgPctCeiling => math.max(widget.orgPctCeiling, widget.initial.organizerPct);
+
+  String get _durationLabel {
+    final whole = _duration == _duration.roundToDouble();
+    return '${whole ? _duration.round() : _duration}h';
+  }
+
+  GameSettings get _draft => _buildSettings(strict: false);
+
+  /// Snapshot of the current field state. [strict] parses empty numeric
+  /// fields as invalid (0 / -1) so the validator reports them, matching the
+  /// wizard's `null -> "Must be ..."` rules, while a lenient draft keeps the
+  /// last good value so the parent's draft never spoils over an in-flight key.
+  GameSettings _buildSettings({required bool strict}) {
+    final s = widget.initial;
+    final buyIn = num.tryParse(_buyIn.text.trim());
+    final koAmount = num.tryParse(_koAmount.text.trim());
+    final rebuyLimit = num.tryParse(_rebuyLimit.text.trim());
+    final rebuyCost = num.tryParse(_rebuyCost.text.trim());
+    final addOnCost = num.tryParse(_addOnCost.text.trim());
+    return s.copyWith(
+      name: _name.text.trim(),
+      date: _date.text.trim(),
+      time: _time.text.trim(),
+      location: _location.text.trim(),
+      durationHours: _duration,
+      buyIn: buyIn?.toInt() ?? (strict ? 0 : s.buyIn),
+      locationPrivate: _locationPrivate,
+      chipSet: _chipSet,
+      chipSetName: _chipSetName,
+      expectedPlayersOverride: _expectedOverridden ? _expectedPlayers : null,
+      clearExpectedPlayersOverride: !_expectedOverridden,
+      rsvpDeadlineHours: _rsvpDeadlineHours,
+      rebuys: _rebuys,
+      rebuysCloseLevel: _rebuys ? _rebuysClose : 0,
+      rebuyCloseChosenByOrganizer: _rebuys ? _rebuyCloseChosen : false,
+      reEntry: _reEntry,
+      rebuyLimit: _rebuys
+          ? (_rebuyUnlimited
+              ? null
+              : (rebuyLimit?.toInt() ?? (strict ? -1 : 1)))
+          : null,
+      addOn: _addOn,
+      addOnCloseLevel: _addOnClose,
+      koEnabled: _koEnabled,
+      koAmount: koAmount?.toInt() ?? (strict ? -1 : s.koAmount),
+      antePreference: _antePreference,
+      anteEnabled: _antePreference != AntePreference.none,
+      anteStyle: _antePreference == AntePreference.individual
+          ? AnteStyle.individual
+          : AnteStyle.bigBlind,
+      anteAfterLevel: _anteAfterLevel,
+      organizerPct: _orgPct,
+      breaks: List.of(_breaks),
+      rebuyCost: _rebuys
+          ? (rebuyCost?.toInt() ?? buyIn?.toInt() ?? s.buyIn)
+          : null,
+      addOnCost: _addOn ? addOnCost?.toInt() : null,
+      tableSettingsOverride: _overrideTableSettings
+          ? TableSettings(
+              maxPerTable: _maxPerTable,
+              randomizeByDefault: _randomizeSeating,
+            )
+          : null,
+      clearTableSettingsOverride: !_overrideTableSettings,
+      format: _format,
+      maxReEntries: num.tryParse(_maxReEntries.text.trim())?.toInt(),
+      // §11.4 Stage A. Blank = the engine derives the table count from the
+      // expected field and paces each table at the §38 45-minute default.
+      shootoutTables: num.tryParse(_shootoutTables.text.trim())?.toInt(),
+      shootoutTableTargetMins:
+          num.tryParse(_shootoutTableTargetMins.text.trim())?.toInt(),
+      // §25.1a. The toggle is the switch that matters — `effectiveEarlyArrivalPct`
+      // returns 0 when it is off, so a stale override cannot keep granting chips.
+      earlyArrivalBonusEnabled: _earlyArrivalBonus,
+      earlyArrivalCutoffMins:
+          num.tryParse(_earlyArrivalCutoff.text.trim())?.toInt(),
+      earlyArrivalBonusPctOverride: _earlyArrivalPctFraction,
+    );
+  }
+
+  void _emit() {
+    final draft = _draft;
+    widget.onChanged(draft);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.sections.contains(EventFormSection.details))
+          _group('Event details', _detailsFields()),
+        if (widget.sections.contains(EventFormSection.chips))
+          _group('Chips', _chipsFields()),
+        if (widget.sections.contains(EventFormSection.rules))
+          _group('Rules', _rulesFields()),
+        if (widget.sections.contains(EventFormSection.rebuys))
+          _group('Rebuys & add-ons', _rebuysFields()),
+        if (widget.sections.contains(EventFormSection.format))
+          _group('Format', _formatFields()),
+        if (widget.sections.contains(EventFormSection.money))
+          _group('Money', _moneyFields()),
+      ],
+    );
+  }
+
+  Widget _group(String label, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: Text(
+            label.toUpperCase(),
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        ...children,
+      ],
+    );
+  }
+
+  // ---- Details ----
+
+  List<Widget> _detailsFields() {
+    final errors = validateEventSettings(_buildSettings(strict: true));
+    return [
+      AppTextField(
+        controller: _name,
+        label: 'Event name',
+        placeholder: 'e.g. Friday Poker',
+        error: errors['name'],
+        onChanged: (_) => _emit(),
+      ),
+      const SizedBox(height: AppSpacing.md),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: _pickDate,
+              child: AbsorbPointer(
+                child: AppTextField(
+                  controller: _date,
+                  label: 'Date',
+                  error: errors['date'],
+                  readOnly: true,
+                  suffixIcon: IconButton(
+                    tooltip: 'Pick a date',
+                    icon: const Icon(Icons.calendar_today, size: 18),
+                    onPressed: _pickDate,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: GestureDetector(
+              onTap: _pickTime,
+              child: AbsorbPointer(
+                child: AppTextField(
+                  controller: _time,
+                  label: 'Time',
+                  error: errors['time'],
+                  readOnly: true,
+                  suffixIcon: IconButton(
+                    tooltip: 'Pick a start time',
+                    icon: const Icon(Icons.access_time, size: 18),
+                    onPressed: _pickTime,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.md),
+      AppTextField(
+        controller: _location,
+        label: 'Location (optional)',
+        placeholder: "e.g. Daniel's place",
+        error: errors['location'],
+        onChanged: (_) => _emit(),
+      ),
+      if (_location.text.trim().isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.sm),
+        _ToggleRow(
+          title: 'Keep address private',
+          subtitle: 'Guests see the address only after check-in',
+          value: _locationPrivate,
+          onChanged: (v) {
+            setState(() => _locationPrivate = v);
+            _emit();
+          },
+        ),
+      ],
+      const SizedBox(height: AppSpacing.lg),
+      AppTextField(
+        controller: _buyIn,
+        label: 'Buy-in',
+        error: errors['buyIn'],
+        keyboardType: TextInputType.number,
+        onChanged: (_) => _emit(),
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      _EditRow(
+        title: 'Expected players',
+        subtitle: _expectedOverridden
+            ? 'Your override — chips and blinds are planned for this many'
+            : 'From RSVPs. Adjust if you expect more.',
+        trailing: CountStepper(
+          value: _expectedPlayers,
+          min: 2,
+          max: 200,
+          semanticLabel: 'Expected players',
+          onChanged: (v) {
+            setState(() {
+              _expectedPlayers = v;
+              _expectedOverridden = true;
+            });
+            _emit();
+          },
+        ),
+      ),
+      if (_expectedOverridden)
+        Align(
+          alignment: Alignment.centerRight,
+          child: InkWell(
+            onTap: () => setState(() {
+              _expectedOverridden = false;
+              _expectedPlayers = widget.initial.players;
+            }),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xs),
+              child: Text(
+                'Follow RSVPs instead',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.primaryText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ),
+      const SizedBox(height: AppSpacing.lg),
+      _EditRow(
+        title: 'RSVP deadline',
+        subtitle: '$_rsvpDeadlineHours ${_rsvpDeadlineHours == 1 ? 'hour' : 'hours'} '
+            'before the start. After that nobody new can answer Going.',
+        trailing: CountStepper(
+          value: _rsvpDeadlineHours,
+          min: 1,
+          max: 72,
+          semanticLabel: 'RSVP deadline in hours',
+          onChanged: (v) {
+            setState(() => _rsvpDeadlineHours = v);
+            _emit();
+          },
+        ),
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      _OptionPicker(
+        label: 'Target duration',
+        options: const ['3h', '3.5h', '4h', '4.5h', '5h', '5.5h', '6h'],
+        selected: _durationLabel,
+        onChanged: (v) {
+          final val = v.replaceAll('h', '');
+          setState(() => _duration = double.tryParse(val) ?? widget.initial.durationHours);
+          _emit();
+        },
+      ),
+    ];
+  }
+
+  Future<void> _pickDate() async {
+    final initialDate = DateTime.tryParse(_date.text) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+    );
+    if (picked != null) {
+      final y = picked.year;
+      final m = picked.month.toString().padLeft(2, '0');
+      final d = picked.day.toString().padLeft(2, '0');
+      setState(() => _date.text = '$y-$m-$d');
+      _emit();
+    }
+  }
+
+  TimeOfDay get _startTime {
+    final parts = _time.text.split(':');
+    if (parts.length == 2) {
+      final h = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      if (h != null && m != null && h >= 0 && h < 24 && m >= 0 && m < 60) {
+        return TimeOfDay(hour: h, minute: m);
+      }
+    }
+    return const TimeOfDay(hour: 20, minute: 0);
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(context: context, initialTime: _startTime);
+    if (picked != null) {
+      final h = picked.hour.toString().padLeft(2, '0');
+      final m = picked.minute.toString().padLeft(2, '0');
+      setState(() => _time.text = '$h:$m');
+      _emit();
+    }
+  }
+
+  // ---- Chips ----
+
+  List<Widget> _chipsFields() {
+    return [
+      ChipSetEditor(
+        initial: _chipSet,
+        initialName: _chipSetName,
+        onChanged: (chips, name) {
+          setState(() {
+            _chipSet = chips;
+            _chipSetName = name;
+          });
+          _emit();
+        },
+      ),
+      if (!widget.hideSavePresetButton) ...[
+        const SizedBox(height: AppSpacing.md),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: AppButton(
+            variant: AppButtonVariant.secondary,
+            size: AppButtonSize.sm,
+            onPressed: _chipSet.isEmpty ? null : () => _showSavePresetModal(context),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.bookmark_add_outlined, size: 16),
+                SizedBox(width: AppSpacing.xs),
+                Text('Save chip set as preset'),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ];
+  }
+
+  Future<void> _showSavePresetModal(BuildContext context) async {
+    final controller = TextEditingController(
+      text: _chipSetName.isNotEmpty && _chipSetName != 'Custom'
+          ? _chipSetName
+          : 'My Chip Set',
+    );
+    final app = context.read<AppProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    await showAppModal(
+      context: context,
+      title: 'Save chip set preset',
+      maxWidth: 400,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Save these ${_chipSet.length} chip denominations as a preset you can reuse for any tournament.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
+            controller: controller,
+            label: 'Preset name',
+            placeholder: 'e.g. Home Set 500',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: AppButton(
+                  onPressed: () {
+                    final trimmed = controller.text.trim();
+                    if (trimmed.isEmpty) return;
+                    final id = 'cs-${DateTime.now().millisecondsSinceEpoch}';
+                    try {
+                      app.saveChipSet(id, trimmed, _chipSet);
+                      setState(() {
+                        _chipSetName = trimmed;
+                      });
+                      _emit();
+                      Navigator.of(context).pop();
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text('Saved "$trimmed" to your chip set presets.'),
+                        ),
+                      );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Could not save preset: $e')),
+                      );
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---- Rules ----
+
+  /// The monolithic rules section: every rebuys/add-ons and format decision on
+  /// one scroll (D1's "thirteen decisions on one scroll"). Kept for callers
+  /// that want all rules fields behind one section — the invitation edit
+  /// modal's four-section mount. Step-based callers (the creation wizard)
+  /// should compose [EventFormSection.rebuys] and [EventFormSection.format]
+  /// instead so each step owns only its own decisions.
+  List<Widget> _rulesFields() {
+    return [
+      ..._rebuysFields(),
+      Divider(color: AppColors.border),
+      ..._formatFields(),
+    ];
+  }
+
+  /// Rebuys & add-ons decisions only — the wizard's "Rebuys & add-ons" step.
+  /// Rebuy-pricing errors (`rebuyLimit`) surface here, where the field lives.
+  List<Widget> _rebuysFields() {
+    final errors = validateEventSettings(_buildSettings(strict: true));
+    return [
+      _EditRow(
+        title: 'Tournament format',
+        subtitle: 'How entries work',
+        trailing: _OptionPicker(
+          options: const ['Freeze Out', 'Rebuy', 'Re-entry', 'Shootout'],
+          selected: _format.label,
+          onChanged: (v) {
+            setState(() {
+              if (v == 'Freeze Out') {
+                _format = TournamentFormat.freezeOut;
+                _rebuys = false;
+                _reEntry = false;
+                _rebuyUnlimited = false;
+              } else if (v == 'Rebuy') {
+                _format = TournamentFormat.rebuy;
+                _rebuys = true;
+                _reEntry = false;
+              } else if (v == 'Re-entry') {
+                _format = TournamentFormat.reEntry;
+                _rebuys = true;
+                _reEntry = true;
+              } else if (v == 'Shootout') {
+                _format = TournamentFormat.shootout;
+                _rebuys = false;
+                _reEntry = false;
+                _rebuyUnlimited = false;
+              }
+            });
+            _emit();
+          },
+        ),
+      ),
+      if (_format == TournamentFormat.reEntry)
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xs, bottom: AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Max re-entries per player',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              SizedBox(
+                width: 130,
+                child: AppTextField(
+                  controller: _maxReEntries,
+                  keyboardType: TextInputType.number,
+                  placeholder: 'Unlimited',
+                  error: errors['maxReEntries'],
+                  onChanged: (_) => _emit(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      // §11.4: a shootout's Stage A is N independent tables, each played down
+      // to a winner. Both figures are optional — the engine derives the table
+      // count from the expected field and paces each table at §38's 45
+      // minutes — so they are offered as overrides, not as required input.
+      if (_format == TournamentFormat.shootout)
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xs, bottom: AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Stage A tables',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              SizedBox(
+                width: 130,
+                child: AppTextField(
+                  controller: _shootoutTables,
+                  keyboardType: TextInputType.number,
+                  placeholder: 'Auto',
+                  onChanged: (_) => _emit(),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Minutes per Stage A table',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              SizedBox(
+                width: 130,
+                child: AppTextField(
+                  controller: _shootoutTableTargetMins,
+                  keyboardType: TextInputType.number,
+                  placeholder: '45',
+                  onChanged: (_) => _emit(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      Divider(color: AppColors.border),
+      _EditRow(
+        title: 'Rebuys & re-entry',
+        subtitle: 'Players can buy back in after elimination',
+        trailing: _OptionPicker(
+          options: const ['Off', 'Limited', 'Unlimited'],
+          selected: _rebuys
+              ? (_rebuyUnlimited ? 'Unlimited' : 'Limited')
+              : 'Off',
+          onChanged: (v) {
+            if (v == 'Off') {
+              _rebuys = false;
+              _rebuyUnlimited = false;
+              // Spec §7/§32 keep rebuy and re-entry one toggle when turning
+              // OFF; turning on never re-enables a re-entry a host had off.
+              _reEntry = false;
+            } else if (v == 'Limited') {
+              _rebuys = true;
+              _rebuyUnlimited = false;
+            } else {
+              _rebuys = true;
+              _rebuyUnlimited = true;
+              _rebuysClose = 6;
+            }
+            _emit();
+          },
+        ),
+      ),
+      if (_rebuys) ...[
+        _EditRow(
+          title: _rebuyUnlimited ? 'Unlimited rebuys until' : 'Close rebuys',
+          subtitle: 'At the end of this level',
+          trailing: _OptionPicker(
+            options: const ['End L4', 'End L5', 'End L6', 'End L7', 'End L8'],
+            selected: 'End L$_rebuysClose',
+            onChanged: (v) {
+              setState(() {
+                _rebuysClose = int.tryParse(v.replaceAll('End L', '')) ?? 6;
+                _rebuyCloseChosen = true;
+              });
+              _emit();
+            },
+          ),
+        ),
+        // What a rebuy buys at the level the host picked, so the trade-off is
+        // visible. Informational only: it never changes the suggestion.
+        if (widget.freshStackAt?.call(_rebuysClose) case final FreshStack fresh)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: Text(
+              fresh.label,
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+        if (!_rebuyUnlimited)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Max rebuys per player',
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                SizedBox(
+                  width: 130,
+                  child: AppTextField(
+                    controller: _rebuyLimit,
+                    keyboardType: TextInputType.number,
+                    error: errors['rebuyLimit'],
+                    onChanged: (_) => _emit(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (!widget.sections.contains(EventFormSection.money))
+          _EditRow(
+            title: 'Rebuy price',
+            subtitle: 'Defaults to the buy-in when blank',
+            trailing: SizedBox(
+              width: 130,
+              child: AppTextField(
+                controller: _rebuyCost,
+                keyboardType: TextInputType.number,
+                placeholder: _buyIn.text.isNotEmpty ? _buyIn.text : '100',
+                onChanged: (_) => _emit(),
+              ),
+            ),
+          ),
+      ],
+      if (_reEntry)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          child: Text(
+            'Re-entry closes with late registration and rebuys.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ),
+      Divider(color: AppColors.border),
+      _EditRow(
+        title: 'Add-on',
+        subtitle: 'One per active player at rebuy close',
+        trailing: _OptionPicker(
+          options: const ['Yes', 'No'],
+          selected: _addOn ? 'Yes' : 'No',
+          onChanged: (v) {
+            setState(() => _addOn = v == 'Yes');
+            _emit();
+          },
+        ),
+      ),
+      if (_addOn)
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: _OptionPicker(
+            label: 'Add-on available until',
+            options: const ['End L4', 'End L5', 'End L6', 'End L7', 'End L8'],
+            selected: 'End L$_addOnClose',
+            onChanged: (v) {
+              setState(
+                () => _addOnClose =
+                    int.tryParse(v.replaceAll('End L', '')) ?? 6,
+              );
+              _emit();
+            },
+          ),
+        ),
+    ];
+  }
+
+  /// Format decisions only — ante, breaks (and the seating-mode override the
+  /// format feeds). The wizard's "Format" step mounts this.
+  ///
+  /// The KO bounty is deliberately absent. The spec puts it on step 1 and only
+  /// step 1: "KO bounty | toggle→then amount + type" (technical 48, §C1 step
+  /// 1). Step 4 lists pace, hard finish, ante, tables, payouts and organiser
+  /// contribution — no bounty. Rendering a second Yes/No here would let a host
+  /// turn the bounty on at step 4 with no amount or type in front of them, and
+  /// the two controls would disagree.
+  List<Widget> _formatFields() {
+    return [
+      _ToggleRow(
+        title: 'Ante',
+        subtitle: 'Ante posted every hand later in the tournament',
+        value: _antePreference != AntePreference.none,
+        onChanged: (v) {
+          setState(() {
+            _antePreference = v ? AntePreference.bigBlind : AntePreference.none;
+          });
+          _emit();
+        },
+      ),
+      if (_antePreference != AntePreference.none) ...[
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          child: _EditRow(
+            title: 'Ante type',
+            subtitle: 'Big Blind Ante is recommended for faster home play',
+            trailing: _OptionPicker(
+              options: const [
+                'Big blind (Recommended)',
+                'Individual',
+              ],
+              selected: _antePreference == AntePreference.individual
+                  ? 'Individual'
+                  : 'Big blind (Recommended)',
+              onChanged: (v) {
+                setState(
+                  () => _antePreference = v.contains('Individual')
+                      ? AntePreference.individual
+                      : AntePreference.bigBlind,
+                );
+                _emit();
+              },
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: _OptionPicker(
+            label: 'Activate ante',
+            options: const [
+              'After L4',
+              'After L5',
+              'After L6',
+              'After L7',
+              'After L8',
+            ],
+            selected: 'After L$_anteAfterLevel',
+            onChanged: (v) {
+              setState(
+                () => _anteAfterLevel =
+                    int.tryParse(v.replaceAll('After L', '')) ?? 6,
+              );
+              _emit();
+            },
+          ),
+        ),
+      ],
+      Divider(color: AppColors.border),
+      // §25.1a: players checked in before the cutoff start above the printed
+      // stack. Off by default — it is a house rule, not a tournament rule —
+      // and both figures fall back to the engine's 30 minutes / 12.5% when
+      // left blank.
+      _ToggleRow(
+        title: 'Early arrival bonus',
+        subtitle: 'Extra starting chips for players checked in before the '
+            'cutoff',
+        value: _earlyArrivalBonus,
+        onChanged: (v) {
+          setState(() => _earlyArrivalBonus = v);
+          _emit();
+        },
+      ),
+      if (_earlyArrivalBonus)
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Check in this many minutes before the start',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              SizedBox(
+                width: 130,
+                child: AppTextField(
+                  controller: _earlyArrivalCutoff,
+                  keyboardType: TextInputType.number,
+                  placeholder: '30',
+                  onChanged: (_) => _emit(),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Bonus, as a % of the starting stack',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              SizedBox(
+                width: 130,
+                child: AppTextField(
+                  controller: _earlyArrivalPct,
+                  // Decimal: 12.5% is the default and hosts round it to
+                  // halves, so an integer-only keypad would make the default
+                  // itself untypeable.
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  placeholder: '12.5',
+                  suffixIcon: Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: Text(
+                      '%',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ),
+                  onChanged: (_) => _emit(),
+                ),
+              ),
+              Builder(
+                builder: (context) {
+                  final pct = double.tryParse(_earlyArrivalPct.text.trim()) ?? 12.5;
+                  final refStack = _chipSet.isNotEmpty
+                      ? (_chipSet.fold<int>(0, (s, c) => s + c.value * c.quantity) ~/
+                              (widget.initial.players > 0 ? widget.initial.players : 8))
+                          .clamp(500, 20000)
+                      : 2000;
+                  final bonusChips = (refStack * (pct / 100)).round();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Text(
+                      'Adds ~${Formatters.chips(bonusChips)} extra chips (${pct.toStringAsFixed(1)}% of ~${Formatters.chips(refStack)} stack)',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      Divider(color: AppColors.border),
+      _ToggleRow(
+        title: 'Override table settings',
+        subtitle:
+            'Group default: $_maxPerTable per table, randomize '
+            '${_randomizeSeating ? 'on' : 'off'}',
+        value: _overrideTableSettings,
+        onChanged: (v) {
+          setState(() => _overrideTableSettings = v);
+          _emit();
+        },
+      ),
+      if (_overrideTableSettings) ...[
+        _EditRow(
+          title: 'Players per table before splitting',
+          subtitle: '4 to 10 seats per table',
+          trailing: CountStepper(
+            value: _maxPerTable,
+            min: 4,
+            max: 10,
+            semanticLabel: 'Players per table',
+            onChanged: (v) {
+              setState(() => _maxPerTable = v);
+              _emit();
+            },
+          ),
+        ),
+        _ToggleRow(
+          title: 'Randomize seating',
+          subtitle: 'Defaults seating generation to fully random',
+          value: _randomizeSeating,
+          onChanged: (v) {
+            setState(() => _randomizeSeating = v);
+            _emit();
+          },
+        ),
+      ],
+      Divider(color: AppColors.border),
+      _group('Breaks', _breaksFields()),
+    ];
+  }
+
+  List<Widget> _breaksFields() {
+    return [
+      _EditRow(
+        title: 'Breaks',
+        subtitle: _breaks.isNotEmpty
+            ? 'Break time comes out of your $_durationLabel target, not on top '
+                  'of it.'
+            : 'Scheduled pauses built into the structure.',
+        trailing: _OptionPicker(
+          options: const ['Off', '1', '2', '3'],
+          selected: _breaks.isNotEmpty ? '${_breaks.length}' : 'Off',
+          onChanged: (v) {
+            if (v == 'Off') {
+              _breaks = const [];
+              _emit();
+              return;
+            }
+            final count = int.parse(v);
+            final mins = _breaks.isNotEmpty ? _breaks.first.durationMins : 10;
+            // afterLevel 0 asks the engine to place it: after the rebuy
+            // window, or the midpoint when rebuys are off.
+            setState(() {
+              _breaks = List.generate(
+                count,
+                (i) => i < _breaks.length
+                    ? _breaks[i]
+                    : ScheduledBreak(afterLevel: 0, durationMins: mins),
+              );
+            });
+            _emit();
+          },
+        ),
+      ),
+      if (_breaks.isNotEmpty) ...[
+        for (var i = 0; i < _breaks.length; i++) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.secondary.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Break ${i + 1}',
+                    style: AppTypography.bodyXs.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.foreground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      Text(
+                        'After level',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                      CountStepper(
+                        value: _breaks[i].afterLevel,
+                        min: 0,
+                        max: 30,
+                        semanticLabel: 'Break ${i + 1} after level',
+                        onChanged: (v) {
+                          setState(() {
+                            _breaks = [
+                              for (var j = 0; j < _breaks.length; j++)
+                                j == i
+                                    ? _breaks[j].copyWith(afterLevel: v)
+                                    : _breaks[j],
+                            ];
+                          });
+                          _emit();
+                        },
+                      ),
+                      if (_breaks[i].afterLevel == 0)
+                        Text(
+                          'Auto',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.primaryText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      Text(
+                        'Minutes',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                      _OptionPicker(
+                        options: const ['5', '10', '15', '20', 'Custom'],
+                        selected: kBreakDurationPresets
+                                .contains(_breaks[i].durationMins)
+                            ? '${_breaks[i].durationMins}'
+                            : 'Custom',
+                        onChanged: (v) {
+                          if (v == 'Custom') return;
+                          final mins = int.parse(v);
+                          setState(() {
+                            _breaks = [
+                              for (var j = 0; j < _breaks.length; j++)
+                                j == i
+                                    ? _breaks[j].copyWith(durationMins: mins)
+                                    : _breaks[j],
+                            ];
+                          });
+                          _emit();
+                        },
+                      ),
+                      // No fixed width: CountStepper needs ~152px min
+                      // (48px buttons + 56px value). A 120px box overflows.
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: CountStepper(
+                          value: _breaks[i].durationMins,
+                          min: 1,
+                          max: 60,
+                          step: 1,
+                          semanticLabel: 'Break ${i + 1} minutes',
+                          onChanged: (v) {
+                            setState(() {
+                              _breaks = [
+                                for (var j = 0; j < _breaks.length; j++)
+                                  j == i
+                                      ? _breaks[j]
+                                          .copyWith(durationMins: v)
+                                      : _breaks[j],
+                              ];
+                            });
+                            _emit();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        if (_breaks.every((b) => b.afterLevel > 0))
+          Text(
+            'Placed exactly where you have chosen.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          )
+        else
+          Text(
+            _rebuys
+                ? 'Anything left on Auto goes after the rebuy window closes '
+                      '(around L$_rebuysClose).'
+                : 'Anything left on Auto goes around the middle of the '
+                      'tournament.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+      ],
+    ];
+  }
+
+  // ---- Money ----
+
+  List<Widget> _moneyFields() {
+    final fields = <Widget>[];
+    // Spec "Rebuy price | = buy-in (+ bounty)": the default already carries the
+    // bounty, so the placeholder has to say so or the host reads "15" and pays
+    // "15 + 5". The bounty itself is a step-1 control, so this is the one place
+    // the derived price surfaces it.
+    final defaultRebuy = _koEnabled
+        ? '${int.tryParse(_buyIn.text.trim()) ?? 0} + ${_koAmount.text.trim()}'
+        : _buyIn.text;
+    if (_rebuys) {
+      fields
+        ..add(_EditRow(
+          title: 'Rebuy price',
+          subtitle: 'Defaults to the buy-in when blank',
+          trailing: SizedBox(
+            width: 130,
+            child: AppTextField(
+              controller: _rebuyCost,
+              keyboardType: TextInputType.number,
+              placeholder: 'Default ($defaultRebuy)',
+              onChanged: (_) => _emit(),
+            ),
+          ),
+        ))
+        ..add(const SizedBox(height: AppSpacing.md));
+    }
+    if (_addOn) {
+      fields
+        ..add(_EditRow(
+          title: 'Add-on price',
+          subtitle: 'Defaults to the buy-in when blank',
+          trailing: SizedBox(
+            width: 130,
+            child: AppTextField(
+              controller: _addOnCost,
+              keyboardType: TextInputType.number,
+              placeholder: 'Default (${_buyIn.text})',
+              onChanged: (_) => _emit(),
+            ),
+          ),
+        ))
+        ..add(const SizedBox(height: AppSpacing.md));
+    }
+    if (widget.showOrganizerPct) {
+      fields
+        ..add(_EditRow(
+          title: 'Organizational costs',
+          subtitle: 'Percentage retained for equipment, drinks & snacks — '
+              'host only, never shown to players',
+          trailing: CountStepper(
+            value: _orgPct,
+            min: 0,
+            max: _orgPctCeiling,
+            suffix: '%',
+            semanticLabel: 'Organizational costs percentage',
+            onChanged: _handleOrgPctChanged,
+          ),
+        ))
+        ..add(const SizedBox(height: AppSpacing.md));
+    }
+    return fields;
+  }
+
+  Future<void> _handleOrgPctChanged(int v) async {
+    if (v > 0 && !_legalAccepted && _orgPct == 0) {
+      final confirmed = await showOrganizerLegalGateDialog(context);
+      if (!confirmed) return;
+      _legalAccepted = true;
+    }
+    setState(() => _orgPct = v);
+    _emit();
+  }
+}
+
+class _EditRow extends StatelessWidget {
+  const _EditRow({
+    required this.title,
+    required this.subtitle,
+    required this.trailing,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = AppBreakpoints.deviceOf(context).isMobile;
+    
+    final textColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTypography.bodySm.copyWith(
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          subtitle,
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                textColumn,
+                const SizedBox(height: AppSpacing.sm),
+                // Wrap-in-Column stretches full width: a fixed-width child
+                // (stepper) stays left, a Wrap (option pills) uses the width.
+                Align(alignment: Alignment.centerLeft, child: trailing),
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: textColumn),
+                const SizedBox(width: AppSpacing.sm),
+                // A Wrap pill group inside a Row gets unbounded width and
+                // overflows instead of wrapping. Flexible bounds it to the
+                // remaining space so pills wrap; Align keeps steppers right.
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: trailing,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = AppBreakpoints.deviceOf(context).isMobile;
+
+    final textColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTypography.bodySm.copyWith(
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          subtitle,
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: textColumn),
+                    AppToggle(value: value, onChanged: onChanged),
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: textColumn),
+                const SizedBox(width: AppSpacing.sm),
+                AppToggle(value: value, onChanged: onChanged),
+              ],
+            ),
+    );
+  }
+}
+
+class _OptionPicker extends StatelessWidget {
+  const _OptionPicker({
+    required this.options,
+    required this.selected,
+    required this.onChanged,
+    this.label,
+  });
+
+  final List<String> options;
+  final String selected;
+  final ValueChanged<String> onChanged;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget picker = Wrap(
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      children: [
+        for (final o in options)
+          GestureDetector(
+            onTap: () => onChanged(o),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: o == selected
+                    ? AppColors.primary
+                    : AppColors.secondary.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Text(
+                o,
+                style: AppTypography.bodyXs.copyWith(
+                  color: o == selected
+                      ? AppColors.foreground
+                      : AppColors.mutedForeground,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+
+    if (label != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label!,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          picker,
+        ],
+      );
+    }
+    return picker;
+  }
+}

@@ -18,51 +18,64 @@ extension AppProviderUserData on AppProvider {
       if (!bootstrap.isCompleted) bootstrap.complete();
     }
 
+    // Addendum §3's free hosting tier. Loaded alongside the rest of the
+    // user's data so the check-in and seating gates have it before anybody
+    // reaches them.
+    loadPremiumTier();
+
     _groupsSub?.cancel();
-    _groupsSub = _repo.groupsIndexStream(uid).listen((rows) {
-      // Rebuild from the lightweight index, but keep the already-loaded rich
-      // bundle for the selected group (its members/games) so the sidebar count
-      // doesn't flip back to 0 on every index re-delivery — apply the index's
-      // pinned/name/icon on top.
-      _groups = [
-        for (final r in rows)
-          if (r.groupId == _currentGroupId &&
-              _currentGroup.id == r.groupId &&
-              _currentGroup.members.isNotEmpty)
-            _currentGroup.copyWith(
-              name: r.name.isNotEmpty ? r.name : null,
-              icon: r.icon,
-              pinned: r.pinned,
-            )
-          else
-            _groupFromMembership(r),
-      ];
-      // Additionally keep live member rosters for every group so home/sidebar
-      // counts stay real-time even when no rich bundle is loaded yet.
-      _syncGroupMembersSubs();
-      // Mirror every group's notification outbox into this user's inbox
-      // (free-plan fan-out — replaces the Cloud Function).
-      _syncGroupOutboxSubs();
-      // First group after sign-in is auto-selected (pinned first, then
-      // alphabetical — same ordering the sidebar uses).
-      if (_currentGroupId == null && rows.isNotEmpty) {
-        final sorted = [...rows]
-          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-        sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-        _selectGroup(sorted.first.groupId);
-      }
-      // The index has loaded; if it picked a group, chain readiness to that
-      // group's bundle so callers land on a populated dashboard.
-      if (_currentGroupId != null) {
-        groupReady.then((_) => bootstrapDone());
-      } else {
-        bootstrapDone();
-      }
-      if (!_disposed) notifyListeners();
-    }, onError: (Object e) {
-      debugPrint('groupsIndex stream error: $e');
-      bootstrapDone();
-    });
+    _groupsSub = _repo
+        .groupsIndexStream(uid)
+        .listen(
+          (rows) {
+            // Rebuild from the lightweight index, but keep the already-loaded rich
+            // bundle for the selected group (its members/games) so the sidebar count
+            // doesn't flip back to 0 on every index re-delivery — apply the index's
+            // pinned/name/icon on top.
+            _groups = [
+              for (final r in rows)
+                if (r.groupId == _currentGroupId &&
+                    _currentGroup.id == r.groupId &&
+                    _currentGroup.members.isNotEmpty)
+                  _currentGroup.copyWith(
+                    name: r.name.isNotEmpty ? r.name : null,
+                    icon: r.icon,
+                    pinned: r.pinned,
+                  )
+                else
+                  _groupFromMembership(r),
+            ];
+            // Additionally keep live member rosters for every group so home/sidebar
+            // counts stay real-time even when no rich bundle is loaded yet.
+            _syncGroupMembersSubs();
+            // Mirror every group's notification outbox into this user's inbox
+            // (free-plan fan-out — replaces the Cloud Function).
+            _syncGroupOutboxSubs();
+            // First group after sign-in is auto-selected (pinned first, then
+            // alphabetical — same ordering the sidebar uses).
+            if (_currentGroupId == null && rows.isNotEmpty) {
+              final sorted = [...rows]
+                ..sort(
+                  (a, b) =>
+                      a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+                );
+              sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+              _selectGroup(sorted.first.groupId);
+            }
+            // The index has loaded; if it picked a group, chain readiness to that
+            // group's bundle so callers land on a populated dashboard.
+            if (_currentGroupId != null) {
+              groupReady.then((_) => bootstrapDone());
+            } else {
+              bootstrapDone();
+            }
+            if (!_disposed) notifyListeners();
+          },
+          onError: (Object e) {
+            debugPrint('groupsIndex stream error: $e');
+            bootstrapDone();
+          },
+        );
 
     _presetsSub?.cancel();
     _presetsSub = _repo.presetsStream(uid).listen((list) {
@@ -70,8 +83,7 @@ extension AppProviderUserData on AppProvider {
         ..clear()
         ..addAll(list);
       if (!_disposed) notifyListeners();
-    },
-        onError: (Object e) => debugPrint('presets stream error: $e'));
+    }, onError: (Object e) => debugPrint('presets stream error: $e'));
 
     _chipSetsSub?.cancel();
     _chipSetsSub = _repo.chipSetsStream(uid).listen((list) {
@@ -79,16 +91,14 @@ extension AppProviderUserData on AppProvider {
         ..clear()
         ..addAll(list);
       if (!_disposed) notifyListeners();
-    },
-        onError: (Object e) => debugPrint('chipSets stream error: $e'));
+    }, onError: (Object e) => debugPrint('chipSets stream error: $e'));
 
     _notificationsSub?.cancel();
     _notificationsSub = _repo.notificationsStream(uid).listen((list) {
       _deliverBrowserNotifications(list);
       _notifications = list;
       if (!_disposed) notifyListeners();
-    },
-        onError: (Object e) => debugPrint('notifications stream error: $e'));
+    }, onError: (Object e) => debugPrint('notifications stream error: $e'));
 
     // Lifetime stats: recompute whenever a result lands (this device wrote it
     // or another device did — same source of truth either way).
@@ -101,8 +111,19 @@ extension AppProviderUserData on AppProvider {
         _pushStatsSummaries();
       }
       if (!_disposed) notifyListeners();
-    },
-        onError: (Object e) => debugPrint('results stream error: $e'));
+    }, onError: (Object e) => debugPrint('results stream error: $e'));
+
+    _soloSub?.cancel();
+    _soloSub = _repo.soloSessionsStream(uid).listen((list) {
+      _soloHistory = list;
+      if (!_disposed) notifyListeners();
+    }, onError: (Object e) => debugPrint('soloGames stream error: $e'));
+
+    _soloTournamentsSub?.cancel();
+    _soloTournamentsSub = _repo.soloTournamentsStream(uid).listen((list) {
+      _soloTournaments = list;
+      if (!_disposed) notifyListeners();
+    }, onError: (Object e) => debugPrint('soloTournaments stream error: $e'));
 
     // Free-plan: accept pending admin-by-email invites by self-writing the
     // user's own membership index (there is no Cloud Function to mirror it).
@@ -112,24 +133,30 @@ extension AppProviderUserData on AppProvider {
         final gid = invite['gid'] as String?;
         if (gid == null) continue;
         if (_groups.any((g) => g.id == gid)) continue;
-        unawaited(_repo
-            .updateGroupIndex(
-              uid,
-              gid,
-              name: invite['name'] as String?,
-              icon: invite['icon'] as String?,
-              role: 'member',
-            )
-            .catchError((Object e) => debugPrint('accept invite failed: $e')));
-        final inviteId = invite['id'] as String? ?? invite['__inviteId'] as String?;
-        if (inviteId != null) {
-          unawaited(_repo.removePendingInvite(inviteId).catchError(
-              (Object e) => debugPrint('remove invite failed: $e')));
-        }
+        final joinCode = invite['joinCode'] as String? ?? '';
+        unawaited(
+          () async {
+            try {
+              final ok = await _repo.joinGroup(
+                gid,
+                _user!,
+                groupName: invite['name'] as String? ?? '',
+                groupIcon: invite['icon'] as String? ?? '',
+                joinCode: joinCode,
+              );
+              final inviteId =
+                  invite['id'] as String? ?? invite['__inviteId'] as String?;
+              if (ok != null && inviteId != null) {
+                await _repo.removePendingInvite(inviteId);
+              }
+            } catch (e) {
+              debugPrint('accept invite failed: $e');
+            }
+          }(),
+        );
       }
       if (!_disposed) notifyListeners();
-    },
-        onError: (Object e) => debugPrint('pendingInvites stream error: $e'));
+    }, onError: (Object e) => debugPrint('pendingInvites stream error: $e'));
   }
 
   /// Mirrors the lifetime stats summary onto this user's roster row in every
@@ -145,8 +172,11 @@ extension AppProviderUserData on AppProvider {
     if (key == _lastPushedStatsKey) return;
     _lastPushedStatsKey = key;
     for (final g in _groups) {
-      unawaited(_repo.saveMemberStats(g.id, uid, stats)
-          .catchError((Object e) => debugPrint('saveMemberStats failed: $e')));
+      unawaited(
+        _repo
+            .saveMemberStats(g.id, uid, stats)
+            .catchError((Object e) => debugPrint('saveMemberStats failed: $e')),
+      );
     }
   }
 
@@ -176,21 +206,33 @@ extension AppProviderUserData on AppProvider {
     final uid = _user?.id;
     if (uid == null || game.finishOrder.isEmpty) return;
     if (_resultsRecorded.contains(game.id)) return;
-    final me =
-        game.players.where((p) => p.id == uid && !p.isGuest).firstOrNull;
+    final me = game.players.where((p) => p.id == uid && !p.isGuest).firstOrNull;
     if (me == null) return;
     final index = game.finishOrder.indexOf(uid);
     if (index == -1) return;
     _resultsRecorded.add(game.id);
+    final position = finishPositionFromIndex(
+      index: index,
+      listLength: game.finishOrder.length,
+    );
+    final buyInsPaid = _calculatePlayerBuyInsPaid(game, me);
+    final prize = game.structure.prizes
+        .where((pr) => pr.place == position)
+        .firstOrNull
+        ?.amount ?? 0;
     _myResults = [
       ..._myResults.where((r) => r.gameId != game.id),
       GameResultRow(
         gameId: game.id,
         groupId: game.groupId,
-        position: index + 1,
+        position: position,
         playerCount: game.finishOrder.length,
         knockouts: me.knockouts,
-        finishedAt: DateTime.now(),
+        finishedAt: game.endedAt ?? DateTime.now(),
+        eliminatedAtLevel: me.eliminatedAtLevel,
+        prize: prize,
+        buyInsPaid: buyInsPaid,
+        hasExplicitBuyIns: true,
       ),
     ];
     _user = _user?.copyWith(stats: _statsFromResults(_myResults));
@@ -206,28 +248,110 @@ extension AppProviderUserData on AppProvider {
     if (game.status != LiveGameStatus.completed || game.finishOrder.isEmpty) {
       return;
     }
-    if (_resultsRecorded.contains(game.id)) return;
-    final me =
-        game.players.where((p) => p.id == uid && !p.isGuest).firstOrNull;
+    final me = game.players.where((p) => p.id == uid && !p.isGuest).firstOrNull;
     if (me == null) return;
     final index = game.finishOrder.indexOf(uid);
     if (index == -1) return;
-    _resultsRecorded.add(game.id);
-    unawaited(_repo
-        .saveGameResult(
-          uid,
-          game.id,
-          GameResultRow(
+
+    final existing = _myResults.where((r) => r.gameId == game.id).firstOrNull;
+    if (existing != null && existing.hasExplicitBuyIns && _resultsRecorded.contains(game.id)) {
+      return;
+    }
+
+    final position = finishPositionFromIndex(
+      index: index,
+      listLength: game.finishOrder.length,
+    );
+    final buyInsPaid = _calculatePlayerBuyInsPaid(game, me);
+    final prize = game.structure.prizes
+        .where((pr) => pr.place == position)
+        .firstOrNull
+        ?.amount ?? 0;
+
+    unawaited(
+      () async {
+        try {
+          GameResultRow? authoritative;
+          if (game.groupId.isNotEmpty) {
+            final backoffDelays = const [250, 500, 1000, 2000, 4000];
+            for (var attempt = 0; attempt < 5; attempt++) {
+              authoritative = await _repo.fetchMySettlement(
+                game.groupId,
+                game.id,
+                uid,
+              );
+              if (authoritative != null) break;
+              if (attempt < 4) {
+                // Exponential backoff with jitter (250, 500, 1000, 2000, 4000 ms)
+                final delayMs = backoffDelays[attempt] + Random().nextInt(100);
+                await Future<void>.delayed(
+                  Duration(milliseconds: delayMs),
+                );
+              }
+            }
+          }
+          if (authoritative != null) {
+            await _repo.saveGameResult(uid, game.id, authoritative);
+            _resultsRecorded.add(game.id);
+            return;
+          }
+
+          // If an existing authoritative exact result is already present, never overwrite it with a fallback
+          if (existing != null && existing.hasExplicitBuyIns) {
+            _resultsRecorded.add(game.id);
+            return;
+          }
+
+          final fallback = GameResultRow(
             gameId: game.id,
             groupId: game.groupId,
-            position: index + 1,
+            position: position,
             playerCount: game.finishOrder.length,
             knockouts: me.knockouts,
-            finishedAt: DateTime.now(),
-          ),
-        )
-        .catchError(
-            (Object e) => debugPrint('saveGameResult failed: $e')));
+            finishedAt: game.endedAt ?? DateTime.now(),
+            eliminatedAtLevel: me.eliminatedAtLevel,
+            prize: prize,
+            buyInsPaid: buyInsPaid,
+            hasExplicitBuyIns: false, // Fallback from scrubbed doc: not explicit, allows future backfill!
+          );
+          await _repo.saveGameResult(uid, game.id, fallback);
+          _resultsRecorded.add(game.id);
+        } catch (e) {
+          debugPrint('saveGameResult failed: $e');
+        }
+      }(),
+    );
+  }
+
+  static final Set<String> _backfillAttempted = {};
+
+  /// Asynchronously fetches the unscrubbed authoritative settlement for legacy
+  /// results that were recorded with estimated or scrubbed fallback amounts.
+  Future<void> maybeBackfillAuthoritativeResult(LiveGame game) async {
+    final uid = _repo.currentUid;
+    if (!_backendUp || uid == null || game.groupId.isEmpty) return;
+    if (!_backfillAttempted.add(game.id)) return;
+    final existing = resultForGame(game.id);
+    if (existing != null && existing.hasExplicitBuyIns) return;
+
+    try {
+      final settlement =
+          await _repo.fetchMySettlement(game.groupId, game.id, uid);
+      if (settlement != null && settlement.hasExplicitBuyIns) {
+        _myResults = [
+          ..._myResults.where((r) => r.gameId != game.id),
+          settlement,
+        ];
+        _user = _user?.copyWith(stats: _statsFromResults(_myResults));
+        if (!_disposed) notifyListeners();
+        await _repo.saveGameResult(uid, game.id, settlement);
+      } else {
+        _backfillAttempted.remove(game.id);
+      }
+    } catch (e) {
+      debugPrint('maybeBackfillAuthoritativeResult failed: $e');
+      _backfillAttempted.remove(game.id);
+    }
   }
 
   /// Cancels all user/group-scoped subscriptions and clears derived state.
@@ -243,11 +367,19 @@ extension AppProviderUserData on AppProvider {
       _notificationsSub,
       _requestsSub,
       _cashSub,
+      _reportsSub,
+      _importedSub,
       _resultsSub,
+      _soloSub,
+      _soloTournamentsSub,
       _pendingInvitesSub,
     ]) {
       s?.cancel();
     }
+    _reportsSub = null;
+    _reports = const [];
+    _importedSub = null;
+    _importedNights = const [];
     for (final s in _groupMembersSubs.values) {
       s.cancel();
     }
@@ -261,6 +393,17 @@ extension AppProviderUserData on AppProvider {
     _mirroredOutboxIds.clear();
     _groupsSub = null;
     _bundleSub = null;
+    _gameDocSub?.cancel();
+    _gameDocSub = null;
+    _gameChatSub?.cancel();
+    _gameChatSub = null;
+    _requestsSub?.cancel();
+    _requestsSub = null;
+    _lookupSub?.cancel();
+    _lookupSub = null;
+    _currentGame = null;
+    _gameChatKey = null;
+    _gameChatMessages = const [];
     _gameDocSub = null;
     _gameChatSub = null;
     _gameDocRetryTimer?.cancel();
@@ -284,6 +427,8 @@ extension AppProviderUserData on AppProvider {
     _requestsSub = null;
     _cashSub = null;
     _resultsSub = null;
+    _soloSub = null;
+    _soloTournamentsSub = null;
     _pendingInvitesSub = null;
     _gameSaveDebounce?.cancel();
     _projectionDebounce?.cancel();
@@ -299,9 +444,12 @@ extension AppProviderUserData on AppProvider {
     _currentGroup = AppProvider._kEmptyGroup;
     _notifications = const [];
     _cashHistory = const [];
+    _soloHistory = const [];
+    _soloTournaments = const [];
     _myResults = const [];
     _resultsRecorded.clear();
     _lastPushedStatsKey = null;
+    _lastInvitePreviewKey = null;
     _seenNotificationIds.clear();
     _notificationsPrimed = false;
     // Tear down the guest identity on ANY sign-out path (auth-state listener,
@@ -320,7 +468,24 @@ extension AppProviderUserData on AppProvider {
     _bundleSub?.cancel();
     _cashSub?.cancel();
     _cashSub = null;
+    _reportsSub?.cancel();
+    _reportsSub = null;
+    _reports = const [];
+    _importedSub?.cancel();
+    _importedSub = null;
+    _importedNights = const [];
     _bundleSub = null;
+    _gameDocSub?.cancel();
+    _gameDocSub = null;
+    _gameChatSub?.cancel();
+    _gameChatSub = null;
+    _requestsSub?.cancel();
+    _requestsSub = null;
+    _lookupSub?.cancel();
+    _lookupSub = null;
+    _currentGame = null;
+    _gameChatKey = null;
+    _gameChatMessages = const [];
     _bundleLoaded = false;
     _bundleReady = Completer<void>();
     // Until the full bundle arrives, show the lightweight index row (name +
@@ -336,63 +501,109 @@ extension AppProviderUserData on AppProvider {
       markReady();
       return;
     }
-    _bundleSub = _repo.groupBundleStream(gid).listen((g) {
-      // _setGroup (not a bare `_currentGroup = g`) so the full group — members,
-      // games, code — is also written into `_groups`, which backs the sidebar
-      // / drawer / orderedGroups (they'd otherwise show the lightweight index
-      // row with 0 members).
-      // Keep the member's own not-yet-acked RSVP visible on the hub's game
-      // cards too, not just the game screen (see [_pendingOwnRsvp]).
-      final hydrated = _pendingOwnRsvp.isEmpty
-          ? g
-          : g.copyWith(
-              games: g.games
-                  .map((gm) => _withPendingCheckInOverlay(_withOwnRsvpOverlay(gm)))
-                  .toList());
-      _setGroup(hydrated);
+    final isGroupAdmin = row?.ownerId == _user?.id ||
+        (row?.members.any((m) => m.id == _user?.id && m.isAdmin) ?? false);
 
-      // The bundle is the first place a member's role becomes known, so retire
-      // any stale local crash-resume snapshot here too.
-      _dropRecoveryIfNotAuthority();
-      // F-001 Fix: Keep the currently viewed game screen in sync for members
-      // (and admins receiving RSVPs/Check-ins) without clobbering the admin's local timer.
-      if (_currentGame != null) {
-        if (isAdmin && (_pendingGameSave || _localGameDirty || _restoredFromRecovery)) {
-          // Do not overwrite local edits with stale bundle data during debounce or recovery.
-        } else {
-          final updatedGame = hydrated.games.where((x) => x.id == _currentGame!.id).firstOrNull;
-          if (updatedGame != null) {
-            if (isAdmin) {
-              // Same restore the game-doc stream applies, so both sources
-              // produce an identical game for identical server state. Without
-              // it the bundle copy (scrubbed) and the doc copy (restored)
-              // alternated, the content signature flipped on every emit and
-              // the admin stayed permanently "dirty" — which is what stopped
-              // members' RSVPs from ever reaching the admin's screen.
-              _currentGame = _restoreAdminPrivateFields(updatedGame).copyWith(
-                secondsRemaining: _currentGame!.secondsRemaining,
-                timerRunning: _currentGame!.timerRunning,
-                levelEndTime: _currentGame!.levelEndTime,
-              );
-            } else {
-              _currentGame = updatedGame;
+    void subscribeBundle(bool asAdmin) {
+      _bundleSub?.cancel();
+      _bundleSub = _repo
+          .groupBundleStream(gid, isAdmin: asAdmin)
+          .listen(
+            (g) {
+              final bundleAdmin = g.ownerId == _user?.id ||
+                  g.members.any((m) => m.id == _user?.id && m.isAdmin);
+              if (!asAdmin && bundleAdmin) {
+                // Cold start recovery: re-subscribe as admin once full group doc confirms admin status
+                subscribeBundle(true);
+                return;
+              }
+              // Dynamically sync cash sessions subscription with the verified group role
+              if (bundleAdmin && _cashSub == null) {
+                _cashSub = _repo.completedCashSessionsStream(gid).listen((list) {
+                  _cashHistory = list;
+                  if (!_disposed) notifyListeners();
+                }, onError: (Object e) => debugPrint('cashSessions stream error: $e'));
+              } else if (!bundleAdmin && _cashSub != null) {
+                _cashSub?.cancel();
+                _cashSub = null;
+                _cashHistory = const [];
+              }
+              // _setGroup (not a bare `_currentGroup = g`) so the full group — members,
+              // games, code — is also written into `_groups`, which backs the sidebar
+              // / drawer / orderedGroups (they'd otherwise show the lightweight index
+              // row with 0 members).
+              // Keep the member's own not-yet-acked RSVP visible on the hub's game
+              // cards too, not just the game screen (see [_pendingOwnRsvp]).
+              final hydrated = _pendingOwnRsvp.isEmpty
+                  ? g
+                  : g.copyWith(
+                      games: g.games
+                          .map(
+                            (gm) => _withPendingCheckInOverlay(
+                              _withOwnRsvpOverlay(gm),
+                            ),
+                          )
+                          .toList(),
+                    );
+              _setGroup(hydrated);
+
+              // The bundle is the first place a member's role becomes known, so retire
+              // any stale local crash-resume snapshot here too.
+            _dropRecoveryIfNotAuthority();
+            // F-001 Fix: Keep the currently viewed game screen in sync for members
+            // (and admins receiving RSVPs/Check-ins) without clobbering the admin's local timer.
+            if (_currentGame != null) {
+              if (isAdmin &&
+                  (_pendingGameSave ||
+                      _localGameDirty ||
+                      _restoredFromRecovery)) {
+                // Do not overwrite local edits with stale bundle data during debounce or recovery.
+              } else {
+                final updatedGame = hydrated.games
+                    .where((x) => x.id == _currentGame!.id)
+                    .firstOrNull;
+                if (updatedGame != null) {
+                  if (isAdmin) {
+                    // Same restore the game-doc stream applies, so both sources
+                    // produce an identical game for identical server state. Without
+                    // it the bundle copy (scrubbed) and the doc copy (restored)
+                    // alternated, the content signature flipped on every emit and
+                    // the admin stayed permanently "dirty" — which is what stopped
+                    // members' RSVPs from ever reaching the admin's screen.
+                    _currentGame = _restoreAdminPrivateFields(updatedGame)
+                        .copyWith(
+                          secondsRemaining: _currentGame!.secondsRemaining,
+                          timerRunning: _currentGame!.timerRunning,
+                          levelEndTime: _currentGame!.levelEndTime,
+                        );
+                  } else {
+                    _currentGame = updatedGame;
+                  }
+                }
+              }
             }
-          }
-        }
-      }
-      _bundleLoaded = true;
-      markReady();
-      // Catch results of games this device never followed live (e.g. the
-      // player sat out or never opened the game screen).
-      for (final finished in g.pastGames) {
-        _maybeRecordOwnResult(finished);
-      }
-      if (!_disposed) notifyListeners();
-    }, onError: (Object e) {
-      debugPrint('groupBundle stream error: $e');
-      markReady();
-    });
-    if (row?.ownerId == _user?.id) {
+            _bundleLoaded = true;
+            markReady();
+            _syncReportsSub(gid);
+            _syncImportedSub(gid);
+            _syncInvitePreview(g);
+            // Catch results of games this device never followed live (e.g. the
+            // player sat out or never opened the game screen).
+            for (final finished in g.pastGames) {
+              _maybeRecordOwnResult(finished);
+            }
+            if (!_disposed) notifyListeners();
+          },
+          onError: (Object e) {
+            debugPrint('groupBundle stream error: $e');
+            markReady();
+          },
+        );
+    }
+
+    subscribeBundle(isGroupAdmin);
+
+    if (row?.ownerId == _user?.id || (row?.members.any((m) => m.id == _user?.id && m.isAdmin) ?? false)) {
       _cashSub = _repo.completedCashSessionsStream(gid).listen((list) {
         _cashHistory = list;
         if (!_disposed) notifyListeners();
@@ -406,22 +617,25 @@ extension AppProviderUserData on AppProvider {
   bool get groupBundleLoading => _currentGroupId != null && !_bundleLoaded;
 
   /// Completes once the selected group's bundle has loaded (or errored).
-  Future<void> get groupReady =>
-      _bundleReady?.future ?? Future<void>.value();
+  Future<void> get groupReady => _bundleReady?.future ?? Future<void>.value();
 
   Group _groupFromMembership(GroupMembership r) => Group(
-        id: r.groupId,
-        name: r.name,
-        joinCode: '',
-        ownerId: '',
-        members: const [],
-        games: const [],
-        chat: const [],
-        polls: const [],
-        notifications: const [],
-        icon: r.icon,
-        pinned: r.pinned,
-      );
+    id: r.groupId,
+    name: r.name,
+    joinCode: '',
+    ownerId: '', // Never fabricate ownerId = self for generic admin membership
+    members: r.role == 'admin' && _user != null
+        ? [
+            _user!.copyWith(isAdmin: true),
+          ]
+        : const [],
+    games: const [],
+    chat: const [],
+    polls: const [],
+    notifications: const [],
+    icon: r.icon,
+    pinned: r.pinned,
+  );
 
   /// Subscribes each group's notification outbox and mirrors unseen items into
   /// the signed-in user's own inbox — the free-plan replacement for a Cloud
@@ -439,23 +653,25 @@ extension AppProviderUserData on AppProvider {
       if (_groupOutboxSubs.containsKey(g.id)) continue;
       final gid = g.id;
       _mirrorCursors[gid] ??= -1;
-      _groupOutboxSubs[gid] = _repo.groupOutboxStream(gid).listen(
-        (docs) => _mirrorOutbox(gid, docs),
-        onError: (Object e) {
-          debugPrint('outbox stream error: $e');
-          // A brand-new listener can reach the server just ahead of a
-          // just-committed joinGroup batch (the index doc that triggered
-          // this subscription arrives via local-cache optimism before the
-          // server has the matching membership row), so isMember(gid) is
-          // transiently false. Retry once the write has had time to land.
-          if (_isRetriablePermissionError(e)) {
-            _groupOutboxSubs.remove(gid)?.cancel();
-            Future.delayed(const Duration(milliseconds: 800), () {
-              if (!_disposed) _syncGroupOutboxSubs();
-            });
-          }
-        },
-      );
+      _groupOutboxSubs[gid] = _repo
+          .groupOutboxStream(gid)
+          .listen(
+            (docs) => _mirrorOutbox(gid, docs),
+            onError: (Object e) {
+              debugPrint('outbox stream error: $e');
+              // A brand-new listener can reach the server just ahead of a
+              // just-committed joinGroup batch (the index doc that triggered
+              // this subscription arrives via local-cache optimism before the
+              // server has the matching membership row), so isMember(gid) is
+              // transiently false. Retry once the write has had time to land.
+              if (_isRetriablePermissionError(e)) {
+                _groupOutboxSubs.remove(gid)?.cancel();
+                Future.delayed(const Duration(milliseconds: 800), () {
+                  if (!_disposed) _syncGroupOutboxSubs();
+                });
+              }
+            },
+          );
     }
   }
 
@@ -487,9 +703,11 @@ extension AppProviderUserData on AppProvider {
         if (d.updatedAtMillis <= cursor) continue;
         cursor = max(cursor, d.updatedAtMillis);
         if (!d.isFor(uid)) continue;
-        unawaited(_repo
-            .mirrorInboxNotification(uid, d.toAppNotification(read: false))
-            .catchError((Object e) => debugPrint('mirror inbox failed: $e')));
+        unawaited(
+          _repo
+              .mirrorInboxNotification(uid, d.toAppNotification(read: false))
+              .catchError((Object e) => debugPrint('mirror inbox failed: $e')),
+        );
       }
     }
 
@@ -515,23 +733,28 @@ extension AppProviderUserData on AppProvider {
     for (final g in _groups) {
       if (_groupMembersSubs.containsKey(g.id)) continue;
       final gid = g.id;
-      _groupMembersSubs[gid] =
-          _repo.groupMembersStream(gid).listen((members) {
-        final i = _groups.indexWhere((x) => x.id == gid);
-        if (i == -1) return;
-        _groups = [..._groups]..[i] = _groups[i].copyWith(members: members);
-        if (!_disposed) notifyListeners();
-      }, onError: (Object e) {
-        debugPrint('group members stream error: $e');
-        // See _syncGroupOutboxSubs: a fresh listener can lose the race
-        // against the server-side commit of a just-created membership row.
-        if (_isRetriablePermissionError(e)) {
-          _groupMembersSubs.remove(gid)?.cancel();
-          Future.delayed(const Duration(milliseconds: 800), () {
-            if (!_disposed) _syncGroupMembersSubs();
-          });
-        }
-      });
+      _groupMembersSubs[gid] = _repo
+          .groupMembersStream(gid)
+          .listen(
+            (members) {
+              final i = _groups.indexWhere((x) => x.id == gid);
+              if (i == -1) return;
+              _groups = [..._groups]
+                ..[i] = _groups[i].copyWith(members: members);
+              if (!_disposed) notifyListeners();
+            },
+            onError: (Object e) {
+              debugPrint('group members stream error: $e');
+              // See _syncGroupOutboxSubs: a fresh listener can lose the race
+              // against the server-side commit of a just-created membership row.
+              if (_isRetriablePermissionError(e)) {
+                _groupMembersSubs.remove(gid)?.cancel();
+                Future.delayed(const Duration(milliseconds: 800), () {
+                  if (!_disposed) _syncGroupMembersSubs();
+                });
+              }
+            },
+          );
     }
   }
 
@@ -558,9 +781,14 @@ extension AppProviderUserData on AppProvider {
   Future<void> _loadRecovery() async {
     final recovered = await RecoveryService.loadGame();
     if (recovered != null) {
-      _currentGame = recovered;
-      _restoredFromRecovery = true;
-      _recoveryTime = DateTime.now();
+      if (recovered.status == LiveGameStatus.completed ||
+          recovered.status == LiveGameStatus.cancelled) {
+        RecoveryService.clearGame();
+      } else {
+        _currentGame = recovered;
+        _restoredFromRecovery = true;
+        _recoveryTime = DateTime.now();
+      }
     }
     final cash = await RecoveryService.loadCashSession();
     if (cash != null && !cash.isCompleted) {
@@ -573,16 +801,28 @@ extension AppProviderUserData on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
-  /// True if the locally recovered game state differs from the "cloud" state.
-  /// Compares multiple fields to detect real conflicts, not just audit count.
+  /// True if a remote cloud game has superseded our local recovered state
+  /// (e.g. someone else took over the clock while this device was offline, §E9, Row 82).
   bool get hasOfflineConflict {
     if (_currentGame == null || !_restoredFromRecovery) return false;
+    if (_currentGame!.status == LiveGameStatus.completed ||
+        _currentGame!.status == LiveGameStatus.cancelled) {
+      return false;
+    }
     final cloudGame = _currentGroup.games
         .where((g) => g.id == _currentGame!.id)
         .firstOrNull;
     if (cloudGame == null) return false;
-    return _currentGame!.revision > cloudGame.revision ||
-        _currentGame!.auditHistory.length > cloudGame.auditHistory.length;
+
+    // Only a conflict if cloud has strictly advanced past local or another
+    // device took over the clock authority while this device was offline.
+    final cloudIsAhead = cloudGame.revision > _currentGame!.revision;
+    final otherDeviceTookClock =
+        cloudGame.editorDeviceId.isNotEmpty &&
+        cloudGame.editorDeviceId != _repo.deviceId &&
+        cloudGame.revision >= _currentGame!.revision;
+
+    return cloudIsAhead || otherDeviceTookClock;
   }
 
   void resolveOfflineConflict({required bool keepLocal}) {
@@ -625,8 +865,13 @@ extension AppProviderUserData on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  /// Copied out rather than handed over, matching [presets] below.
+  /// [saveChipSet] and [deleteChipSet] mutate `_savedChipSets` in place, so
+  /// returning it directly gave every reader the one instance whose identity
+  /// never changes — a `context.select` on it would compare that instance to
+  /// itself, find them equal and never rebuild.
   List<({String id, String name, List<ChipColor> chips})> get savedChipSets =>
-      _savedChipSets;
+      List.unmodifiable(_savedChipSets);
 
   void saveChipSet(String id, String name, List<ChipColor> chips) {
     final dupValues = chips.map((c) => c.value).toList();
@@ -636,16 +881,47 @@ extension AppProviderUserData on AppProvider {
       );
     }
     final idx = _savedChipSets.indexWhere((c) => c.id == id);
+    final previous = idx >= 0 ? _savedChipSets[idx] : null;
     if (idx >= 0) {
       _savedChipSets[idx] = (id: id, name: name, chips: chips);
     } else {
       _savedChipSets.add((id: id, name: name, chips: chips));
     }
+    final updatedPresets = <TournamentPreset>[];
+    if (previous != null) {
+      for (var i = 0; i < _presets.length; i++) {
+        final preset = _presets[i];
+        if (preset.chipSetName != previous.name ||
+            !_sameChipSet(preset.chipSet, previous.chips)) {
+          continue;
+        }
+        final updated = preset.copyWith(
+          chipSetName: name,
+          chipSet: List.of(chips),
+        );
+        _presets[i] = updated;
+        updatedPresets.add(updated);
+      }
+    }
     if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null && id != AppProvider.seedChipSet.id) {
-      unawaited(_repo.saveChipSet(uid, id, name, chips)
-          .catchError((Object e) => debugPrint('saveChipSet failed: $e')));
+      unawaited(
+        _repo
+            .saveChipSet(uid, id, name, chips)
+            .catchError((Object e) => debugPrint('saveChipSet failed: $e')),
+      );
+    }
+    if (_backendUp && uid != null) {
+      for (final preset in updatedPresets) {
+        unawaited(
+          _repo
+              .savePreset(uid, preset)
+              .catchError(
+                (Object e) => debugPrint('savePreset failed: $e'),
+              ),
+        );
+      }
     }
   }
 
@@ -655,8 +931,11 @@ extension AppProviderUserData on AppProvider {
     if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
-      unawaited(_repo.deleteChipSet(uid, id)
-          .catchError((Object e) => debugPrint('deleteChipSet failed: $e')));
+      unawaited(
+        _repo
+            .deleteChipSet(uid, id)
+            .catchError((Object e) => debugPrint('deleteChipSet failed: $e')),
+      );
     }
   }
 
@@ -665,20 +944,97 @@ extension AppProviderUserData on AppProvider {
   void updateProfile({String? name, String? email}) {
     final current = _user;
     if (current == null) return;
-    final nextName =
-        name?.trim().isNotEmpty == true ? name!.trim() : current.name;
-    final nextEmail =
-        email?.trim().isNotEmpty == true ? email!.trim() : current.email;
+    final nextName = name?.trim().isNotEmpty == true
+        ? name!.trim()
+        : current.name;
+    final nextEmail = email?.trim().isNotEmpty == true
+        ? email!.trim()
+        : current.email;
     _user = current.copyWith(name: nextName, email: nextEmail);
     if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
-      unawaited(_repo.updateUserProfile(uid, name: nextName, email: nextEmail)
-          .catchError((Object e) => debugPrint('updateUserProfile failed: $e')));
+      unawaited(
+        _repo
+            .updateUserProfile(uid, name: nextName, email: nextEmail)
+            .catchError(
+              (Object e) => debugPrint('updateUserProfile failed: $e'),
+            ),
+      );
     }
   }
 
+  /// §F2 DATA — "Export my data". Gathers everything this account owns that
+  /// the app holds, as indented JSON.
+  ///
+  /// Scope is deliberately the user's OWN data: their profile, their lifetime
+  /// stats, their saved chip sets and presets, their preferences, and the
+  /// identity of the groups they belong to. It does **not** include other
+  /// members, group chat, or anyone else's results — those are other people's
+  /// data that happen to be visible to this user, which is not the same thing
+  /// as theirs to export.
+  String exportMyData() {
+    // Fixed: add calls
+    final u = _user;
+    return const JsonEncoder.withIndent('  ').convert({
+      'exportedAt': DateTime.now().toUtc().toIso8601String(),
+      'account': u == null
+          ? null
+          : {
+              'id': u.id,
+              'name': u.name,
+              'email': u.email,
+              'stats': {
+                'played': u.stats.played,
+                'wins': u.stats.wins,
+                'podium': u.stats.podium,
+                'avgFinish': u.stats.avgFinish,
+                'knockouts': u.stats.knockouts,
+              },
+            },
+      'preferences': {
+        'voiceEnabled': _voiceEnabled,
+        'voiceVolume': _voiceVolume,
+        'notificationsEnabled': _notificationsEnabled,
+        'keepHistoryForStructures': _keepHistoryForStructures,
+        'soundsEnabled': _soundsEnabled,
+        'compactSummary': _compactSummary,
+        'smsEnabled': _smsEnabled,
+        'avatarColor': _avatarColorIndex,
+      },
+      // Membership only — not the other members, and not the group's games.
+      'groups': [
+        for (final g in _groups)
+          {'id': g.id, 'name': g.name, 'isOwner': g.ownerId == u?.id},
+      ],
+      'chipSets': [
+        for (final s in savedChipSets)
+          {
+            'id': s.id,
+            'name': s.name,
+            'chips': s.chips.map(chipColorToMap).toList(),
+          },
+      ],
+      'presets': _presets.map(tournamentPresetToMap).toList(),
+    });
+  }
+
   List<TournamentPreset> get presets => List.unmodifiable(_presets);
+
+  String? get defaultGamePresetId => _defaultGamePresetId;
+
+  TournamentPreset get defaultGamePreset =>
+      presetById(_defaultGamePresetId) ??
+      presetById('starter-freezeout') ??
+      AppProvider.seedPresets.first;
+
+  void setDefaultGamePreset(String? id) {
+    final next = presetById(id) == null ? null : id;
+    if (_defaultGamePresetId == next) return;
+    _defaultGamePresetId = next;
+    _persistPref('defaultGamePresetId', next);
+    if (!_disposed) notifyListeners();
+  }
 
   TournamentPreset? presetById(String? id) {
     if (id == null) return null;
@@ -688,28 +1044,52 @@ extension AppProviderUserData on AppProvider {
     return null;
   }
 
-  void savePreset(TournamentPreset preset) {
+  /// Presets the host saved themselves — the ones the free tier's
+  /// "3 saved templates/presets" budget (spec D4) counts. The four app-shipped
+  /// starter presets (§B6/F6, ids `starter-*`) are content, not saved slots:
+  /// counting them made a brand-new free account show the upgrade prompt
+  /// before its host had saved anything at all.
+  int get userSavedPresetCount =>
+      _presets.where((p) => !p.id.startsWith('starter-')).length;
+
+  bool savePreset(TournamentPreset preset) {
+    // Fixed: 3-free cap
     final idx = _presets.indexWhere((p) => p.id == preset.id);
     if (idx >= 0) {
       _presets[idx] = preset;
     } else {
+      if (premiumTier != PremiumTier.premium &&
+          userSavedPresetCount >= PremiumBoundary.freeMaxSavedPresets) {
+        return false;
+      }
       _presets.add(preset);
     }
     if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
-      unawaited(_repo.savePreset(uid, preset)
-          .catchError((Object e) => debugPrint('savePreset failed: $e')));
+      unawaited(
+        _repo
+            .savePreset(uid, preset)
+            .catchError((Object e) => debugPrint('savePreset failed: $e')),
+      );
     }
+    return true;
   }
 
   void deletePreset(String id) {
     _presets.removeWhere((p) => p.id == id);
+    if (_defaultGamePresetId == id) {
+      _defaultGamePresetId = null;
+      _persistPref('defaultGamePresetId', null);
+    }
     if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
-      unawaited(_repo.deletePreset(uid, id)
-          .catchError((Object e) => debugPrint('deletePreset failed: $e')));
+      unawaited(
+        _repo
+            .deletePreset(uid, id)
+            .catchError((Object e) => debugPrint('deletePreset failed: $e')),
+      );
     }
   }
 

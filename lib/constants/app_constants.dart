@@ -13,7 +13,8 @@ class AppSpacing {
   static const double xxl = 32; // Increased from 24 to 32
   static const double xxxl = 40; // Increased from 32 to 40
   static const double huge = 48; // Increased from 40 to 48
-  static const double page = 32; // Increased from 24
+  static const double gutter = 18; // Spec B3 mobile horizontal gutter
+  static const double page = 18; // Spec B3
   static const double section = 40; // Increased from 32
 
   static const EdgeInsets pagePadding = EdgeInsets.symmetric(
@@ -21,11 +22,16 @@ class AppSpacing {
     vertical: xxl,
   );
 
+  /// Compact-layout page padding (Spec B3: 18px horizontal gutters).
+  ///
+  /// Deliberately carries NO extra bottom clearance for the floating bottom
+  /// nav. The nav belongs to `ScreenShell`, so the shell pads for it exactly
+  /// once, using the nav's own height.
   static const EdgeInsets mobileContentPadding = EdgeInsets.only(
-    left: xl,
-    right: xl,
+    left: gutter,
+    right: gutter,
     top: xl,
-    bottom: 96,
+    bottom: xl,
   );
 
   static const EdgeInsets desktopContentPadding = EdgeInsets.only(
@@ -46,6 +52,17 @@ class AppRadius {
   static const double lg = 16;
   static const double xl = 24;
   static const double pill = 999;
+
+  // Role-specific radii from the component spec (§B3 shape tokens). These are
+  // deliberately NOT folded into the scale above: `md` is the right radius for
+  // a chip, a tile and a nav bar, and 18 is right only for a card. Folding
+  // 18 into the scale would have meant nudging `lg` and `xl`, which every
+  // hand-rolled `BorderRadius.circular(16)` in the app already reads from.
+  /// §B3 — Card radius.
+  static const double card = 18;
+
+  /// §B3 — Text input radius (paired with the 52–56 px field height).
+  static const double input = 14;
 }
 
 /// Centralized shadows (mirrors .card-glow / .card-glow-active / glass).
@@ -83,35 +100,33 @@ class AppShadows {
 class AppDurations {
   AppDurations._();
 
-  static const Duration fastest = Duration(milliseconds: 100);
-  static const Duration fast = Duration(milliseconds: 150);
-  static const Duration normal = Duration(milliseconds: 300);
-  static const Duration slow = Duration(milliseconds: 500);
+  static const Duration fastest = Duration(milliseconds: 150);
+  static const Duration fast = Duration(milliseconds: 180);
+  static const Duration normal = Duration(milliseconds: 200);
+  static const Duration slow = Duration(milliseconds: 220);
 }
 
 /// Centralized font sizes (Tailwind text scale).
 class AppFontSizes {
   AppFontSizes._();
 
-  static const double xs = 12;
-  static const double sm = 14;
-  static const double md = 16;
-  static const double lg = 18;
-  static const double xl = 20;
-  static const double xxl = 24;
-  static const double xxxl = 30;
-  static const double display = 36;
-  static const double displayLg = 48;
-  static const double displayXl = 60;
-  static const double displayHero = 72;
+  static const double xs = 13;
+  static const double sm = 15;
+  static const double md = 17;
+  static const double lg = 19;
+  static const double xl = 21;
+  static const double xxl = 25;
+  static const double xxxl = 31;
+  static const double display = 38;
+  static const double displayLg = 50;
+  static const double displayXl = 62;
+  static const double displayHero = 74;
 }
 
-/// Centralized asset paths.
-class AppAssets {
-  AppAssets._();
+/// Centralized feature flags.
+class AppFeatureFlags {
+  AppFeatureFlags._();
 
-  static const String spade = '♠';
-  static const String heart = '♥';
-  static const String diamond = '♦';
-  static const String club = '♣';
+  /// Spec §A2 & §G3 O13: Soft shot clock is explicitly out of scope for v1.
+  static const bool enableShotClock = false;
 }

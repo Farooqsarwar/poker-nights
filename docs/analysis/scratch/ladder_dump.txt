@@ -1,0 +1,39 @@
+== base25 9 players, regular, stack 25000 ==
+  L1: 125/250   step x-
+  L2: 200/400   step x1.60
+  L3: 250/500   step x1.25
+  L4: 400/800   step x1.60
+  L5: 500/1000   step x1.25
+  L6: 750/1500   step x1.50
+  L7: 1000/2000   step x1.33
+  L8: 1500/3000   step x1.50
+  L9: 2000/4000   step x1.33
+  L10: 3000/6000   step x1.50
+  L11: 4000/8000   step x1.33
+  L12: 6000/12000   step x1.50
+== base25 9 players, turbo, stack 21000 ==
+  L1: 175/350   step x-
+  L2: 200/400   step x1.14
+  L3: 250/500   step x1.25
+  L4: 300/600   step x1.20
+  L5: 400/800   step x1.33
+  L6: 500/1000   step x1.25
+  L7: 600/1200   step x1.20
+  L8: 750/1500   step x1.25
+  L9: 1000/2000   step x1.33
+  L10: 1250/2500   step x1.25
+  L11: 1500/3000   step x1.20
+  L12: 2000/4000   step x1.33
+== base25 20 players, regular, stack 8000 ==
+  L1: 100/175   step x-
+  L2: 125/250   step x1.43
+  L3: 200/400   step x1.60
+  L4: 250/500   step x1.25
+  L5: 400/800   step x1.60
+  L6: 500/1000   step x1.25
+  L7: 750/1500   step x1.50
+  L8: 1000/2000   step x1.33
+  L9: 1500/3000   step x1.50
+  L10: 2000/4000   step x1.33
+  L11: 3000/6000   step x1.50
+  L12: 4000/8000   step x1.33

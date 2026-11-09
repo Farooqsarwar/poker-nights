@@ -1,0 +1,34 @@
+| Case | Night (4 h, regular, BB ante) | Family | Stack | Opening | Depth (BB) | Feasible | Ladder all 25-based |
+|---|---|---|---|---|---|---|---|
+| box500 | 6p freeze | niceSpec | 2000 | 10/20 | 100 | yes | no |
+| box500 | 6p freeze | home25 | 2000 | 10/20 | 100 | yes | no |
+| box500 | 9p freeze | niceSpec | 1200 | 6/12 | 100 | yes | no |
+| box500 | 9p freeze | home25 | 1200 | 6/12 | 100 | yes | no |
+| box500 | 9p rebuy | niceSpec | 400 | 2/4 | 100 | yes | no |
+| box500 | 9p rebuy | home25 | 400 | 2/4 | 100 | yes | no |
+| box500 | 20p freeze | niceSpec | 600 | 3/6 | 100 | yes | no |
+| box500 | 20p freeze | home25 | 600 | 3/6 | 100 | yes | no |
+| demo | 6p freeze | niceSpec | 800 | 4/8 | 100 | yes | no |
+| demo | 6p freeze | home25 | 800 | 4/8 | 100 | yes | no |
+| demo | 9p freeze | niceSpec | 600 | 3/6 | 100 | yes | no |
+| demo | 9p freeze | home25 | 600 | 3/6 | 100 | yes | no |
+| demo | 9p rebuy | niceSpec | 250 | 1/2 | 125 | yes | no |
+| demo | 9p rebuy | home25 | 250 | 1/2 | 125 | yes | no |
+| demo | 20p freeze | niceSpec | 200 | 1/2 | 100 | yes | no |
+| demo | 20p freeze | home25 | 200 | 1/2 | 100 | yes | no |
+| base25 | 6p freeze | niceSpec | 5000 | 25/50 | 100 | yes | yes |
+| base25 | 6p freeze | home25 | 5000 | 25/50 | 100 | yes | yes |
+| base25 | 9p freeze | niceSpec | 5000 | 25/50 | 100 | yes | yes |
+| base25 | 9p freeze | home25 | 5000 | 25/50 | 100 | yes | yes |
+| base25 | 9p rebuy | niceSpec | 5000 | 25/50 | 100 | yes | yes |
+| base25 | 9p rebuy | home25 | 5000 | 25/50 | 100 | yes | yes |
+| base25 | 20p freeze | niceSpec | 4000 | 25/50 | 80 | yes | yes |
+| base25 | 20p freeze | home25 | 4000 | 25/50 | 80 | yes | yes |
+| base100 | 6p freeze | niceSpec | 40000 | 200/400 | 100 | yes | yes |
+| base100 | 6p freeze | home25 | 40000 | 200/400 | 100 | yes | yes |
+| base100 | 9p freeze | niceSpec | 20000 | 100/200 | 100 | yes | yes |
+| base100 | 9p freeze | home25 | 20000 | 100/200 | 100 | yes | yes |
+| base100 | 9p rebuy | niceSpec | 12000 | 100/200 | 60 | yes | yes |
+| base100 | 9p rebuy | home25 | 12000 | 100/200 | 60 | yes | yes |
+| base100 | 20p freeze | niceSpec | 15000 | 100/200 | 75 | yes | yes |
+| base100 | 20p freeze | home25 | 15000 | 100/200 | 75 | yes | yes |

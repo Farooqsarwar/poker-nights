@@ -1,115 +1,335 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../app/colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
-import '../../services/push_service.dart';
-import '../../services/onesignal_sender.dart';
-import '../../theme/theme_palette.dart';
-import '../../widgets/app_badge.dart';
-import '../../widgets/app_button.dart';
-import '../../widgets/app_card.dart';
-import '../../widgets/app_divider.dart';
+import '../../services/payment_service.dart';
+import '../../widgets/app_avatar.dart';
+import '../../widgets/app_tag.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/app_select.dart';
 import '../../widgets/app_toggle.dart';
-import '../../widgets/group_switcher.dart';
-import '../../app/icons.dart';
+import '../../widgets/app_slider.dart';
+import '../../widgets/app_back_button.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/delete_account_flow.dart';
 
-/// Settings mirroring the account area of the web app.
+class _CurrencyChoice extends StatelessWidget {
+  const _CurrencyChoice({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label == 'None' ? 'No currency symbol' : 'Currency $label',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 56, minHeight: 44),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primarySoft : AppColors.muted,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(
+              color: selected ? AppColors.primary : AppColors.borderSubtle,
+            ),
+          ),
+          child: Text(
+            label,
+            style: AppTypography.bodySm.copyWith(
+              fontWeight: FontWeight.w700,
+              color: selected ? AppColors.primaryText : AppColors.foreground,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Settings screen matching F2_Settings mobile-first design.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  void _chooseDefaultChipSet(BuildContext context, AppProvider app) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: AppColors.borderSubtle),
+      ),
+      builder: (bottomSheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Default Chip Set',
+                  style: AppTypography.bodyLg.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.foreground,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  title: Text(
+                    'Standard set',
+                    style: TextStyle(color: AppColors.foreground),
+                  ),
+                  trailing: app.defaultChipSetId == null
+                      ? Icon(Icons.check, color: AppColors.primary)
+                      : null,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  onTap: () {
+                    app.setDefaultChipSet(null);
+                    Navigator.of(bottomSheetContext).pop();
+                  },
+                ),
+                for (final set in app.savedChipSets)
+                  ListTile(
+                    title: Text(
+                      set.name,
+                      style: TextStyle(color: AppColors.foreground),
+                    ),
+                    trailing: app.defaultChipSetId == set.id
+                        ? Icon(Icons.check, color: AppColors.primary)
+                        : null,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    onTap: () {
+                      app.setDefaultChipSet(set.id);
+                      Navigator.of(bottomSheetContext).pop();
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final user = app.user;
+    final blockedCount = app.blockedUserIds.length;
+
+    final defaultSetName = app.defaultChipSetId == null
+        ? 'STANDARD SET'
+        : (app.savedChipSets
+                  .where((c) => c.id == app.defaultChipSetId)
+                  .firstOrNull
+                  ?.name
+                  .toUpperCase() ??
+              'STANDARD SET');
 
     return AppPage(
-      maxWidth: 720,
+      maxWidth: 520,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const GroupContextHeader(title: 'Settings'),
-          const SizedBox(height: AppSpacing.xs),
+          // App bar with Squircle back button <
+          Row(
+            children: [
+              AppBackButton(
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(RoutePaths.profile);
+                  }
+                },
+                label: 'Back',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Title & Subtitle
+          Text(
+            'Settings',
+            style: AppTypography.display(
+              size: 30,
+              weight: FontWeight.w700,
+              color: AppColors.foreground,
+            ),
+          ),
+          const SizedBox(height: 4),
           Text(
             'Account and group preferences',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
-          // ── Group settings ───────────────────────────────────────────────
-          // Group settings live in one place so the user never wonders
-          // whether a setting changes them or the group (IA §4).
-          if (app.hasCurrentGroup) ...[
-            Text(
-              'Your group',
-              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _GroupSettingsCard(app: app),
-            const SizedBox(height: AppSpacing.xl),
-          ],
-          // Notifications
+          const SizedBox(height: 24),
+
+          // SOUND & VOICE Section (Spec E11 / T33)
           Text(
-            'Gameplay',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            'SOUND & VOICE',
+            style: AppTypography.bodyXs.copyWith(
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceHint,
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          AppCard(
-            padding: EdgeInsets.zero,
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
             child: Column(
               children: [
-                _SettingRow(
-                  icon: Icons.volume_up_outlined,
+                _buildSettingRow(
                   title: 'Voice announcements',
                   subtitle: 'Spoken blinds and level updates',
                   trailing: AppToggle(
                     value: app.voiceEnabled,
                     onChanged: (v) => app.setVoiceEnabled(v),
                   ),
-                  showDivider: true,
+                  showDivider: !app.voiceEnabled,
                 ),
-                _SettingRow(
-                  icon: Icons.lightbulb_outline,
-                  title: 'Admin app tour',
-                  subtitle: 'Show step-by-step guidance during tournaments',
+                if (app.voiceEnabled)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.volume_down,
+                          size: 20,
+                          color: AppColors.mutedForeground,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: AppSlider(
+                            value: app.voiceVolume,
+                            onChanged: (v) => app.setVoiceVolume(v),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Icon(
+                          Icons.volume_up,
+                          size: 20,
+                          color: AppColors.mutedForeground,
+                        ),
+                      ],
+                    ),
+                  ),
+                if (app.voiceEnabled) const Divider(height: 1),
+                _buildSettingRow(
+                  title: 'Sound effects & chimes',
+                  subtitle: 'Audio cues and 1-minute warning chimes',
                   trailing: AppToggle(
-                    value: app.showAppTour,
-                    onChanged: (v) => app.setAppTour(v),
+                    value: app.soundsEnabled,
+                    onChanged: (v) => app.setSoundsEnabled(v),
                   ),
                   showDivider: true,
                 ),
-                // Push notifications via OneSignal (free-plan fan-out — no
-                // Cloud Function). Toggling on shows the OS/browser prompt.
-                _SettingRow(
-                  icon: Icons.notifications_outlined,
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Test voice playback',
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => app.testVoice(),
+                        child: const Text('Play sample'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // GAMEPLAY Section
+          Text(
+            'GAMEPLAY',
+            style: AppTypography.bodyXs.copyWith(
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceHint,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: Column(
+              children: [
+                _buildSettingRow(
+                  title: 'Haptics',
+                  subtitle: 'Short vibration on level change',
+                  trailing: AppToggle(
+                    value: app.hapticsEnabled,
+                    onChanged: (v) => app.setHapticsEnabled(v),
+                  ),
+                  showDivider: true,
+                ),
+                _buildSettingRow(
                   title: 'Push notifications',
-                  subtitle:
-                      'Tournament, RSVP and result alerts on every device',
+                  subtitle: 'Tournament, RSVP and result alerts',
                   trailing: AppToggle(
                     value: app.notificationsEnabled,
                     onChanged: (v) async {
                       final error = await app.setNotificationsEnabled(v);
                       if (error != null && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(error)),
-                        );
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text(error)));
                       }
                     },
                   ),
-                  showDivider: false,
+                  showDivider: true,
                 ),
-                _SettingRow(
-                  icon: Icons.description_outlined,
+                _buildSettingRow(
                   title: 'Compact results',
-                  subtitle: 'Show fewer details in game summaries',
+                  subtitle: 'Fewer details in game summaries',
                   trailing: AppToggle(
                     value: app.compactSummary,
                     onChanged: (v) => app.setCompactSummary(v),
@@ -119,51 +339,168 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
-          // Game Assets
+          const SizedBox(height: 24),
+
+          // HOSTING DEFAULTS (Spec B9 / H5)
+          if (app.isAdmin) ...[
+            Text(
+              'HOSTING DEFAULTS',
+              style: AppTypography.bodyXs.copyWith(
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w600,
+                color: AppColors.onSurfaceHint,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.borderSubtle),
+              ),
+              child: Column(
+                children: [
+                  _buildSettingRow(
+                    title: 'Default table capacity',
+                    subtitle: 'Maximum players per table (4–10)',
+                    trailing: Text(
+                      '${app.currentGroup.tableSettings.maxPerTable} seats',
+                      style: AppTypography.monoSm.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    showDivider: true,
+                  ),
+                  _buildSettingRow(
+                    title: 'RSVP deadline',
+                    subtitle: 'Hours before scheduled start to lock RSVPs',
+                    trailing: Text(
+                      '24 hours',
+                      style: AppTypography.monoSm.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    showDivider: false,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          // ON THIS PHONE Section (F2): choices that change how this phone
+          // shows things and are never shared with the group.
           Text(
-            'Game Assets',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            'ON THIS PHONE',
+            style: AppTypography.bodyXs.copyWith(
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceHint,
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          AppCard(
-            padding: EdgeInsets.zero,
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Currency',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.foreground,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'A symbol in front of money on this phone. Chip counts '
+                    'never get one.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final option in const [
+                        ('None', ''),
+                        ('€', '€'),
+                        ('\$', '\$'),
+                        ('£', '£'),
+                      ])
+                        _CurrencyChoice(
+                          label: option.$1,
+                          selected: app.currencySymbol == option.$2,
+                          onTap: () => app.setCurrencySymbol(option.$2),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // GAME ASSETS Section
+          Text(
+            'GAME ASSETS',
+            style: AppTypography.bodyXs.copyWith(
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceHint,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
             child: Column(
               children: [
-                _SettingRow(
-                  icon: Icons.casino_outlined,
+                _buildSettingRow(
                   title: 'Chip sets',
-                  subtitle: 'Manage saved chip denominations and colours',
+                  subtitle: 'Manage saved denominations & colours',
                   trailing: Icon(
                     Icons.chevron_right,
-                    color: AppColors.mutedForeground,
+                    color: AppColors.onSurfaceHint,
+                    size: 20,
                   ),
-                  showDivider: false,
                   onTap: () => context.push(RoutePaths.chipSets),
+                  showDivider: true,
                 ),
-                _SettingRow(
-                  icon: Icons.casino_outlined,
+                _buildSettingRow(
                   title: 'Default chip set',
                   subtitle: 'Used when you create a new tournament',
-                  trailing: SizedBox(
-                    width: 160,
-                    child: AppSelect<String?>(
-                      value: app.defaultChipSetId,
-                      onChanged: app.setDefaultChipSet,
-                      items: [
-                        const DropdownMenuItem<String?>(
-                          value: null,
-                          child: Text('Standard set'),
+                  trailing: GestureDetector(
+                    onTap: () => _chooseDefaultChipSet(context, app),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.muted,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        border: Border.all(color: AppColors.borderSubtle),
+                      ),
+                      child: Text(
+                        defaultSetName,
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.secondaryForeground,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.6,
                         ),
-                        for (final set in app.savedChipSets)
-                          DropdownMenuItem<String?>(
-                            value: set.id,
-                            child: Text(
-                              set.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                      ],
+                      ),
                     ),
                   ),
                   showDivider: false,
@@ -171,101 +508,46 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
-          // Appearance
+          const SizedBox(height: 24),
+
+          // §B1 opens "Exactly one look: black ground, crimson accent, white
+          // ink." There is nothing to choose between, so the APPEARANCE
+          // section and its theme grid are gone rather than reduced to a
+          // single-option picker.
+
+          // ACCOUNT Section
           Text(
-            'Appearance',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          // Color theme selector
-          Text(
-            'Color theme',
+            'ACCOUNT',
             style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceHint,
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          _ThemeGrid(
-            activeId: app.colorTheme,
-            onSelect: (id) => app.setColorTheme(id),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          // Developer / Debug
-          Text(
-            'Developer',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppCard(
-            padding: EdgeInsets.zero,
-            child: InkWell(
-              onTap: () {
-                final push = PushService.instance;
-                if (!push.permissionGranted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Push permission not granted!')),
-                  );
-                  return;
-                }
-                if (!OneSignalSender.instance.configured) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Push not configured — missing ONESIGNAL_REST_API_KEY.',
-                      ),
-                    ),
-                  );
-                  return;
-                }
-                if (app.user == null) return;
-                OneSignalSender.instance.send(
-                  title: 'Debug Push',
-                  body: 'Hello! Your push notifications are working perfectly.',
-                  externalIds: [app.user!.id],
-                );
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Test push sent! It should arrive shortly.')),
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Row(
-                  children: [
-                    Icon(Icons.bug_report, size: 20, color: AppColors.icon),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Send Test Push (Debug)', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 2),
-                          Text('Fires a real push to this device.', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          // Account
-          Text(
-            'Account',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Row(
               children: [
-                Icon(
-                  Icons.person_outline,
-                  size: 22,
-                  color: AppColors.icon,
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderSubtle,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.person_outline,
+                    color: AppColors.foreground,
+                    size: 20,
+                  ),
                 ),
-                const SizedBox(width: AppSpacing.md),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,6 +556,7 @@ class SettingsScreen extends StatelessWidget {
                         user?.name ?? 'Guest',
                         style: AppTypography.bodySm.copyWith(
                           fontWeight: FontWeight.w600,
+                          color: AppColors.foreground,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -286,29 +569,545 @@ class SettingsScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (app.isAdmin)
-                  const AppBadge(label: 'Admin', variant: AppBadgeVariant.gold),
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          AppButton(
-            variant: AppButtonVariant.secondary,
-            onPressed: () => _confirmSignOut(context, app),
-            child: const Text('Sign out'),
+          const SizedBox(height: 10),
+
+          // §E10 (3) "until unblocked in Settings -> Blocked" / §B4 "undo in
+          // Settings -> Blocked". The row is ALWAYS visible, unlike the
+          // conditional Reports row in §B9: a block is undone here and
+          // nowhere else, and the message it hid is exactly the thing the
+          // user can no longer see. A row that vanished with the last
+          // unblock would make the undo path undiscoverable, and the empty
+          // state below is written for exactly that case.
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: _buildSettingRow(
+              title: 'Blocked',
+              // The subtitle describes the destination rather than repeating
+              // the sheet's empty state, so each string has one owner and the
+              // row still reads correctly with nothing blocked.
+              subtitle: blockedCount == 0
+                  ? 'Manage who you have blocked'
+                  : 'Their messages and polls are hidden for you',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (blockedCount > 0) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: Text(
+                        '$blockedCount',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.primaryText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Icon(
+                    Icons.chevron_right,
+                    color: AppColors.onSurfaceHint,
+                    size: 20,
+                  ),
+                ],
+              ),
+              onTap: () => _showBlockedMembers(context, app),
+              showDivider: false,
+            ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          AppDivider(label: 'About'),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 24),
+
+          // DATA Section (§F2 DATA)
           Text(
-            'Poker Night v1.0.0',
-            textAlign: TextAlign.center,
+            'DATA',
             style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceHint,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: Column(
+              children: [
+                _buildSettingRow(
+                  title: 'Keep my game history to improve structures',
+                  subtitle:
+                      'Lets pace and finish-time forecasts learn from your real '
+                      'nights. Each group can opt out separately.',
+                  trailing: AppToggle(
+                    value: app.keepHistoryForStructures,
+                    onChanged: (v) => app.setKeepHistoryForStructures(v),
+                  ),
+                  showDivider: true,
+                ),
+                _buildSettingRow(
+                  title: 'Export my data',
+                  subtitle: 'Copy everything this account owns as JSON',
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    color: AppColors.onSurfaceHint,
+                    size: 20,
+                  ),
+                  onTap: () => _exportMyData(context, app),
+                  showDivider: true,
+                ),
+                _buildSettingRow(
+                  title: 'Delete account',
+                  subtitle: 'Permanently remove your account and all data',
+                  trailing: Icon(
+                    Icons.delete_outline,
+                    color: AppColors.destructiveText,
+                    size: 20,
+                  ),
+                  onTap: () => confirmDeleteAccount(context, app),
+                  showDivider: false,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // PLAN Section (F2): what this account has, and the way to Premium.
+          Text(
+            'PLAN',
+            style: AppTypography.bodyXs.copyWith(
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceHint,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: Column(
+              children: [
+                _buildSettingRow(
+                  title: app.premiumTier == PremiumTier.premium
+                      ? 'Premium'
+                      : 'Free',
+                  subtitle: app.premiumTier == PremiumTier.premium
+                      ? 'Two or more tables, seasons, custom TV layouts and more'
+                      : 'Upgrade for two or more tables, seasons and bounties',
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppTag(
+                        app.premiumTier == PremiumTier.premium
+                            ? 'PREMIUM'
+                            : 'FREE',
+                        tone: app.premiumTier == PremiumTier.premium
+                            ? AppTagTone.primary
+                            : AppTagTone.neutral,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        app.premiumTier == PremiumTier.premium
+                            ? 'Manage'
+                            : 'See Premium',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.primaryText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  onTap: () => context.push(RoutePaths.upgrade),
+                  showDivider: true,
+                ),
+                if (Payments.isSimulated && kDebugMode)
+                  _buildSettingRow(
+                    title: 'Demo mode tier switcher',
+                    subtitle: app.premiumTier == PremiumTier.premium
+                        ? 'Currently simulated Premium. Tap to test Free tier.'
+                        : 'Currently simulated Free. Tap to test Premium tier.',
+                    trailing: AppTag(
+                      app.premiumTier == PremiumTier.premium
+                          ? 'SWITCH TO FREE'
+                          : 'SWITCH TO PREMIUM',
+                      tone: app.premiumTier == PremiumTier.premium
+                          ? AppTagTone.neutral
+                          : AppTagTone.primary,
+                    ),
+                    onTap: () async {
+                      await app.toggleDemoPremium();
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            app.premiumTier == PremiumTier.premium
+                                ? 'Demo Premium active — all advanced features unlocked.'
+                                : 'Switched to Free tier.',
+                          ),
+                        ),
+                      );
+                    },
+                    showDivider: true,
+                  ),
+                _buildSettingRow(
+                  title: 'Export data & history',
+                  subtitle: app.premiumTier == PremiumTier.premium
+                      ? 'Download tournaments, sessions and JSON audit records'
+                      : 'Audit logs, net cash settlement, and CSV exports (Premium)',
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppTag(
+                        app.premiumTier == PremiumTier.premium
+                            ? 'UNLOCKED'
+                            : 'PREMIUM',
+                        tone: app.premiumTier == PremiumTier.premium
+                            ? AppTagTone.success
+                            : AppTagTone.primary,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Icon(
+                        Icons.chevron_right,
+                        color: AppColors.onSurfaceHint,
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    if (app.premiumTier == PremiumTier.premium) {
+                      final json = app.exportMyData();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Account data exported (${json.length} bytes).',
+                          ),
+                        ),
+                      );
+                    } else {
+                      context.push(RoutePaths.upgrade);
+                    }
+                  },
+                  showDivider: true,
+                ),
+                _buildSettingRow(
+                  title: 'Terms of Service',
+                  subtitle: 'The rules for using Poker Night',
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    color: AppColors.onSurfaceHint,
+                    size: 20,
+                  ),
+                  onTap: () => context.push(RoutePaths.terms),
+                  showDivider: true,
+                ),
+                _buildSettingRow(
+                  title: 'Privacy Policy',
+                  subtitle: 'What we keep and why',
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    color: AppColors.onSurfaceHint,
+                    size: 20,
+                  ),
+                  onTap: () => context.push(RoutePaths.privacy),
+                  showDivider: true,
+                ),
+                _buildSettingRow(
+                  title: 'Help & support',
+                  subtitle: 'Answers and how to reach us',
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    color: AppColors.onSurfaceHint,
+                    size: 20,
+                  ),
+                  onTap: () => context.push(RoutePaths.support),
+                  showDivider: false,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Sign out card button (F2 design)
+          InkWell(
+            onTap: () => _confirmSignOut(context, app),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              height: 54,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.borderSubtle),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Sign out',
+                    style: TextStyle(
+                      color: AppColors.destructiveText,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Icon(
+                    Icons.logout_rounded,
+                    color: AppColors.destructiveText,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  /// §E10 (3) / §B4 — the account-wide undo for a block.
+  ///
+  /// Reads the blocked ids from the provider on every rebuild instead of
+  /// snapshotting them once, so an unblock updates the list in place and the
+  /// empty state takes over when the last one goes. A `StatefulBuilder` is
+  /// what makes that work: this is a dialog, so it does not sit under the
+  /// `context.watch` in [build] and would not otherwise see `notifyListeners`.
+  ///
+  /// Names come from the current group's roster so a row reads as a person; a
+  /// member who has since left the group falls back to their raw id rather
+  /// than showing a blank.
+  void _showBlockedMembers(BuildContext context, AppProvider app) {
+    final group = app.currentGroup;
+    String nameOf(String id) {
+      final match = group.members.where((m) => m.id == id).firstOrNull;
+      final name = match?.name.trim() ?? '';
+      return name.isEmpty ? id : name;
+    }
+
+    showAppModal(
+      context: context,
+      title: 'Blocked members',
+      child: StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final ids = app.blockedUserIds.toList();
+          if (ids.isEmpty) {
+            return Text(
+              'Nobody is blocked.',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            );
+          }
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Their messages and polls are hidden for you. Unblocking '
+                'brings the whole conversation back.',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final id in ids)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.muted,
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                              border: Border.all(color: AppColors.borderSubtle),
+                            ),
+                            child: Row(
+                              children: [
+                                AppAvatar(
+                                  name: nameOf(id),
+                                  size: AppAvatarSize.sm,
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    nameOf(id),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.bodySm.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    if (app.unblockUser(id)) {
+                                      setSheetState(() {});
+                                      ScaffoldMessenger.maybeOf(
+                                        context,
+                                      )?.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            '${nameOf(id)} is unblocked.',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: AppColors.primaryText,
+                                    visualDensity: VisualDensity.compact,
+                                    minimumSize: const Size(44, 44),
+                                  ),
+                                  child: const Text('Unblock'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// §F2 DATA — "Export my data".
+  ///
+  /// Copies the export to the clipboard rather than writing a file: the app
+  /// ships no file-download or share dependency, and a `data:` URL behaves
+  /// differently on web, iOS and Android. The clipboard works identically
+  /// everywhere, so the user gets their data in one tap on every platform.
+  /// The JSON is shown as well, so nobody has to paste it somewhere to find
+  /// out what they just copied.
+  void _exportMyData(BuildContext context, AppProvider app) {
+    final json = app.exportMyData();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Your data'),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              json,
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(
+              'Close',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(dialogContext);
+              await Clipboard.setData(ClipboardData(text: json));
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Your data was copied.')),
+              );
+              if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+            },
+            child: Text(
+              'Copy',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.primaryText,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  static Widget _buildSettingRow({
+    required String title,
+    required String subtitle,
+    required Widget trailing,
+    required bool showDivider,
+    VoidCallback? onTap,
+  }) {
+    Widget content = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.foreground,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          trailing,
+        ],
+      ),
+    );
+
+    if (onTap != null) {
+      content = InkWell(onTap: onTap, child: content);
+    }
+
+    return Column(
+      children: [
+        content,
+        if (showDivider)
+          Divider(height: 1, thickness: 1, color: AppColors.borderSubtle),
+      ],
     );
   }
 
@@ -317,7 +1116,11 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.card,
-        title: const Text('Sign out?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: AppColors.borderSubtle),
+        ),
+        title: Text('Sign out?', style: TextStyle(color: AppColors.foreground)),
         content: Text(
           'You will need to log in again to see your games.',
           style: AppTypography.bodySm.copyWith(
@@ -342,427 +1145,13 @@ class SettingsScreen extends StatelessWidget {
             },
             child: Text(
               'Sign out',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructive,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 3×2 grid of theme cards showing each palette's colours.
-class _ThemeGrid extends StatelessWidget {
-  const _ThemeGrid({required this.activeId, required this.onSelect});
-
-  final String activeId;
-  final ValueChanged<String> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = <List<ThemePalette>>[];
-    for (var i = 0; i < ThemePalettes.all.length; i += 3) {
-      final end = (i + 3 < ThemePalettes.all.length) ? i + 3 : ThemePalettes.all.length;
-      rows.add(ThemePalettes.all.sublist(i, end));
-    }
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        children: [
-          for (final entry in rows.asMap().entries) ...[
-            Row(
-              children: [
-                for (final p in entry.value) ...[
-                  Expanded(
-                    child: _ThemeCard(
-                      palette: p,
-                      selected: p.id == activeId,
-                      onTap: () => onSelect(p.id),
-                    ),
-                  ),
-                  if (p != entry.value.last)
-                    const SizedBox(width: AppSpacing.sm),
-                ],
-              ],
-            ),
-            if (entry.key < rows.length - 1)
-              const SizedBox(height: AppSpacing.sm),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// A single theme card showing the palette name, a colour swatch preview,
-/// and a small sample of the UI colours.
-class _ThemeCard extends StatelessWidget {
-  const _ThemeCard({
-    required this.palette,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final ThemePalette palette;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    Theme.of(context);
-    return InkWell
-      (
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: AnimatedContainer(
-        duration: AppDurations.fast,
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        decoration: BoxDecoration(
-          color: palette.card,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          border: Border.all(
-            color: selected ? palette.primary : palette.border,
-            width: selected ? 1.6 : 1,
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Colour swatch row: primary, background, card, border
-            Row(
-              children: [
-                _swatch(palette.primary),
-                const SizedBox(width: 4),
-                _swatch(palette.background),
-                const SizedBox(width: 4),
-                _swatch(palette.card),
-                const SizedBox(width: 4),
-                _swatch(palette.border),
-                if (selected) ...[
-                  const Spacer(),
-                  Icon(Icons.check_circle, size: 16, color: palette.primary),
-                ],
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              palette.name,
-              style: AppTypography.bodyXs.copyWith(
-                color: palette.foreground,
+              style: TextStyle(
+                color: AppColors.destructiveText,
                 fontWeight: FontWeight.w600,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static Widget _swatch(Color c) {
-    return Container(
-      width: 16,
-      height: 16,
-      decoration: BoxDecoration(
-        color: c,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: c.computeLuminance() > 0.5
-              ? Colors.black.withValues(alpha: 0.15)
-              : Colors.white.withValues(alpha: 0.15),
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingRow extends StatelessWidget {
-  const _SettingRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.trailing,
-    required this.showDivider,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Widget trailing;
-  final bool showDivider;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          border: showDivider
-              ? Border(bottom: BorderSide(color: AppColors.border))
-              : null,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: AppColors.icon),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTypography.bodySm.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            trailing,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Group settings section — group name, members, game defaults, invite code,
-/// and the danger zone (leave / transfer). Keeps group concerns clearly
-/// separate from account/app preferences (IA §4).
-class _GroupSettingsCard extends StatelessWidget {
-  const _GroupSettingsCard({required this.app});
-
-  final AppProvider app;
-
-  @override
-  Widget build(BuildContext context) {
-    final group = app.currentGroup;
-    final chip = Icons.chevron_right;
-    final chevron = Icon(chip, color: AppColors.mutedForeground, size: 20);
-
-    void copyCode() {
-      Clipboard.setData(ClipboardData(text: group.joinCode));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Group code copied to clipboard')),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              _SettingRow(
-                icon: groupIconMap[group.icon] ?? Icons.shield_outlined,
-                title: group.name,
-                subtitle: '${group.members.length} members ○ ${group.ownerId == app.user?.id ? 'You own this group' : 'Group details'}',
-                trailing: chevron,
-                showDivider: true,
-                onTap: () => context.go(RoutePaths.group),
-              ),
-              _SettingRow(
-                icon: Icons.groups_outlined,
-                title: 'Manage members',
-                subtitle: 'Admins, co-admins, remove members',
-                trailing: chevron,
-                showDivider: true,
-                onTap: () =>
-                    context.go(RoutePaths.members),
-              ),
-              _SettingRow(
-                icon: Icons.style_outlined,
-                title: 'Game defaults',
-                subtitle: 'Chip sets and tournament presets',
-                trailing: chevron,
-                showDivider: true,
-                onTap: () => context.push(RoutePaths.presets),
-              ),
-              _SettingRow(
-                icon: Icons.qr_code_2_outlined,
-                title: 'Invite members',
-                subtitle: 'Group code: ${group.joinCode} · tap to copy',
-                trailing: chevron,
-                showDivider: false,
-                onTap: copyCode,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        AppCard(
-          padding: EdgeInsets.zero,
-          borderColor: AppColors.destructive.withValues(alpha: 0.3),
-          child: Column(
-            children: [
-              if (app.isAdmin)
-                _SettingRow(
-                  icon: Icons.admin_panel_settings_outlined,
-                  title: 'Transfer ownership',
-                  subtitle: 'Hand the group to another member',
-                  trailing: chevron,
-                  showDivider: true,
-                  onTap: () => _showTransferOwnershipDialog(context),
-                ),
-              InkWell(
-                onTap: () => _confirmLeaveGroup(context),
-                child: Container(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.exit_to_app_outlined,
-                        size: 20,
-                        color: AppColors.destructive,
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Leave group',
-                              style: AppTypography.bodySm.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.destructive,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'You can rejoin with the group code',
-                              style: AppTypography.bodyXs.copyWith(
-                                color: AppColors.mutedForeground,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        Icons.chevron_right,
-                        color: AppColors.destructive.withValues(alpha: 0.6),
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _confirmLeaveGroup(BuildContext context) {
-    final app = this.app;
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        title: const Text('Leave Group'),
-        content: const Text(
-          'Leave this group? You can rejoin with the group code.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              'Cancel',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              app.leaveGroup();
-              context.go(RoutePaths.home);
-            },
-            child: Text(
-              'Leave',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructive,
-              ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showTransferOwnershipDialog(BuildContext context) {
-    final app = this.app;
-    final members = app.currentGroup.members
-        .where((m) => m.id != app.user?.id)
-        .toList();
-    if (members.isEmpty) return;
-    String? selectedId;
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          backgroundColor: AppColors.card,
-          title: const Text('Transfer Ownership'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Select a member to become the new group owner. This cannot be undone.',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              ...members.map(
-                (m) => RadioListTile<String>(
-                  value: m.id,
-                  groupValue: selectedId,
-                  onChanged: (v) => setState(() => selectedId = v),
-                  title: Text(m.name, style: AppTypography.bodySm),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(
-                'Cancel',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: selectedId == null
-                  ? null
-                  : () async {
-                      Navigator.of(ctx).pop();
-                      await app.transferGroupOwnership(selectedId!);
-                    },
-              child: const Text('Transfer'),
-            ),
-          ],
-        ),
       ),
     );
   }

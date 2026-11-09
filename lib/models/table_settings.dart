@@ -3,12 +3,12 @@
 /// that group runs, and can be overridden per tournament on [GameSettings].
 class TableSettings {
   const TableSettings({
-    this.maxPerTable = 9,
+    int maxPerTable = 9,
     this.randomizeByDefault = false,
-  });
+  }) : maxPerTable = maxPerTable < 4 ? 4 : (maxPerTable > 10 ? 10 : maxPerTable);
 
   /// Player count that triggers a split into another table once check-in
-  /// reaches it (spec §12.1: table capacity defaults to 9).
+  /// reaches it (spec §12.1: table capacity defaults to 9, range 4–10).
   final int maxPerTable;
 
   /// Whether seating generation defaults to the fully-random mode rather
@@ -20,7 +20,7 @@ class TableSettings {
 
   TableSettings copyWith({int? maxPerTable, bool? randomizeByDefault}) {
     return TableSettings(
-      maxPerTable: maxPerTable ?? this.maxPerTable,
+      maxPerTable: maxPerTable != null ? maxPerTable.clamp(4, 10) : this.maxPerTable,
       randomizeByDefault: randomizeByDefault ?? this.randomizeByDefault,
     );
   }

@@ -1,0 +1,62 @@
+name: Flutter CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # One place to bump. 3.44.7 is the stable release this project was last
+  # verified against; pubspec.lock asks for Dart >=3.10.3 <4.0.0 and
+  # Flutter >=3.38.4, so any stable at or above 3.38.4 satisfies the project.
+  FLUTTER_VERSION: "3.44.7"
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      # --fatal-infos makes an info-level lint a build failure, which is the
+      # point of running the analyzer in CI at all.
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+      # The engine's correctness gate, run first and reported on its own so a
+      # structure-engine regression is named in the CI summary instead of being
+      # one failure among ~1,600 in the full run, and so it fails fast.
+      #
+      # These files are also picked up by the full `flutter test` below; this
+      # step is deliberate duplication for visibility, not a different check.
+      #   * engine_invariants_test   — sb<bb, steps, round stacks, true bank
+      #                                feasibility, rebuy close/ante/add-on
+      #                                break; ~3,840 runs under BOTH blind
+      #                                families (niceSpec and home25)
+      #   * f1_5_composition_test    — the §F1.15/§F1.16 demo-night control
+      #   * engine_force_stack_test  — forceStack / targetDepthBB / home25
+      #   * infeasible_start_guard_test — a night the chip case can't deal can
+      #                                never start a clock or open a dashboard
+      - name: Engine invariants (WP1 gate)
+        timeout-minutes: 20
+        run: >
+          flutter test --reporter expanded
+          test/engine_invariants_test.dart
+          test/f1_5_composition_test.dart
+          test/engine_force_stack_test.dart
+          test/infeasible_start_guard_test.dart
+          test/demo_night_vector_test.dart
+
+      - name: Run all tests (all 1,843 tests across the spec)
+        run: flutter test --reporter expanded

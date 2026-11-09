@@ -50,6 +50,7 @@ class RecoveryService {
   static final _db = Localstore.instance;
   static const _collection = 'recovery';
   static const _docId = 'active_game';
+  static bool enabled = true;
 
   /// Timestamp of the most recently loaded snapshot, so the UI can offer
   /// "Restore active tournament — last saved 21:43" (Tech spec §20.1).
@@ -57,6 +58,7 @@ class RecoveryService {
   static DateTime? get lastSavedAt => _lastSavedAt;
 
   static Future<void> saveGame(LiveGame game) async {
+    if (!enabled) return;
     try {
       final data = liveGameToMap(game);
       data['lastSavedAt'] = DateTime.now().toIso8601String();
@@ -70,6 +72,7 @@ class RecoveryService {
   static const _cashDocId = 'active_cash';
 
   static Future<void> saveCashSession(CashSession session) async {
+    if (!enabled) return;
     try {
       final data = cashSessionToMap(session);
       data['lastSavedAt'] = DateTime.now().toIso8601String();
@@ -80,6 +83,7 @@ class RecoveryService {
   }
 
   static Future<void> clearCashSession() async {
+    if (!enabled) return;
     try {
       await _db.collection(_collection).doc(_cashDocId).delete();
     } catch (e) {
@@ -88,9 +92,10 @@ class RecoveryService {
   }
 
   static Future<CashSession?> loadCashSession() async {
-    final data = await _db.collection(_collection).doc(_cashDocId).get();
-    if (data == null) return null;
+    if (!enabled) return null;
     try {
+      final data = await _db.collection(_collection).doc(_cashDocId).get();
+      if (data == null) return null;
       return cashSessionFromMap(Map<String, dynamic>.from(data));
     } catch (e) {
       debugPrint('Error recovering cash session: $e');
@@ -102,6 +107,7 @@ class RecoveryService {
   static const _guestDocId = 'guest_session';
 
   static Future<void> saveGuestSession(GuestSession session) async {
+    if (!enabled) return;
     try {
       await _db.collection(_collection).doc(_guestDocId).set(session.toMap());
     } catch (e) {
@@ -110,6 +116,7 @@ class RecoveryService {
   }
 
   static Future<void> clearGuestSession() async {
+    if (!enabled) return;
     try {
       await _db.collection(_collection).doc(_guestDocId).delete();
     } catch (e) {
@@ -118,9 +125,10 @@ class RecoveryService {
   }
 
   static Future<GuestSession?> loadGuestSession() async {
-    final data = await _db.collection(_collection).doc(_guestDocId).get();
-    if (data == null) return null;
+    if (!enabled) return null;
     try {
+      final data = await _db.collection(_collection).doc(_guestDocId).get();
+      if (data == null) return null;
       return GuestSession.fromMap(Map<String, dynamic>.from(data));
     } catch (e) {
       debugPrint('Error recovering guest session: $e');
@@ -129,6 +137,7 @@ class RecoveryService {
   }
 
   static Future<void> clearGame() async {
+    if (!enabled) return;
     try {
       await _db.collection(_collection).doc(_docId).delete();
     } catch (e) {
@@ -137,10 +146,11 @@ class RecoveryService {
   }
 
   static Future<LiveGame?> loadGame() async {
-    final data = await _db.collection(_collection).doc(_docId).get();
-    if (data == null) return null;
-
+    if (!enabled) return null;
     try {
+      final data = await _db.collection(_collection).doc(_docId).get();
+      if (data == null) return null;
+
       final game = liveGameFromMap(Map<String, dynamic>.from(data));
       final lastSavedString = data['lastSavedAt'] as String?;
       if (lastSavedString != null) {
@@ -165,8 +175,8 @@ class RecoveryService {
         // Deduct elapsed wall-clock time and explicitly synthesize a new
         // levelEndTime so the timer behaves correctly post-recovery.
         final elapsed = DateTime.now().difference(_lastSavedAt!).inSeconds;
-        final remaining = (game.secondsRemaining - elapsed) > 0 
-            ? (game.secondsRemaining - elapsed) 
+        final remaining = (game.secondsRemaining - elapsed) > 0
+            ? (game.secondsRemaining - elapsed)
             : 0;
         return game.copyWith(
           secondsRemaining: remaining,

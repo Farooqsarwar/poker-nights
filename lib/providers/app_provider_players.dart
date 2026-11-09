@@ -3,10 +3,30 @@
 /// Extracted verbatim from app_provider.dart (`// ── Player management ──` + `// ── Guest session ──`). Do not change business logic.
 part of 'app_provider.dart';
 
+/// §25.4b. The three gameplay events a per-player undo may reverse.
+///
+/// `Remove player` is deliberately absent: the spec calls it "a roster
+/// correction, not a gameplay event" and rules it out of this path explicitly.
+enum PlayerActionKind { rebuy, addOn, bust }
+
 extension AppProviderPlayers on AppProvider {
   void eliminatePlayer(String playerId, {String? koRecipientId, String? idempotencyKey}) {
     _forceClaimEditor();
     if (!_isGameAuthority) return;
+    // A bust is idempotent (Technical section "Sync"): "a second bust for a
+    // player who is already out is a no-op - no second bounty, no second
+    // place."
+    //
+    // The auto-derived idempotency key does NOT cover this. `_claimIdempotency`
+    // folds the *expected next* revision into its key, so a second tap lands
+    // on a fresh revision and reads as a new action rather than a replay - it
+    // only ever catches the same write arriving twice over the wire. Every
+    // sibling action here (grantRebuy, grantReEntry, grantAddOn) refuses a
+    // target that is already out; this was the one that did not, so a
+    // double tap re-took the place, paid a second bounty, and wrote a second
+    // audit line for a player who had already gone home.
+    final target = _currentGame!.players.where((p) => p.id == playerId).firstOrNull;
+    if (target == null || target.eliminated) return;
     final (rev, key) =
         _claimIdempotency(idempotencyKey ?? '', action: 'eliminatePlayer', target: playerId);
     if (rev == null) return; // replayed action — already applied
@@ -18,17 +38,40 @@ extension AppProviderPlayers on AppProvider {
     final bounty = _currentGame!.settings.koEnabled
         ? _currentGame!.settings.koAmount
         : 0;
+    // §25.5 / §3: "at each elimination, also check the survivors' current
+    // stacks against their stored lowestStackBB and update if this is a new
+    // low." Only meaningful for a player the host has actually entered a
+    // [Player.stack] for — most nights that will be nobody, and the recap
+    // stays honestly empty rather than inventing a sample.
+    final currentBB = _currentGame!.currentLevelData?.bb ?? 0;
     final updated = _currentGame!.players.map((p) {
       if (p.id == playerId) {
-        return p.copyWith(eliminated: true, active: false, eliminationPos: pos, table: 0, seat: 0);
+        return p.copyWith(
+          eliminated: true,
+          active: false,
+          eliminationPos: pos,
+          eliminatedAtLevel: _currentGame!.currentLevel,
+          // DECISION: Preserve table and seat on elimination so rebuy keeps the seat (fixes Dani B3 / M4).
+        );
       }
+      var next = p;
       // Optional single knockout recipient (technical §11.3). The bounty
       // chips transfer from the eliminated player, so total chips in play
       // is unchanged — only the recipient's knockout count increases.
       if (koRecipientId != null && p.id == koRecipientId) {
-        return p.copyWith(knockouts: p.knockouts + 1);
+        next = next.copyWith(knockouts: next.knockouts + 1);
       }
-      return p;
+      if (next.active && !next.eliminated) {
+        final sampled = sampledLowestStackBB(
+          existing: next.lowestStackBB,
+          stack: next.stack,
+          currentBB: currentBB,
+        );
+        if (sampled != next.lowestStackBB) {
+          next = next.copyWith(lowestStackBB: sampled);
+        }
+      }
+      return next;
     }).toList();
     final remaining = updated.where((p) => p.active).length;
     // Final table redraw only fires for multi-table events (spec §7 and BR-020: "If a
@@ -57,6 +100,14 @@ extension AppProviderPlayers on AppProvider {
           timestamp: DateTime.now(),
         ),
       );
+    } else if (remaining <= 1) {
+      // When 1 player remains, the tournament is decided: pause the clock!
+      _currentGame = _currentGame!.copyWith(
+        players: updated,
+        timerRunning: false,
+        revision: rev,
+        lastIdempotencyKey: key,
+      );
     } else {
       _currentGame = _currentGame!.copyWith(
         players: updated,
@@ -78,6 +129,23 @@ extension AppProviderPlayers on AppProvider {
       );
     } else {
       addAnnouncement('${p.name} eliminated.', speakElimination);
+    }
+    // Spec 14: elimination records the finishing position and a timestamp.
+    addAuditRecord(
+      'elimination',
+      '${p.name} eliminated'
+          '${p.eliminationPos != null ? ' in position ${p.eliminationPos}' : ''}'
+          '${koRecipientId != null && bounty > 0 ? ' — $bounty bounty awarded' : ''}.',
+    );
+    // C-bubble: hand-for-hand ends itself the moment everyone left is paid.
+    // Guarded on the flag (new, default false), so settled nights behave
+    // exactly as before.
+    final after = _currentGame!;
+    if (after.handForHandActive) {
+      final paid = after.structure.paidPlacesForDisplay;
+      if (paid > 0 && after.activePlayers.length <= paid) {
+        stopHandForHand(auto: true);
+      }
     }
   }
 
@@ -156,7 +224,8 @@ extension AppProviderPlayers on AppProvider {
     if (rev == null) return; // replayed action — already applied
     if (!game.settings.rebuys || game.rebuysClosed) return;
     final player = game.players.where((p) => p.id == playerId).firstOrNull;
-    if (player == null || !player.eliminated) return;
+    // DECISION: Allow rebuy on active or eliminated player; keeps seat (fixes Dani B3, B4, M4).
+    if (player == null) return;
     final rebuyLimit = game.settings.rebuyLimit;
     if (rebuyLimit != null && player.rebuys >= rebuyLimit) {
       lastRsvpError = '${player.name} has already used their $rebuyLimit '
@@ -187,6 +256,14 @@ extension AppProviderPlayers on AppProvider {
     // This updates only prizePool, organizerAmount and prizes on the structure,
     // leaving blind levels and any manual edits completely intact.
     _updatePrizePool();
+    // Spec sections 14 and 29: every live operational action creates a
+    // timestamped activity-log record. Money entering the game without one was
+    // the largest gap in the log.
+    addAuditRecord(
+      'rebuy',
+      '${player.name} rebought for ${game.settings.effectiveRebuyCost} '
+          '(rebuy ${player.rebuys + 1}) — $rebuyStack chips added.',
+    );
   }
 
   /// Registers a player's request for a rebuy from the live view. The admin
@@ -247,9 +324,9 @@ extension AppProviderPlayers on AppProvider {
     final (rev, idemKey) =
         _claimIdempotency(idempotencyKey ?? '', action: 'grantReEntry', target: playerId);
     if (rev == null) return; // replayed action — already applied
-    if (!game.settings.reEntry || game.rebuysClosed) return;
     final player = game.players.where((p) => p.id == playerId).firstOrNull;
     if (player == null || !player.eliminated) return;
+    if (!game.canReEnter(player)) return;
 
     _pushUndo();
     final entryStack = game.structure.startingStack;
@@ -271,6 +348,30 @@ extension AppProviderPlayers on AppProvider {
       lastIdempotencyKey: idemKey,
     );
     _updatePrizePool();
+  }
+
+  /// §3's [Player.stack]: the host's manual, spot-check chip count for one
+  /// player. Not gameplay-advancing on its own — it only feeds §25.5's
+  /// low-water-mark sample at the NEXT elimination — so it is not idempotency-
+  /// guarded or undo-tracked the way rebuys/add-ons/eliminations are; a host
+  /// correcting a mistyped count should not need Undo for it.
+  void updatePlayerStack(String playerId, int? stack) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return;
+    final game = _currentGame;
+    if (game == null) return;
+    _currentGame = game.copyWith(
+      players: [
+        for (final p in game.players)
+          if (p.id == playerId)
+            stack == null
+                ? p.copyWith(clearStack: true)
+                : p.copyWith(stack: stack)
+          else
+            p,
+      ],
+    );
+    if (!_disposed) notifyListeners();
   }
 
   void grantAddOn(String playerId, {String? idempotencyKey}) {
@@ -301,6 +402,16 @@ extension AppProviderPlayers on AppProvider {
     );
     // Recalculate prize pool/prizes after money enters the game.
     _updatePrizePool();
+    addAuditRecord(
+      'addon',
+      '${player.name} took the add-on for '
+          '${game.settings.effectiveAddOnCost} — $addOnStack chips added.',
+    );
+    // Taking an add-on is an answer too. C6 line 2204 closes the overtime
+    // window once every player from step 1 "has taken or declined it", so the
+    // last player taking one has to be able to close the window -- otherwise
+    // the group that all said yes stays in overtime with nobody left to ask.
+    _maybeCloseAddOnWindowOvertime();
   }
 
   /// Registers a player's request for an add-on from the live view. The admin
@@ -337,6 +448,199 @@ extension AppProviderPlayers on AppProvider {
     addAnnouncement('Last action undone.', false);
   }
 
+  // ── §25.4b per-player undo ─────────────────────────────────────────────────
+  //
+  // Spec deviation #13: "Per-player undo is filtered removal, not a stack pop —
+  // a host correcting one player's last action shouldn't have to also undo
+  // everyone else's actions taken since."
+  //
+  // The spec's algorithm walks a typed event stack and removes one entry. This
+  // app's undo stack is not that: `_undoStack` is `List<LiveGame?>`, whole-game
+  // snapshots, and §32.5 says the storage does NOT change — only the traversal
+  // does. You cannot filter one player's event out of a snapshot, because a
+  // snapshot is not a set of events. So the inverse is applied DIRECTLY to the
+  // live game here, which produces the state the spec's `applyInverse` would,
+  // and [undoLast]'s snapshot stack is left completely alone — undoing one
+  // player's rebuy no longer rolls back everyone else's evening.
+  //
+  // What the direct inverse cannot recover is noted at each branch below.
+
+  /// Reverse-chronological search for the last gameplay event belonging to one
+  /// player, using the audit timeline — the only per-action record this app
+  /// keeps (§14/§29: "every live operational action creates a timestamped
+  /// activity-log record"). Returns the audit record and the kind it maps to.
+  ///
+  /// The acting player's name always opens the detail line in every one of the
+  /// three writers ([grantRebuy], [grantAddOn], [eliminatePlayer]), so the
+  /// prefix match is exact rather than a substring scan. Two players sharing a
+  /// display name would be ambiguous; the state fallback below covers the case
+  /// where the timeline is unavailable at all.
+  (AuditRecord, PlayerActionKind)? _lastPlayerAuditEvent(Player p) {
+    final history = _currentGame?.auditHistory;
+    if (history == null) return null;
+    for (final rec in history.reversed) {
+      if (!rec.details.startsWith('${p.name} ')) continue;
+      switch (rec.type) {
+        case 'rebuy':
+          return (rec, PlayerActionKind.rebuy);
+        case 'addon':
+          return (rec, PlayerActionKind.addOn);
+        case 'elimination':
+          return (rec, PlayerActionKind.bust);
+      }
+    }
+    return null;
+  }
+
+  /// What a per-player undo would reverse for [playerId], or null when there
+  /// is nothing of theirs to reverse. Pure — the UI can label its button with
+  /// this before the host commits.
+  ({PlayerActionKind kind, String summary})? lastUndoablePlayerAction(
+    String playerId,
+  ) {
+    final game = _currentGame;
+    if (game == null) return null;
+    final p = game.players.where((x) => x.id == playerId).firstOrNull;
+    if (p == null) return null;
+
+    final event = _lastPlayerAuditEvent(p);
+    if (event != null) {
+      return (kind: event.$2, summary: event.$1.details);
+    }
+    // Fallback: the audit timeline is an admin-only sidecar and can be empty
+    // (a co-admin device that has not loaded it, or a restored session). State
+    // still tells us which events happened, just not their order, so fall back
+    // to the order the spec's own list implies — the most consequential first.
+    if (p.eliminated) {
+      return (kind: PlayerActionKind.bust, summary: '${p.name} eliminated.');
+    }
+    if (p.hasAddOn) {
+      return (kind: PlayerActionKind.addOn, summary: '${p.name} took the add-on.');
+    }
+    if (p.rebuys > 0) {
+      return (kind: PlayerActionKind.rebuy, summary: '${p.name} rebought.');
+    }
+    return null;
+  }
+
+  /// Pulls the knocker-out's name back out of an elimination audit line.
+  ///
+  /// [eliminatePlayer] writes "X eliminated by Y — N bounty awarded.", and the
+  /// knockout credit lives only on the recipient's counter — there is no field
+  /// on the eliminated player recording who busted them. Reading the line this
+  /// module wrote itself is the only way to give the credit back; without it,
+  /// undoing a bust would silently leave a phantom knockout on the books.
+  String? _knockerOutNameFrom(String details, String playerName) {
+    const marker = ' eliminated by ';
+    final start = details.indexOf(marker, playerName.length);
+    if (start < 0) return null;
+    final from = start + marker.length;
+    final dash = details.indexOf(' —', from);
+    final name = (dash < 0 ? details.substring(from) : details.substring(from, dash))
+        .trim();
+    return name.isEmpty || name == '?' ? null : name;
+  }
+
+  /// §25.4b. Reverses ONE player's last gameplay action — rebuy, add-on or
+  /// bust — leaving every other player's actions since then untouched.
+  ///
+  /// `Remove player` is deliberately not reversible here: §25.4b calls it "a
+  /// roster correction, not a gameplay event". Use the normal add-player path.
+  ///
+  /// Returns a summary of what was reversed, or null when there was nothing.
+  String? undoLastPlayerAction(String playerId) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return null;
+    final game = _currentGame;
+    if (game == null) return null;
+    final p = game.players.where((x) => x.id == playerId).firstOrNull;
+    if (p == null) return null;
+    final action = lastUndoablePlayerAction(playerId);
+    if (action == null) return null;
+
+    final (rev, key) = _claimIdempotency(
+      '',
+      action: 'undoLastPlayerAction',
+      target: playerId,
+    );
+    if (rev == null) return null;
+    _pushUndo();
+
+    var chipsBack = 0;
+    String summary;
+    var players = game.players;
+
+    switch (action.kind) {
+      case PlayerActionKind.rebuy:
+        if (p.rebuys <= 0) return null;
+        // The chips come off at the CURRENT rebuy stack. A host who edited the
+        // structure between the rebuy and the correction would see a small
+        // discrepancy — the snapshot stack cannot tell us the old figure
+        // either, and the alternative is leaving the chips in play forever.
+        chipsBack = game.structure.rebuyStack;
+        players = [
+          for (final x in game.players)
+            if (x.id == playerId) x.copyWith(rebuys: x.rebuys - 1) else x,
+        ];
+        // Note the player is NOT re-eliminated. §25.4b lists the inverse as
+        // "decrement rebuys" only, and the common correction is a rebuy
+        // credited to the wrong person — who was never out in the first place.
+        summary = '${p.name}\'s last rebuy reversed '
+            '($chipsBack chips removed).';
+      case PlayerActionKind.addOn:
+        if (!p.hasAddOn) return null;
+        chipsBack = game.structure.addOnStack;
+        players = [
+          for (final x in game.players)
+            if (x.id == playerId) x.copyWith(hasAddOn: false) else x,
+        ];
+        summary = '${p.name}\'s add-on reversed ($chipsBack chips removed).';
+      case PlayerActionKind.bust:
+        if (!p.eliminated) return null;
+        final koName = _knockerOutNameFrom(action.summary, p.name);
+        var creditReturned = false;
+        players = game.players.map((x) {
+          if (x.id == playerId) {
+            return x.copyWith(
+              eliminated: false,
+              active: true,
+              clearEliminationPos: true,
+              clearEliminatedAtLevel: true,
+            );
+          }
+          // Only the FIRST match gives the credit back, so a duplicate display
+          // name cannot cost two people a knockout for one reversal.
+          if (!creditReturned &&
+              koName != null &&
+              x.name == koName &&
+              x.knockouts > 0) {
+            creditReturned = true;
+            return x.copyWith(knockouts: x.knockouts - 1);
+          }
+          return x;
+        }).toList();
+        // The seat is NOT restored: `eliminatePlayer` zeroes table and seat and
+        // the snapshot is gone, so the host re-seats from the Seating tab —
+        // the same path a late arrival uses.
+        summary = '${p.name} un-eliminated'
+            '${creditReturned ? ", knockout credit returned to $koName" : ''}.';
+    }
+
+    _currentGame = game.copyWith(
+      players: players,
+      totalChipsInPlay: (game.totalChipsInPlay - chipsBack).clamp(0, 99999999),
+      revision: rev,
+      lastIdempotencyKey: key,
+    );
+    // Money left the game, so the pool and the prizes move with it.
+    _updatePrizePool();
+    addAuditRecord('undo_player_action', summary);
+    addAnnouncement(summary, false);
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return summary;
+  }
+
   void requestCheckIn(String playerId) {
     final requester = _currentGame!.players
         .where((p) => p.id == playerId)
@@ -354,6 +658,14 @@ extension AppProviderPlayers on AppProvider {
     }
     if (_currentGame!.registrationClosed) {
       addAnnouncement('Late registration has closed.', false);
+      return;
+    }
+    if (_currentGame!.checkInClosed) {
+      addAnnouncement('Check-in is closed.', false);
+      return;
+    }
+    if (!_currentGame!.isCheckInOpenAt(DateTime.now())) {
+      addAnnouncement('Check-in has not opened yet.', false);
       return;
     }
     // A member with no roster row yet (joined the group after this game was
@@ -444,6 +756,27 @@ extension AppProviderPlayers on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  void confirmAllPendingRequests() {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return;
+    final game = _currentGame;
+    if (game == null) return;
+    final pending = game.players
+        .where(
+          (p) => !p.confirmed && (p.checkedIn || (p.isGuest && p.name.isNotEmpty)),
+        )
+        .toList();
+    if (pending.isEmpty) return;
+
+    for (final player in pending) {
+      if (player.isGuest) {
+        confirmGuest(player.id);
+      } else {
+        checkInPlayer(player.id);
+      }
+    }
+  }
+
   void checkInPlayer(String playerId) {
     _forceClaimEditor();
     // Blocking terminal states (spec §12) — the door is shut for good. A
@@ -461,12 +794,59 @@ extension AppProviderPlayers on AppProvider {
       addAnnouncement('Late registration has closed.', false);
       return;
     }
+    // Addendum §3 and §4: free hosting is one table, up to nine active
+    // players. Checked HERE rather than only in the UI, because the screens
+    // are not the only way in -- a kiosk, a self-check-in or a later caller
+    // would otherwise walk straight past the limit.
+    final alreadyIn = _currentGame!.players
+        .where((p) => p.checkedIn && p.confirmed && p.id != playerId)
+        .length;
+    if (!canHostPlayers(alreadyIn + 1)) {
+      lastRsvpError = hostingBlockedReason(alreadyIn + 1);
+      if (!_disposed) notifyListeners();
+      return;
+    }
+
+    // §25.1a. Eligibility only — the chip bonus itself cannot be computed
+    // until the starting stack is final, which happens at Start
+    // ([AppProviderTimer.startTimer]), not here. A player who checks in,
+    // cancels, and checks in again after the start loses eligibility, since
+    // this is recomputed fresh every call rather than sticking once true.
+    //
+    // Spec D6 / T32 draws the line at the scheduled start itself. This used to
+    // pass `settings.effectiveEarlyArrivalCutoffMins` (30) to
+    // `isEarlyArrivalEligible`, which demanded arrival 30 minutes early and so
+    // refused the bonus to someone who was approved 30 seconds before the
+    // first shuffle — inside the 10-minute check-in window, and exactly who
+    // the clause is about.
+    final settings = _currentGame!.settings;
+    final earlyArrivalBonusEligible = isEarlyArrivalApproved(
+      bonusEnabled: settings.earlyArrivalBonusEnabled,
+      scheduledStart: settings.scheduledStart,
+      now: _serverNow,
+    );
+
     _pushUndo();
     _currentGame = _currentGame!.copyWith(
       players: _currentGame!.players
           .map(
             (p) => p.id == playerId
-                ? p.copyWith(checkedIn: true, confirmed: true)
+                ? p.copyWith(
+                    checkedIn: true,
+                    confirmed: true,
+                    // §8.1's no-show gate flips a flag instead of deleting the
+                    // row precisely so "the seat stays reserved so a late
+                    // arrival can still be added normally". Clearing
+                    // `confirmed` alone left them half-in: they counted in
+                    // `confirmedCount`, so their buy-in entered `grossEligible`,
+                    // but `LiveGame.activePlayers` is `active && !eliminated`,
+                    // so they could not be seated, eliminated, or seen by
+                    // `isOnBubble`. The game took their money and refused them
+                    // a chair. Both flags have to come back.
+                    noShow: false,
+                    active: true,
+                    earlyArrivalBonusEligible: earlyArrivalBonusEligible,
+                  )
                 : p,
           )
           .toList(),
@@ -622,6 +1002,59 @@ extension AppProviderPlayers on AppProvider {
     return null;
   }
 
+  /// Quick start (C0): seats [count] players, all checked in, in one
+  /// step. If [names] are provided, players receive their configured names;
+  /// otherwise they default to "Player 1", "Player 2", etc.
+  void addQuickPlayers(int count, {List<String>? names}) {
+    _forceClaimEditor();
+    final game = _currentGame;
+    if (game == null || count < 1 || !_isGameAuthority) return;
+    _pushUndo();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final added = [
+      for (var i = 0; i < count; i++)
+        Player(
+          id: 'p-$stamp-$i',
+          name: (names != null && names.length > i && names[i].trim().isNotEmpty)
+              ? names[i].trim()
+              : 'Player ${game.players.length + i + 1}',
+          isGuest: false,
+          rsvp: null,
+          checkedIn: true,
+          confirmed: true,
+          eliminated: false,
+          rebuys: 0,
+          hasAddOn: false,
+          knockouts: 0,
+          table: 0,
+          seat: 0,
+          active: true,
+        ),
+    ];
+    _currentGame = game.copyWith(players: [...game.players, ...added]);
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Renames a registered player in the active tournament.
+  void renamePlayer(String playerId, String newName) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return;
+    final game = _currentGame;
+    if (game == null) return;
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) return;
+    final idx = game.players.indexWhere((p) => p.id == playerId);
+    if (idx == -1) return;
+    _pushUndo();
+    final updated = List<Player>.from(game.players);
+    updated[idx] = updated[idx].copyWith(name: trimmed);
+    _currentGame = game.copyWith(players: updated);
+    addAuditRecord('rename_player', 'Renamed player to $trimmed');
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
   void confirmGuest(String guestId) {
     _forceClaimEditor();
     if (!_isGameAuthority) return;
@@ -659,6 +1092,12 @@ extension AppProviderPlayers on AppProvider {
                   confirmed: true,
                   checkedIn: true,
                   active: true,
+                  // §8.1: a guest dropped by the no-show gate is being seated
+                  // again here, so the flag that dropped them has to clear too
+                  // — `active` alone leaves `noShow` lying to every count that
+                  // reads it (expected attendance, the gate itself on a later
+                  // Start).
+                  noShow: false,
                   table: autoSeat?.table ?? p.table,
                   seat: autoSeat?.seat ?? p.seat,
                 )
@@ -1070,8 +1509,10 @@ extension AppProviderPlayers on AppProvider {
   /// count exceeds that, multiple balanced tables are created automatically.
   /// Every player gets exactly one unique (table, seat) — no duplicates.
   void generateSeating(TableSeatingMode mode) {
+    if (!canGrantRebuys) return;
     _forceClaimEditor();
     if (!_isGameAuthority) return;
+    Telemetry.seatingDrawn(mode.name);
     final game = _currentGame;
     if (game == null) return;
 
@@ -1106,7 +1547,30 @@ extension AppProviderPlayers on AppProvider {
     // group's default otherwise (spec: configurable, defaults to 10).
     final maxPerTable = effectiveTableSettings.maxPerTable.clamp(2, 999);
     final count = ordered.length;
-    final tableCount = (count / maxPerTable).ceil();
+    // §11.4 / §26.1: a shootout's Stage A structure was generated for exactly
+    // `effectiveShootoutTables` independent tables, and the blind/chip math
+    // assumed that many seats per table. Seating already handles multiple
+    // tables under one shared clock, so a shootout only needs the table
+    // COUNT pinned to what the structure assumed -- not independent clocks --
+    // which is why this reads the setting directly rather than re-deriving a
+    // count from `maxPerTable`. Once Stage B has been started (host-triggered
+    // via `startShootoutFinalTable`, never automatic per boundary #9), the
+    // split is gone and everyone belongs on the single final table, so this
+    // no longer applies.
+    final isShootoutStageA =
+        game.settings.effectiveFormat == TournamentFormat.shootout &&
+            game.shootoutStage != ShootoutStage.stageB;
+    // Addendum §3: multi-table hosting is Premium. A free night stays on one
+    // table, which is also why nine is the boundary -- the seating model is
+    // 1-9 on one table and 10 becomes 5+5.
+    //
+    // The check-in and late-player gates should have stopped a free field
+    // reaching ten, so this is a backstop rather than the primary limit: it
+    // keeps a free tournament on one table even if players arrived by some
+    // path those gates do not cover.
+    final tableCount = isShootoutStageA
+        ? max(1, game.settings.effectiveShootoutTables)
+        : (canHostPlayers(count) ? (count / maxPerTable).ceil() : 1);
     final perTable = List<int>.filled(tableCount, count ~/ tableCount);
     for (var i = 0; i < count % tableCount; i++) {
       perTable[i]++;
@@ -1149,6 +1613,15 @@ extension AppProviderPlayers on AppProvider {
     if (dealer != null) {
       addAnnouncement('Seating drawn. ${dealer.name} deals first.', true);
     }
+    // Spec 14: generating or re-randomising seats is a live operational
+    // action. An announcement is not a log entry — the draw has to be
+    // reconstructable afterwards.
+    addAuditRecord(
+      'seating',
+      'Seating drawn (${mode.name}): ${assignments.length} players across '
+          '$tableCount table${tableCount == 1 ? '' : 's'}'
+          '${dealer != null ? ', ${dealer.name} deals first' : ''}.',
+    );
     if (!_disposed) notifyListeners();
   }
 
@@ -1157,6 +1630,7 @@ extension AppProviderPlayers on AppProvider {
   void confirmSeating() {
     final game = _currentGame;
     if (game == null) return;
+    if (!canGrantRebuys) return;
     _forceClaimEditor();
     if (!_isGameAuthority) {
       if (isAdmin) {
@@ -1193,6 +1667,7 @@ extension AppProviderPlayers on AppProvider {
   String? assignSeat(String playerId, int table, int seat) {
     final game = _currentGame;
     if (game == null) return null;
+    if (!canGrantRebuys) return 'Not permitted to assign seats.';
     if (table < 1 || seat < 1) return 'Choose a valid table and seat.';
     final occupied = game.players.any(
       (p) =>
@@ -1210,6 +1685,75 @@ extension AppProviderPlayers on AppProvider {
           )
           .toList(),
       seatingConfirmed: false,
+    );
+    if (!_disposed) notifyListeners();
+    return null;
+  }
+
+  // DECISION: Support visual drag-and-drop seat swapping between players (fixes Dani T4 / S3).
+  String? swapPlayerSeats(String player1Id, String player2Id) {
+    _forceClaimEditor();
+    if (!canGrantRebuys) return 'Not permitted to assign seats.';
+    final game = _currentGame;
+    if (game == null) return null;
+    final p1 = game.players.where((p) => p.id == player1Id).firstOrNull;
+    final p2 = game.players.where((p) => p.id == player2Id).firstOrNull;
+    if (p1 == null || p2 == null) return 'Player not found.';
+    _pushUndo();
+    _currentGame = game.copyWith(
+      players: game.players.map((p) {
+        if (p.id == p1.id) return p.copyWith(table: p2.table, seat: p2.seat);
+        if (p.id == p2.id) return p.copyWith(table: p1.table, seat: p1.seat);
+        return p;
+      }).toList(),
+      seatingConfirmed: false,
+    );
+    addAnnouncement('${p1.name} and ${p2.name} swapped seats.', true);
+    if (!_disposed) notifyListeners();
+    return null;
+  }
+
+  // DECISION: Support dragging a player to any table or seat (fixes Dani T4 / S3).
+  String? movePlayerToTableAndSeat(String playerId, int toTable, [int? toSeat]) {
+    _forceClaimEditor();
+    if (!canGrantRebuys) return 'Not permitted to assign seats.';
+    final game = _currentGame;
+    if (game == null) return null;
+    final player = game.players.where((p) => p.id == playerId).firstOrNull;
+    if (player == null) return 'Player not found.';
+    if (toTable < 1) return 'Choose a valid table.';
+
+    int targetSeat = toSeat ?? 1;
+    if (toSeat == null) {
+      final occupiedSeats = game.players
+          .where((p) => p.table == toTable && !p.eliminated)
+          .map((p) => p.seat)
+          .toSet();
+      while (occupiedSeats.contains(targetSeat)) {
+        targetSeat++;
+      }
+    } else {
+      final occupied = game.players.any(
+        (p) =>
+            p.id != playerId &&
+            p.table == toTable &&
+            p.seat == toSeat &&
+            !p.eliminated,
+      );
+      if (occupied) return 'That seat is already taken — choose another.';
+    }
+
+    _pushUndo();
+    _currentGame = game.copyWith(
+      players: game.players.map((p) {
+        if (p.id == playerId) return p.copyWith(table: toTable, seat: targetSeat);
+        return p;
+      }).toList(),
+      seatingConfirmed: false,
+    );
+    addAnnouncement(
+      '${player.name} moved to Table $toTable seat $targetSeat.',
+      true,
     );
     if (!_disposed) notifyListeners();
     return null;

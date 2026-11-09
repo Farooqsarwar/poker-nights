@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
+import '../../app/colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
+import '../../widgets/glass_styles.dart';
 import '../../models/cash_game.dart';
+import '../../models/chip_color.dart';
 import '../../providers/app_provider.dart';
-import '../../widgets/app_button.dart';
-import '../../widgets/app_card.dart';
+import '../../utils/formatters.dart';
+import '../../utils/mock_data.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/app_text_field.dart';
-import '../../widgets/group_switcher.dart';
+import '../../widgets/app_toggle.dart';
+import '../../widgets/app_back_button.dart';
 
-enum _CashStep { setup, players }
-
-/// New cash game setup mirroring the web `CashGamePage`.
+/// Cash game setup screen strictly matching D1_CashSetup mobile-first design.
+///
+/// Anyone signed in can run one (D-D: "No host or co-host roles, no group
+/// needed"), and a session starts with an empty table: players are added on
+/// the live screen with their own buy-in.
 class CashGameScreen extends StatefulWidget {
   const CashGameScreen({super.key});
 
@@ -25,495 +29,847 @@ class CashGameScreen extends StatefulWidget {
 }
 
 class _CashGameScreenState extends State<CashGameScreen> {
-  _CashStep _step = _CashStep.setup;
-
-  final _name = TextEditingController();
-  final _date = TextEditingController(text: _today());
-  final _location = TextEditingController();
-  final _smallBlind = TextEditingController(text: '1');
-  final _bigBlind = TextEditingController(text: '2');
-  final _minBuyIn = TextEditingController(text: '20');
-  final _maxBuyIn = TextEditingController(text: '200');
-  final _maxPlayers = TextEditingController(text: '10');
-  final List<TextEditingController> _playerControllers = [
-    TextEditingController(),
-    TextEditingController(),
+  // DECISION: C2/M6 - Stepper ladder from 0.05/0.10 up to 50/100; min buy-in defaults to 100 BB and max to 250 BB.
+  static const _blinds = <(String, double, double)>[
+    ('0.05 / 0.10', 0.05, 0.10),
+    ('0.10 / 0.20', 0.10, 0.20),
+    ('0.20 / 0.40', 0.20, 0.40),
+    ('0.25 / 0.50', 0.25, 0.50),
+    ('0.5 / 1', 0.5, 1),
+    ('1 / 2', 1, 2),
+    ('2 / 5', 2, 5),
+    ('5 / 10', 5, 10),
+    ('10 / 20', 10, 20),
+    ('15 / 30', 15, 30),
+    ('20 / 40', 20, 40),
+    ('25 / 50', 25, 50),
+    ('50 / 100', 50, 100),
   ];
 
-  static String _today() {
-    final now = DateTime.now();
-    final mm = now.month.toString().padLeft(2, '0');
-    final dd = now.day.toString().padLeft(2, '0');
-    return '${now.year}-$mm-$dd';
+  final _name = TextEditingController(text: 'Cash game');
+  final _buyIn = TextEditingController(text: '200');
+  final _minBuyIn = TextEditingController(text: '200');
+  final _maxBuyIn = TextEditingController(text: '500');
+  final _chipValue = TextEditingController(text: '1');
+  final _customSb = TextEditingController(text: '1');
+  final _customBb = TextEditingController(text: '2');
+  final _whoIsPlaying = TextEditingController();
+  bool _setMinMax = false;
+  bool _trackSettlement = true;
+  String? _selectedChipSetId;
+
+  // Selected preset blind index: 5 is '1 / 2', -1 = custom.
+  int _selectedBlindIndex = 5;
+  double _sb = 1;
+  double _bb = 2;
+
+  // Buy-in bounds follow the stakes (D1: 50 BB and 250 BB) until the host
+  // types their own; after that they are left alone.
+  bool _buyInsEdited = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _buyIn.addListener(_markEdited);
+    _minBuyIn.addListener(_markEdited);
+    _maxBuyIn.addListener(_markEdited);
+    // Breakdown card reads these controllers — rebuild as the host types.
+    _buyIn.addListener(_refreshBreakdown);
+    _minBuyIn.addListener(_refreshBreakdown);
+    _chipValue.addListener(_refreshBreakdown);
+  }
+
+  void _refreshBreakdown() {
+    if (mounted) setState(() {});
+  }
+
+  bool _settingBuyIns = false;
+
+  void _markEdited() {
+    if (!_settingBuyIns) _buyInsEdited = true;
   }
 
   @override
   void dispose() {
     _name.dispose();
-    _date.dispose();
-    _location.dispose();
-    _smallBlind.dispose();
-    _bigBlind.dispose();
+    _buyIn.dispose();
     _minBuyIn.dispose();
     _maxBuyIn.dispose();
-    _maxPlayers.dispose();
-    for (final c in _playerControllers) {
-      c.dispose();
-    }
+    _chipValue.dispose();
+    _customSb.dispose();
+    _customBb.dispose();
+    _whoIsPlaying.dispose();
     super.dispose();
+  }
+  static String _num(double v) =>
+      v == v.roundToDouble() ? v.round().toString() : v.toString();
+
+  void _applyBlinds(int index, double sb, double bb, {bool syncControllers = true}) {
+    setState(() {
+      _selectedBlindIndex = index;
+      _sb = sb;
+      _bb = bb;
+      if (syncControllers) {
+        _customSb.text = _num(sb);
+        _customBb.text = _num(bb);
+      }
+      if (!_buyInsEdited) {
+        _settingBuyIns = true;
+        _buyIn.text = _num(bb * 100);
+        _minBuyIn.text = _num(bb * 100);
+        _maxBuyIn.text = _num(bb * 250);
+        _settingBuyIns = false;
+      }
+    });
+  }
+
+  /// Custom blinds: SB < BB always, in 1-unit steps for integer blinds or 0.05 for micro.
+  void _nudgeCustom({double sb = 0, double bb = 0}) {
+    var nextSb = _sb + sb;
+    var nextBb = _bb + bb;
+    if (nextSb < 0.05) nextSb = 0.05;
+    if (nextBb <= nextSb) nextBb = nextSb + (nextSb >= 1 ? 1 : 0.05);
+    _applyBlinds(-1, nextSb, nextBb);
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _start(AppProvider app) {
-    final validNames = _playerControllers
-        .map((c) => c.text.trim())
-        .where((n) => n.isNotEmpty)
-        .toList();
-    if (validNames.length < 2) return;
+    final double? minBuy;
+    final double? maxBuy;
+    if (!_setMinMax) {
+      final buy = num.tryParse(_buyIn.text.trim())?.toDouble();
+      if (buy == null || buy <= 0) {
+        _toast('Enter a buy-in amount.');
+        return;
+      }
+      minBuy = buy;
+      maxBuy = buy;
+    } else {
+      minBuy = num.tryParse(_minBuyIn.text.trim())?.toDouble();
+      maxBuy = num.tryParse(_maxBuyIn.text.trim())?.toDouble();
+      if (minBuy == null || maxBuy == null || minBuy <= 0) {
+        _toast('Enter a min and max buy-in.');
+        return;
+      }
+      if (minBuy >= maxBuy) {
+        _toast('Min buy-in must be less than max buy-in.');
+        return;
+      }
+    }
+    final chipValue = num.tryParse(_chipValue.text.trim())?.toDouble();
 
-    final sb = num.tryParse(_smallBlind.text)?.toDouble() ?? 1;
-    final bb = num.tryParse(_bigBlind.text)?.toDouble() ?? 2;
-    final minBuy = num.tryParse(_minBuyIn.text)?.toDouble() ?? 20;
-    final maxBuy = num.tryParse(_maxBuyIn.text)?.toDouble() ?? 200;
+    if (_sb <= 0 || _bb <= 0 || _sb >= _bb) {
+      _toast('Small blind must be less than big blind.');
+      return;
+    }
+    if (chipValue == null || chipValue < 0.01) {
+      _toast('Chip value must be at least 0.01.');
+      return;
+    }
 
-    if (bb <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Big blind must be greater than 0.')));
-      return;
-    }
-    if (sb >= bb) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Small blind must be less than big blind.')));
-      return;
-    }
-    if (minBuy > maxBuy) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Min buy-in must be <= max buy-in.')));
-      return;
-    }
+    final now = DateTime.now();
+    final today =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+    final rawNames = _whoIsPlaying.text.trim();
+    final names = rawNames.isEmpty
+        ? <String>[]
+        : rawNames
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+
     app.startCashGame(
       CashSessionSettings(
-        name: _name.text.trim().isEmpty
-            ? 'Friday Cash Game'
-            : _name.text.trim(),
-        date: _date.text,
-        location: _location.text.trim().isEmpty
-            ? 'Location'
-            : _location.text.trim(),
-        smallBlind: sb,
-        bigBlind: bb,
+        name: _name.text.trim().isEmpty ? 'Cash game' : _name.text.trim(),
+        date: today,
+        location: app.hasCurrentGroup ? app.currentGroup.name : 'Home',
+        smallBlind: _sb,
+        bigBlind: _bb,
         minBuyIn: minBuy,
         maxBuyIn: maxBuy,
-        // No currency selector (no symbols in the primary interface,
-        // User Flow §3.4) and no rake (not in the minimal cash spec, §16.1).
-        maxPlayers: num.tryParse(_maxPlayers.text)?.toInt() ?? 10,
+        maxPlayers: 10,
+        chipValue: chipValue,
+        trackSettlement: _trackSettlement,
+        chipSetId: _selectedChipSetId ?? app.defaultChipSetId,
       ),
-      validNames,
+      names,
     );
-    context.go(RoutePaths.cashGameLive);
+    if (context.mounted) {
+      context.go(RoutePaths.cashGameLive);
+    }
+  }
+
+  /// Chips of the selected set (standard fallback), sorted big first.
+  List<ChipColor> _breakdownChips(AppProvider app) {
+    final id = _selectedChipSetId ?? app.defaultChipSetId;
+    final set = id == null
+        ? null
+        : app.savedChipSets.where((c) => c.id == id).firstOrNull;
+    final chips = List<ChipColor>.of(
+      set?.chips ?? MockData.defaultChipSet,
+    )..sort((a, b) => b.value.compareTo(a.value));
+    return chips.where((c) => c.value > 0).toList();
+  }
+
+  /// Fewest-chip breakdown of one min buy-in, so the host knows what to hand
+  /// each player. Rebuilds live as buy-in, chip value or set changes.
+  Widget _buildBreakdownCard(AppProvider app) {
+    final buyIn =
+        num.tryParse(_minBuyIn.text.trim())?.toDouble() ?? 0;
+    final unit = num.tryParse(_chipValue.text.trim())?.toDouble() ?? 0;
+    final chips = _breakdownChips(app);
+    String body;
+    if (buyIn <= 0 || unit < 0.01 || chips.isEmpty) {
+      body = 'Enter a min buy-in and chip value to see the breakdown.';
+    } else {
+      var rest = (buyIn / unit).round();
+      final parts = <String>[];
+      for (final c in chips) {
+        final n = rest ~/ c.value;
+        if (n > 0) {
+          parts.add('$n × ${c.value}');
+          rest -= n * c.value;
+        }
+      }
+      body = parts.isEmpty
+          ? 'Buy-in is smaller than the smallest chip — lower the chip value.'
+          : 'Per min buy-in: ${parts.join(' + ')}'
+              '${rest > 0 ? ' (+$rest unit${rest == 1 ? '' : 's'} short — add a smaller chip)' : ''}';
+    }
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Chip breakdown',
+            style: AppTypography.bodySm.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _chipSetLabel(AppProvider app) {
+    final id = _selectedChipSetId ?? app.defaultChipSetId;
+    final set = id == null
+        ? null
+        : app.savedChipSets.where((c) => c.id == id).firstOrNull;
+    return set == null
+        ? 'Standard set'
+        : '${set.name} · ${set.chips.length} colours';
+  }
+
+  void _chooseChipSet(BuildContext context, AppProvider app) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: AppColors.borderSubtle),
+      ),
+      builder: (bottomSheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Select Chip Set',
+                  style: AppTypography.bodyLg.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.foreground,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  title: Text(
+                    'Standard set',
+                    style: TextStyle(color: AppColors.foreground),
+                  ),
+                  // DECISION: C1 - Show every chip value and count in the dialog
+                  subtitle: Text(
+                    MockData.defaultChipSet.map((c) => '${c.value} (${c.quantity})').join(', '),
+                    style: TextStyle(color: AppColors.mutedForeground, fontSize: 12),
+                  ),
+                  trailing: _selectedChipSetId == null
+                      ? Icon(Icons.check, color: AppColors.primary)
+                      : null,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  onTap: () {
+                    setState(() => _selectedChipSetId = null);
+                    Navigator.of(bottomSheetContext).pop();
+                  },
+                ),
+                for (final set in app.savedChipSets)
+                  ListTile(
+                    title: Text(
+                      set.name,
+                      style: TextStyle(color: AppColors.foreground),
+                    ),
+                    // DECISION: C1 - Show every chip value and count in the dialog
+                    subtitle: Text(
+                      set.chips.map((c) => '${c.value} (${c.quantity})').join(', '),
+                      style: TextStyle(color: AppColors.mutedForeground, fontSize: 12),
+                    ),
+                    trailing: _selectedChipSetId == set.id
+                        ? Icon(Icons.check, color: AppColors.primary)
+                        : null,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    onTap: () {
+                      setState(() => _selectedChipSetId = set.id);
+                      Navigator.of(bottomSheetContext).pop();
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-
-    // Spec §3.3: Cash game module is admin-only.
-    if (!app.isAdmin) {
-      return const Scaffold(
-        body: Center(child: Text('Admin access required.')),
-      );
-    }
-
-    final validCount = _playerControllers
-        .where((c) => c.text.trim().isNotEmpty)
-        .length;
+    final symbol = Formatters.currencySymbol;
+    final custom = _selectedBlindIndex == -1;
 
     return AppPage(
-      maxWidth: 560,
+      maxWidth: 520,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const GroupContextHeader(),
-          const SizedBox(height: AppSpacing.lg),
+          // App bar with Squircle Back button < and CASH GAME badge pill
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              InkWell(
-                onTap: () => context.go(RoutePaths.home),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(
-                    Icons.arrow_back,
-                    size: AppFontSizes.xl,
-                    color: AppColors.mutedForeground,
+              AppBackButton(
+                onTap: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(RoutePaths.home);
+                  }
+                },
+                tooltip: 'Back to home',
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.destructiveSoft,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(
+                    color: AppColors.destructive.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  'CASH GAME',
+                  style: TextStyle(
+                    color: AppColors.destructiveText,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0,
                   ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Title: New cash game
+          Text(
+            'New cash game',
+            style: AppTypography.display(
+              size: 32,
+              weight: FontWeight.w700,
+              color: AppColors.foreground,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Blinds section
+          Text(
+            'Blinds',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < _blinds.length; i++)
+                _buildStakeChip(
+                  label: _blinds[i].$1,
+                  selected: _selectedBlindIndex == i,
+                  onTap: () =>
+                      _applyBlinds(i, _blinds[i].$2, _blinds[i].$3),
+                ),
+              _buildStakeChip(
+                label: 'Custom',
+                selected: custom,
+                onTap: () => _applyBlinds(-1, _sb, _bb),
+              ),
+            ],
+          ),
+          if (custom) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _StakeStepper(
+                    label: 'Small blind',
+                    controller: _customSb,
+                    onMinus: () => _nudgeCustom(sb: -1),
+                    onPlus: () => _nudgeCustom(sb: 1),
+                    onChanged: (val) {
+                      final parsed = double.tryParse(val.trim());
+                      if (parsed != null && parsed > 0) {
+                        _applyBlinds(-1, parsed, _bb, syncControllers: false);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _StakeStepper(
+                    label: 'Big blind',
+                    controller: _customBb,
+                    onMinus: () => _nudgeCustom(bb: -1),
+                    onPlus: () => _nudgeCustom(bb: 1),
+                    onChanged: (val) {
+                      final parsed = double.tryParse(val.trim());
+                      if (parsed != null && parsed > 0) {
+                        _applyBlinds(-1, _sb, parsed, syncControllers: false);
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 20),
+
+          // Buy-in section with Min/Max toggle
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              Text(
+                _setMinMax ? 'Buy-in range' : 'Buy-in',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _setMinMax = !_setMinMax;
+                    if (_setMinMax) {
+                      _minBuyIn.text = _buyIn.text;
+                      _maxBuyIn.text = _num(_bb * 250);
+                    } else {
+                      _buyIn.text = _minBuyIn.text;
+                    }
+                  });
+                },
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Set minimum and maximum',
+                        style: TextStyle(
+                          color: AppColors.mutedForeground,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      AppToggle(
+                        value: _setMinMax,
+                        onChanged: (v) {
+                          setState(() {
+                            _setMinMax = v;
+                            if (v) {
+                              _minBuyIn.text = _buyIn.text;
+                              _maxBuyIn.text = _num(_bb * 250);
+                            } else {
+                              _buyIn.text = _minBuyIn.text;
+                            }
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (!_setMinMax)
+            _buildBuyInField(controller: _buyIn, prefix: symbol)
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Min buy-in',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _buildBuyInField(controller: _minBuyIn, prefix: symbol),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Max buy-in',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _buildBuyInField(controller: _maxBuyIn, prefix: symbol),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          const SizedBox(height: 20),
+
+          // Chip set dropdown
+          Text(
+            'Chip set',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          InkWell(
+            onTap: () => _chooseChipSet(context, app),
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.borderSubtle),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'New Cash Game',
-                    style: AppTypography.display(
-                      size: AppFontSizes.xxxl,
-                      weight: FontWeight.w700,
+                  Expanded(
+                    child: Text(
+                      _chipSetLabel(app),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.foreground,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                  Text(
-                    'Set up blinds, buy-in limits, and players',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
+                  Icon(
+                    Icons.keyboard_arrow_down,
+                    color: AppColors.mutedForeground,
+                    size: 22,
                   ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          // Step tabs
-          Row(
-            children: [
-              Expanded(
-                child: _StepTab(
-                  label: '1. Game Setup',
-                  active: _step == _CashStep.setup,
-                  onTap: () => setState(() => _step = _CashStep.setup),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                child: _StepTab(
-                  label: '2. Players',
-                  active: _step == _CashStep.players,
-                  onTap: () => setState(() => _step = _CashStep.players),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          if (_step == _CashStep.setup)
-            _SetupForm(
-              name: _name,
-              date: _date,
-              location: _location,
-              smallBlind: _smallBlind,
-              bigBlind: _bigBlind,
-              minBuyIn: _minBuyIn,
-              maxBuyIn: _maxBuyIn,
-              maxPlayers: _maxPlayers,
-              onContinue: () => setState(() => _step = _CashStep.players),
-            )
-          else
-            _PlayersForm(
-              controllers: _playerControllers,
-              onAdd: () => setState(
-                () => _playerControllers.add(TextEditingController()),
-              ),
-              onRemove: (i) => setState(() {
-                _playerControllers.removeAt(i).dispose();
-              }),
-              validCount: validCount,
-              smallBlind: _smallBlind.text,
-              bigBlind: _bigBlind.text,
-              minBuyIn: _minBuyIn.text,
-              maxBuyIn: _maxBuyIn.text,
-              onStart: () => _start(app),
-            ),
-          const SizedBox(height: AppSpacing.xxl),
-        ],
-      ),
-    );
-  }
-}
-
-class _StepTab extends StatelessWidget {
-  const _StepTab({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active ? AppColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-            color: active ? AppColors.primary : AppColors.border,
-          ),
-        ),
-        child: Text(
-          label,
-          style: AppTypography.bodySm.copyWith(
-            fontWeight: FontWeight.w500,
-            color: active
-                ? AppColors.primaryForeground
-                : AppColors.mutedForeground,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SetupForm extends StatelessWidget {
-  const _SetupForm({
-    required this.name,
-    required this.date,
-    required this.location,
-    required this.smallBlind,
-    required this.bigBlind,
-    required this.minBuyIn,
-    required this.maxBuyIn,
-    required this.maxPlayers,
-    required this.onContinue,
-  });
-
-  final TextEditingController name;
-  final TextEditingController date;
-  final TextEditingController location;
-  final TextEditingController smallBlind;
-  final TextEditingController bigBlind;
-  final TextEditingController minBuyIn;
-  final TextEditingController maxBuyIn;
-  final TextEditingController maxPlayers;
-  final VoidCallback onContinue;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AppTextField(
-            controller: name,
-            label: 'Game name',
-            placeholder: 'Friday Cash Game',
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: AppTextField(
-                  controller: date,
-                  label: 'Date',
-                  placeholder: 'YYYY-MM-DD',
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: AppTextField(
-                  controller: location,
-                  label: 'Location',
-                  placeholder: 'Location',
-                ),
-              ),
-            ],
-          ),
-          Divider(color: AppColors.border, height: AppSpacing.xxl),
-          Text(
-            'Blinds',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              // Audit fix E15: no currency selector — currency symbols are
-              // hidden in the primary interface (User Flow §3.4).
-              Expanded(
-                child: AppTextField(
-                  controller: smallBlind,
-                  label: 'Small blind',
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  placeholder: '1',
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: AppTextField(
-                  controller: bigBlind,
-                  label: 'Big blind',
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  placeholder: '2',
-                ),
-              ),
-            ],
-          ),
-          Divider(color: AppColors.border, height: AppSpacing.xxl),
-          Text(
-            'Buy-in limits',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                child: AppTextField(
-                  controller: minBuyIn,
-                  label: 'Min buy-in',
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: AppTextField(
-                  controller: maxBuyIn,
-                  label: 'Max buy-in',
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          // Audit fix C5: no rake field — the minimal cash module (§16.1) has
-          // no rake, and the organizer cut must never be called "rake".
-          AppTextField(
-            controller: maxPlayers,
-            label: 'Max players',
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          AppButton(
-            fullWidth: true,
-            onPressed: onContinue,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Continue to Players'),
-                SizedBox(width: 6),
-                Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
-              ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
+          const SizedBox(height: 20),
 
-class _PlayersForm extends StatelessWidget {
-  const _PlayersForm({
-    required this.controllers,
-    required this.onAdd,
-    required this.onRemove,
-    required this.validCount,
-    required this.smallBlind,
-    required this.bigBlind,
-    required this.minBuyIn,
-    required this.maxBuyIn,
-    required this.onStart,
-  });
-
-  final List<TextEditingController> controllers;
-  final VoidCallback onAdd;
-  final void Function(int) onRemove;
-  final int validCount;
-  final String smallBlind;
-  final String bigBlind;
-  final String minBuyIn;
-  final String maxBuyIn;
-  final VoidCallback onStart;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+          // Chip value (D1): per session, never saved on the chip set.
           Text(
-            'Starting players',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Add players now — you can add more once the game starts.',
+            'Chip value',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
-          for (var i = 0; i < controllers.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: AppTextField(
-                      controller: controllers[i],
-                      placeholder: 'Player ${i + 1}',
-                    ),
-                  ),
-                  if (controllers.length > 1)
-                    InkWell(
-                      onTap: () => onRemove(i),
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppSpacing.sm),
-                        child: Icon(
-                          Icons.close,
-                          size: 18,
-                          color: AppColors.destructive,
+          const SizedBox(height: 10),
+          _buildBuyInField(controller: _chipValue, prefix: '1 chip ='),
+          const SizedBox(height: 6),
+          _buildChipValueExample(symbol),
+          const SizedBox(height: 12),
+          _buildBreakdownCard(app),
+          const SizedBox(height: 20),
+
+          // Track settlement Card
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Expanded, not a bare Text: a 16px label in the test
+                    // font fallback is wider than the row has left after the
+                    // toggle, and an unconstrained Text pushes the toggle off
+                    // the card entirely at 320px.
+                    Expanded(
+                      child: Text(
+                        'Track settlement',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.foreground,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                ],
+                    const SizedBox(width: AppSpacing.sm),
+                    AppToggle(
+                      value: _trackSettlement,
+                      onChanged: (v) => setState(() => _trackSettlement = v),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Auto-calculate who owes who at the end.',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 36),
+
+          // Who is playing section (C4)
+          Text(
+            'Who is playing? (optional)',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: TextField(
+              key: const Key('cash_who_is_playing_input'),
+              controller: _whoIsPlaying,
+              style: TextStyle(
+                color: AppColors.foreground,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
+                isDense: true,
+                hintText: 'Names separated by commas, e.g. Alice, Bob',
+                contentPadding: EdgeInsets.symmetric(vertical: 12),
               ),
             ),
-          AppButton(
-            variant: AppButtonVariant.secondary,
-            fullWidth: true,
-            onPressed: onAdd,
-            child: const Text('+ Add player'),
           ),
-          Divider(color: AppColors.border, height: AppSpacing.xxl),
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.muted,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              children: [
-                _SummaryRow(label: 'Blinds', value: '$smallBlind/$bigBlind'),
-                const SizedBox(height: 4),
-                _SummaryRow(
-                  label: 'Buy-in range',
-                  value: '$minBuyIn–$maxBuyIn',
+          const SizedBox(height: 24),
+
+          // Start session button
+          InkWell(
+            onTap: () => _start(app),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              height: 56,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: Glass.primaryGlow,
+              ),
+              child: Text(
+                'Start session',
+                style: TextStyle(
+                  color: AppColors.foreground,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(height: 4),
-                _SummaryRow(label: 'Starting players', value: '$validCount'),
-              ],
+              ),
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
-          AppButton(
-            size: AppButtonSize.lg,
-            fullWidth: true,
-            onPressed: validCount >= 2 ? onStart : null,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.play_arrow, size: 16, color: AppColors.icon),
-                SizedBox(width: 6),
-                Text('Start cash game'),
-              ],
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  // DECISION: C3 - Show dynamic chip value example with live buy-in and chip count without currency symbol when currency is None.
+  Widget _buildChipValueExample(String sym) {
+    final unit = num.tryParse(_chipValue.text.trim())?.toDouble() ?? 1.0;
+    final buy = _setMinMax
+        ? (num.tryParse(_minBuyIn.text.trim())?.toDouble() ?? 100.0)
+        : (num.tryParse(_buyIn.text.trim())?.toDouble() ?? 100.0);
+    final chipsCount = unit > 0 ? (buy / unit).round() : 0;
+    final chip25Val = 25 * unit;
+    final chip25Str = chip25Val == chip25Val.roundToDouble()
+        ? chip25Val.round().toString()
+        : chip25Val.toStringAsFixed(2);
+    final unitStr = unit == unit.roundToDouble() ? unit.round().toString() : unit.toString();
+    final buyStr = buy == buy.roundToDouble() ? buy.round().toString() : buy.toString();
+
+    final example = 'Example: At 1 chip = $sym$unitStr, a 25 chip is $sym$chip25Str; buy-in $sym$buyStr = $chipsCount chips.';
+    return Text(
+      example,
+      style: AppTypography.bodyXs.copyWith(
+        color: AppColors.mutedForeground,
+      ),
+    );
+  }
+
+  static Widget _buildStakeChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.card,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.borderSubtle,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: AppColors.primarySoftBorder,
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? AppColors.primaryForeground : AppColors.foreground,
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    ));
+  }
+
+  static Widget _buildBuyInField({
+    required TextEditingController controller,
+    required String prefix,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: Row(
+        children: [
+          if (prefix.isNotEmpty) ...[
+            Text(
+              prefix,
+              style: TextStyle(
+                color: AppColors.foreground,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              style: TextStyle(
+                color: AppColors.foreground,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                // The container draws the field; without these the theme's
+                // outline and fill paint a second box inside it.
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 12),
+              ),
             ),
           ),
         ],
@@ -522,25 +878,75 @@ class _PlayersForm extends StatelessWidget {
   }
 }
 
-class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({required this.label, required this.value});
+/// One of the two custom-stakes steppers (D1: SB and BB, SB < BB).
+class _StakeStepper extends StatelessWidget {
+  const _StakeStepper({
+    required this.label,
+    required this.controller,
+    required this.onMinus,
+    required this.onPlus,
+    required this.onChanged,
+  });
 
   final String label;
-  final String value;
+  final TextEditingController controller;
+  final VoidCallback onMinus;
+  final VoidCallback onPlus;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(
-          label,
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.mutedForeground,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Lower $label',
+            onPressed: onMinus,
+            icon: Icon(Icons.remove, size: 18, color: AppColors.foreground),
           ),
-        ),
-        const Spacer(),
-        Text(value, style: AppTypography.monoSm),
-      ],
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.center,
+                  onChanged: onChanged,
+                  style: TextStyle(
+                    color: AppColors.foreground,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Raise $label',
+            onPressed: onPlus,
+            icon: Icon(Icons.add, size: 18, color: AppColors.foreground),
+          ),
+        ],
+      ),
     );
   }
 }

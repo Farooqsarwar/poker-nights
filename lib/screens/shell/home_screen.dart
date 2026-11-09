@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
@@ -16,14 +14,14 @@ import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../utils/main_button.dart';
 import '../../widgets/app_alert_banner.dart';
-import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_tag.dart';
+import '../../services/payment_service.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/app_text_field.dart';
+import '../../widgets/create_group_dialog.dart';
 import '../../widgets/group_switcher.dart';
 
 /// Dashboard mirroring the web `HomePage`.
@@ -35,9 +33,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final _groupNameController = TextEditingController();
-  String _createError = '';
-  bool _showCreate = false;
   bool _showRestoreModal = false;
 
   void _openJoin() => context.go(RoutePaths.join);
@@ -45,10 +40,24 @@ class _HomeScreenState extends State<HomeScreen> {
   static String _hhmm(DateTime dt) =>
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
-  @override
-  void dispose() {
-    _groupNameController.dispose();
-    super.dispose();
+  static String _getInitials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+    if (parts.isEmpty) return '♠';
+    return parts.map((p) => p[0].toUpperCase()).take(2).join();
+  }
+
+  LiveGame? _repostCandidate(AppProvider app) {
+    final candidates = app.currentGroup.games
+        .where((g) => g.status == LiveGameStatus.completed)
+        .toList()
+      ..sort((a, b) => b.settings.scheduledStart == null
+          ? 1
+          : (a.settings.scheduledStart ?? DateTime.fromMillisecondsSinceEpoch(0))
+              .compareTo(b.settings.scheduledStart ?? DateTime.fromMillisecondsSinceEpoch(0)));
+    final hasOpen = app.currentGroup.games.any((g) =>
+        g.status != LiveGameStatus.completed && g.status != LiveGameStatus.cancelled);
+    if (candidates.isEmpty || hasOpen) return null;
+    return candidates.first;
   }
 
   void _openGame(BuildContext context, AppProvider app, LiveGame game) {
@@ -85,249 +94,845 @@ class _HomeScreenState extends State<HomeScreen> {
         )
         .toList();
     final activeGame = games.where((g) => g.status.isActiveLive).firstOrNull;
+    final repost = app.hasCurrentGroup ? _repostCandidate(app) : null;
 
     return Stack(
       children: [
-        const _LuxuryDecorations(),
         AppPage(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: AppSpacing.sm),
-              // Persistent group context — the user always knows which group
-              // they are looking at, and can switch without leaving (IA §1).
-              const GroupContextHeader(),
-              const SizedBox(height: AppSpacing.lg),
-              // Header
-              Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Home',
-                              style:
-                                  AppTypography.display(
-                                    size: AppFontSizes.display,
-                                    weight: FontWeight.w700,
-                                  ).copyWith(
-                                    shadows: [
-                                      Shadow(
-                                        color: AppColors.primary.withValues(
-                                          alpha: 0.5,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= 960;
+
+              if (isWide) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: AppSpacing.sm),
+                    // Desktop Header Row
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.successText,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Welcome back, ${user?.name.isNotEmpty == true ? user!.name : 'Player'}',
+                                    style: TextStyle(
+                                      color: AppColors.mutedForeground,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Home',
+                                    style: TextStyle(
+                                      color: AppColors.foreground,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                  if (app.hasCurrentGroup) ...[
+                                    const SizedBox(width: AppSpacing.md),
+                                    InkWell(
+                                      onTap: () => showGroupSwitcher(context),
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
                                         ),
-                                        blurRadius: 16,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.card,
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: AppColors.borderSubtle),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 20,
+                                              height: 20,
+                                              decoration: BoxDecoration(
+                                                color: AppColors.primary,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              alignment: Alignment.center,
+                                              child: Text(
+                                                _getInitials(group.name),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            ConstrainedBox(
+                                              constraints: const BoxConstraints(maxWidth: 180),
+                                              child: Text(
+                                                group.name,
+                                                style: TextStyle(
+                                                  color: AppColors.foreground,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Icon(
+                                              Icons.keyboard_arrow_down,
+                                              color: AppColors.mutedForeground,
+                                              size: 18,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (app.hasCurrentGroup) ...[
+                          if (isAdmin) ...[
+                            AppButton(
+                              size: AppButtonSize.sm,
+                              onPressed: () => context.push(RoutePaths.quick),
+                              child: const Text('Start game'),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                          ],
+                          AppButton(
+                            variant: AppButtonVariant.secondary,
+                            size: AppButtonSize.sm,
+                            onPressed: () => context.push(RoutePaths.createTournament),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.add, color: AppColors.primaryText, size: 14),
+                                const SizedBox(width: AppSpacing.xs),
+                                const Text('New game'),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          AppButton(
+                            variant: AppButtonVariant.secondary,
+                            size: AppButtonSize.sm,
+                            onPressed: () => context.go(RoutePaths.cashGame),
+                            child: const Text('Cash game'),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                        ],
+                        _NotificationBellButton(app: app),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    if (!app.hasCurrentGroup) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: AppCard(
+                              padding: const EdgeInsets.all(AppSpacing.xl),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Poker tonight?',
+                                    style: AppTypography.eyebrow(
+                                      size: 11,
+                                      weight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.sm),
+                                  Text(
+                                    'Friends already at the table? Start the clock now — no account, nothing to install.',
+                                    style: AppTypography.bodySm.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.xl),
+                                  AppButton(
+                                    fullWidth: true,
+                                    size: AppButtonSize.lg,
+                                    onPressed: () => context.go(RoutePaths.quick),
+                                    child: const Text('Start a game now'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xl),
+                          Expanded(
+                            child: AppCard(
+                              padding: const EdgeInsets.all(AppSpacing.xl),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Same friends every week?',
+                                    style: AppTypography.eyebrow(
+                                      size: 11,
+                                      weight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.sm),
+                                  Text(
+                                    'Set up a recurring poker club with automatic chip calculations, member stats, chat, and season leaderboards.',
+                                    style: AppTypography.bodySm.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.xl),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: AppButton(
+                                          fullWidth: true,
+                                          size: AppButtonSize.lg,
+                                          onPressed: () => openCreateGroupDialog(context),
+                                          child: const Text('Create a group'),
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppSpacing.md),
+                                      Expanded(
+                                        child: AppButton(
+                                          fullWidth: true,
+                                          size: AppButtonSize.lg,
+                                          variant: AppButtonVariant.secondary,
+                                          onPressed: () => context.go(RoutePaths.join),
+                                          child: const Text('Join a group'),
+                                        ),
                                       ),
                                     ],
                                   ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.success,
-                                    shape: BoxShape.circle,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xxl),
+                      Text(
+                        'Poker Toolkit',
+                        style: TextStyle(
+                          color: AppColors.foreground,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'Free utility calculators for your home games — no login required',
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Row(
+                        children: [
+                          _ToolkitCard(
+                            title: 'Tournament Clock',
+                            subtitle: 'Blinds, antes & sound alerts',
+                            icon: Icons.timer_outlined,
+                            onTap: () => context.push(RoutePaths.toolClock),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          _ToolkitCard(
+                            title: 'Structure Generator',
+                            subtitle: 'Custom blind levels by chip count',
+                            icon: Icons.format_list_numbered_rounded,
+                            onTap: () => context.push(RoutePaths.toolBlinds),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          _ToolkitCard(
+                            title: 'ICM Calculator',
+                            subtitle: 'Calculate chip equity & deals',
+                            icon: Icons.show_chart_rounded,
+                            onTap: () => context.push(RoutePaths.toolIcm),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          _ToolkitCard(
+                            title: 'Payout Calculator',
+                            subtitle: 'Prize pool splits & structures',
+                            icon: Icons.receipt_long_outlined,
+                            onTap: () => context.push(RoutePaths.toolPayouts),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+                      AppCard(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius: BorderRadius.circular(AppRadius.md),
+                              ),
+                              child: Icon(
+                                Icons.workspace_premium_rounded,
+                                color: AppColors.primary,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Poker Night Premium',
+                                        style: AppTypography.bodySm.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppSpacing.sm),
+                                      AppTag(
+                                        app.premiumTier == PremiumTier.premium
+                                            ? 'ACTIVE'
+                                            : 'PREMIUM',
+                                        tone: app.premiumTier == PremiumTier.premium
+                                            ? AppTagTone.success
+                                            : AppTagTone.primary,
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                const SizedBox(width: AppSpacing.sm),
-                                // Audit fix E11: no more "Welcome back, Guest".
-                                Text(
-                                  user?.name != null && user!.name.isNotEmpty
-                                      ? 'Welcome back, ${user.name}'
-                                      : 'Welcome back',
-                                  style: AppTypography.bodySm.copyWith(
-                                    color: AppColors.mutedForeground,
+                                  const SizedBox(height: AppSpacing.xxs),
+                                  Text(
+                                    'Two or more tables, seasons & points, custom TV layouts, bounties & unlimited templates.',
+                                    style: AppTypography.bodyXs.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            AppButton(
+                              size: AppButtonSize.sm,
+                              variant: app.premiumTier == PremiumTier.premium
+                                  ? AppButtonVariant.secondary
+                                  : AppButtonVariant.primary,
+                              onPressed: () => context.push(RoutePaths.upgrade),
+                              child: Text(
+                                app.premiumTier == PremiumTier.premium
+                                    ? 'Manage'
+                                    : 'See Premium',
+                              ),
                             ),
                           ],
                         ),
                       ),
+                    ] else ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Left Column (flex: 7)
+                          Expanded(
+                            flex: 7,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (app.hasOfflineConflict) ...[
+                                  AppAlertBanner(
+                                    type: AppAlertType.warning,
+                                    message:
+                                        'Remote cloud changes conflict with your local offline progress. Please choose which state to keep.',
+                                    actionLabel: 'Review Conflict',
+                                    onAction: () => context.go(RoutePaths.hostDashboard),
+                                  ).animate().fadeIn(duration: 400.ms),
+                                  const SizedBox(height: AppSpacing.lg),
+                                ] else if (app.restoredFromRecovery && activeGame != null) ...[
+                                  AppAlertBanner(
+                                    type: AppAlertType.info,
+                                    message:
+                                        'An active tournament was found on this device'
+                                        '${app.restoredAt != null ? ' — last saved ${_hhmm(app.restoredAt!)}' : ''}.',
+                                    actionLabel: 'Review',
+                                    onAction: () => setState(() => _showRestoreModal = true),
+                                  ).animate().fadeIn(duration: 400.ms),
+                                  const SizedBox(height: AppSpacing.lg),
+                                ],
+                                _NextActionCard(
+                                  app: app,
+                                  group: group,
+                                  isAdmin: isAdmin,
+                                  onOpen: (g) => _openGame(context, app, g),
+                                ),
+                                if (repost != null) ...[
+                                  const SizedBox(height: AppSpacing.lg),
+                                  AppCard(
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Same as last time?',
+                                                style: TextStyle(
+                                                  color: AppColors.foreground,
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                              const SizedBox(height: AppSpacing.xs),
+                                              Text(
+                                                'Repost ${repost.settings.name} one week later.',
+                                                style: AppTypography.bodySm.copyWith(
+                                                  color: AppColors.mutedForeground,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: AppSpacing.md),
+                                        AppButton(
+                                          variant: AppButtonVariant.secondary,
+                                          onPressed: () => context.push(
+                                            '${RoutePaths.createTournament}?repost=${repost.id}',
+                                          ),
+                                          child: const Text('Repost'),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: AppSpacing.xl),
+                                _UpcomingGames(
+                                  games: games,
+                                  isAdmin: app.isAdmin,
+                                  userId: user?.id,
+                                  onOpen: (g) => _openGame(context, app, g),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xl),
+                          // Right Column (flex: 5)
+                          Expanded(
+                            flex: 5,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _GroupCard(
+                                  group: group,
+                                  loading: app.groupBundleLoading,
+                                  showJoin: _openJoin,
+                                  showCreate: () => openCreateGroupDialog(context),
+                                  isAdmin: app.isAdmin,
+                                ),
+                                const SizedBox(height: AppSpacing.xl),
+                                Text(
+                                  'Group snapshot',
+                                  style: TextStyle(
+                                    color: AppColors.foreground,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: AppSpacing.sm),
+                                _GroupStats(group: group, app: app, isGrid: true),
+                                if (app.notifications.any((n) => !n.read)) ...[
+                                  const SizedBox(height: AppSpacing.xl),
+                                  _AlertsPreview(notifications: app.notifications),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-              // Group activity snapshot — answers "how is the group doing?"
-              // at a glance (IA §7).
-              if (app.hasCurrentGroup) ...[
-                _GroupStats(group: group, app: app),
-                const SizedBox(height: AppSpacing.xl),
-              ],
-              // Offline Conflict Banner
-              if (app.hasOfflineConflict) ...[
-                AppAlertBanner(
-                  type: AppAlertType.warning,
-                  message:
-                      'Local offline progress detected that is out of sync with the cloud. Would you like to keep the local offline data or revert to cloud?',
-                  actionLabel: 'Review Conflict',
-                  onAction: () => context.go(RoutePaths.adminDashboard),
-                ).animate().fadeIn(duration: 400.ms),
-                const SizedBox(height: AppSpacing.xl),
-              ] else if (app.restoredFromRecovery && activeGame != null) ...[
-                AppAlertBanner(
-                  type: AppAlertType.info,
-                  message:
-                      'An active tournament was found on this device'
-                      '${app.restoredAt != null ? ' — last saved ${_hhmm(app.restoredAt!)}' : ''}.',
-                  actionLabel: 'Review',
-                  onAction: () => setState(() => _showRestoreModal = true),
-                ).animate().fadeIn(duration: 400.ms),
-                const SizedBox(height: AppSpacing.xl),
-              ],
-
-              // Next required action (User Flow §4.1)
-              ...[
-                _NextActionCard(
-                  app: app,
-                  group: group,
-                  isAdmin: isAdmin,
-                  onOpen: (g) => _openGame(context, app, g),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-              ],
-
-              // Primary actions (User Flow §4.1)
-              if (isAdmin) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: AppButton(
-                        onPressed: () =>
-                            context.go(RoutePaths.createTournament),
-                        child: const AppIconLabel(
-                          label: 'New Game',
-                          icon: Icons.add,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: AppButton(
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () => context.go(RoutePaths.cashGame),
-                        child: const AppIconLabel(
-                          label: 'Start Cash Game',
-                          icon: Icons.sports_esports,
-                        ),
-                      ),
-                    ),
                   ],
-                ),
-                const SizedBox(height: AppSpacing.lg),
-              ],
-              // Two-column layout
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final wide = constraints.maxWidth >= 960;
-                  if (wide) {
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 8,
-                          child: _UpcomingGames(
-                            games: games,
-                            isAdmin: app.isAdmin,
-                            userId: user?.id,
-                            onOpen: (g) => _openGame(context, app, g),
+                );
+              }
+
+              // Mobile / compact layout (< 960px)
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: AppSpacing.sm),
+                  // Top Header Row
+                  Row(
+                    children: [
+                      Semantics(
+                        label: 'Open navigation menu',
+                        button: true,
+                        child: InkWell(
+                          onTap: app.toggleDrawer,
+                          borderRadius: BorderRadius.circular(21),
+                          child: Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: AppColors.primarySoft,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppColors.primarySoftBorder),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              user?.name.isNotEmpty == true
+                                  ? user!.name[0].toUpperCase()
+                                  : '?',
+                              style: TextStyle(
+                                color: AppColors.foreground,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.xxl),
-                        Expanded(
-                          flex: 4,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _GroupCard(
-                                group: app.hasCurrentGroup ? group : null,
-                                loading: app.groupBundleLoading,
-                                showJoin: _openJoin,
-                                showCreate: () =>
-                                    setState(() => _showCreate = true),
-                                isAdmin: app.isAdmin,
-                              ),
-                              const SizedBox(height: AppSpacing.xl),
-                              if (app.notifications.any((n) => !n.read))
-                                _AlertsPreview(
-                                  notifications: app.notifications,
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 7,
+                                  height: 7,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.successText,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
-                            ],
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Welcome back',
+                                  style: TextStyle(
+                                    color: AppColors.mutedForeground,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              user?.name.isNotEmpty == true
+                                  ? user!.name
+                                  : '',
+                              style: TextStyle(
+                                color: AppColors.foreground,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _NotificationBellButton(app: app),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  if (!app.hasCurrentGroup) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    AppCard(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Poker tonight?',
+                            style: AppTypography.eyebrow(
+                              size: 11,
+                              weight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            'Friends already at the table? Start the clock now — no account, nothing to install.',
+                            style: AppTypography.bodySm.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          AppButton(
+                            fullWidth: true,
+                            onPressed: () => context.go(RoutePaths.quick),
+                            child: const Text('Start a game now'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      'Same friends every week?',
+                      style: AppTypography.bodyStyle.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AppButton(
+                            fullWidth: true,
+                            onPressed: () => openCreateGroupDialog(context),
+                            child: const Text('Create a group'),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: AppButton(
+                            fullWidth: true,
+                            variant: AppButtonVariant.secondary,
+                            onPressed: () => context.go(RoutePaths.join),
+                            child: const Text('Join a group'),
                           ),
                         ),
                       ],
-                    );
-                  }
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _UpcomingGames(
-                        games: games,
-                        isAdmin: app.isAdmin,
-                        userId: user?.id,
-                        onOpen: (g) => _openGame(context, app, g),
+                    ),
+                  ] else ...[
+                    Text(
+                      'Home',
+                      style: TextStyle(
+                        color: AppColors.foreground,
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
                       ),
-                      const SizedBox(height: AppSpacing.xl),
-                      _GroupCard(
-                        group: app.hasCurrentGroup ? group : null,
-                        loading: app.groupBundleLoading,
-                        showJoin: _openJoin,
-                        showCreate: () => setState(() => _showCreate = true),
-                        isAdmin: app.isAdmin,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    InkWell(
+                      onTap: () => showGroupSwitcher(context),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.card,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.borderSubtle),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                app.hasCurrentGroup ? _getInitials(group.name) : '♠',
+                                style: TextStyle(
+                                  color: AppColors.foreground,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                app.hasCurrentGroup ? group.name : 'Select a group',
+                                style: TextStyle(
+                                  color: AppColors.foreground,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Icon(
+                              Icons.keyboard_arrow_down,
+                              color: AppColors.mutedForeground,
+                              size: 22,
+                            ),
+                          ],
+                        ),
                       ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    if (app.hasOfflineConflict) ...[
+                      AppAlertBanner(
+                        type: AppAlertType.warning,
+                        message:
+                            'Remote cloud changes conflict with your local offline progress. Please choose which state to keep.',
+                        actionLabel: 'Review Conflict',
+                        onAction: () => context.go(RoutePaths.hostDashboard),
+                      ).animate().fadeIn(duration: 400.ms),
                       const SizedBox(height: AppSpacing.xl),
-                      if (app.notifications.any((n) => !n.read))
-                        _AlertsPreview(notifications: app.notifications),
+                    ] else if (app.restoredFromRecovery && activeGame != null) ...[
+                      AppAlertBanner(
+                        type: AppAlertType.info,
+                        message:
+                            'An active tournament was found on this device'
+                            '${app.restoredAt != null ? ' — last saved ${_hhmm(app.restoredAt!)}' : ''}.',
+                        actionLabel: 'Review',
+                        onAction: () => setState(() => _showRestoreModal = true),
+                      ).animate().fadeIn(duration: 400.ms),
+                      const SizedBox(height: AppSpacing.xl),
                     ],
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-        // Modals
-        AppModal(
-          open: _showCreate,
-          onClose: () => setState(() => _showCreate = false),
-          title: 'Create a group',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.sm),
-              AppTextField(
-                controller: _groupNameController,
-                label: 'Group name',
-                placeholder: 'e.g. Friday Poker Club',
-                error: _createError.isEmpty ? null : _createError,
-                onChanged: (_) => setState(() => _createError = ''),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              AppButton(
-                fullWidth: true,
-                size: AppButtonSize.lg,
-                disabled: _groupNameController.text.trim().length < 2,
-                onPressed: () async {
-                  if (_groupNameController.text.trim().length < 2) return;
-                  final created = await app.createGroup(
-                    _groupNameController.text.trim(),
-                  );
-                  if (!context.mounted) return;
-                  if (created == null) {
-                    setState(
-                      () => _createError =
-                          'Could not create the group. Please try again.',
-                    );
-                    return;
-                  }
-                  setState(() => _showCreate = false);
-                  context.go(RoutePaths.group);
-                },
-                child: const Text('Create Group'),
-              ),
-            ],
+
+                    _NextActionCard(
+                      app: app,
+                      group: group,
+                      isAdmin: isAdmin,
+                      onOpen: (g) => _openGame(context, app, g),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    if (app.hasCurrentGroup && repost != null) ...[
+                      AppCard(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Same as last time?',
+                                    style: TextStyle(
+                                      color: AppColors.foreground,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Text(
+                                    'Repost ${repost.settings.name} one week later.',
+                                    style: AppTypography.bodySm.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            AppButton(
+                              variant: AppButtonVariant.secondary,
+                              onPressed: () => context.push(
+                                '${RoutePaths.createTournament}?repost=${repost.id}',
+                              ),
+                              child: const Text('Repost'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
+
+                    if (isAdmin) ...[
+                      AppButton(
+                        size: AppButtonSize.lg,
+                        fullWidth: true,
+                        onPressed: () => context.push(RoutePaths.quick),
+                        child: const Text('Start a game now'),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AppButton(
+                            variant: AppButtonVariant.secondary,
+                            size: AppButtonSize.lg,
+                            fullWidth: true,
+                            onPressed: () => context.push(RoutePaths.createTournament),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.add, color: AppColors.primaryText, size: 18),
+                                const SizedBox(width: AppSpacing.sm),
+                                const Flexible(
+                                  child: Text(
+                                    'New game',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: AppButton(
+                            variant: AppButtonVariant.secondary,
+                            size: AppButtonSize.lg,
+                            fullWidth: true,
+                            onPressed: () => context.go(RoutePaths.cashGame),
+                            child: const Text(
+                              'Cash game',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+
+                    Text(
+                      'Group snapshot',
+                      style: TextStyle(
+                        color: AppColors.foreground,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _GroupStats(group: group, app: app, isGrid: false),
+                    const SizedBox(height: AppSpacing.xl),
+                    _UpcomingGames(
+                      games: games,
+                      isAdmin: app.isAdmin,
+                      userId: user?.id,
+                      onOpen: (g) => _openGame(context, app, g),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    _GroupCard(
+                      group: app.hasCurrentGroup ? group : null,
+                      loading: app.groupBundleLoading,
+                      showJoin: _openJoin,
+                      showCreate: () => openCreateGroupDialog(context),
+                      isAdmin: app.isAdmin,
+                    ),
+                    if (app.notifications.any((n) => !n.read)) ...[
+                      const SizedBox(height: AppSpacing.xl),
+                      _AlertsPreview(notifications: app.notifications),
+                    ],
+                  ],
+                ],
+              );
+            },
           ),
         ),
         // Restore-active-tournament prompt (Tech §20.1, audit fix B8):
@@ -378,98 +983,122 @@ class _HomeScreenState extends State<HomeScreen> {
 /// Group activity snapshot shown on Home — answers "how is the group doing?"
 /// with counts that already exist in the provider (IA §7).
 class _GroupStats extends StatelessWidget {
-  const _GroupStats({required this.group, required this.app});
+  const _GroupStats({required this.group, required this.app, this.isGrid = false});
 
   final Group group;
   final AppProvider app;
+  final bool isGrid;
 
   @override
   Widget build(BuildContext context) {
     final past = group.pastGames.length;
     final members = group.members.length;
     final cash = app.cashHistory.length;
-    final prizeVolume = group.pastGames
-        .fold<int>(0, (s, g) => s + g.structure.prizePool);
-    final cashVolume = app.cashHistory
-        .fold<double>(0, (s, c) => s + c.totalBuyIns);
+    final prizeVolume = group.pastGames.fold<int>(
+      0,
+      (s, g) => s + g.structure.prizePool,
+    );
+    final cashVolume = app.cashHistory.fold<double>(
+      0,
+      (s, c) => s + c.totalBuyIns,
+    );
+    final totalVol = prizeVolume + cashVolume;
+    final volumeStr = Formatters.prize(totalVol);
 
-    final stats = [
-      ('Games', '$past', Icons.style_outlined),
-      ('Members', '$members', Icons.groups_outlined),
-      ('Cash games', '$cash', Icons.payments_outlined),
-      ('Volume', Formatters.chips(prizeVolume + cashVolume), Icons.account_balance_wallet_outlined),
-    ];
+    if (isGrid) {
+      return Column(
+        children: [
+          Row(
+            children: [
+              _MetricCard(value: '$past', label: 'games'),
+              const SizedBox(width: 8),
+              _MetricCard(value: '$members', label: 'members'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _MetricCard(value: '$cash', label: 'cash games'),
+              const SizedBox(width: 8),
+              _MetricCard(value: volumeStr, label: 'volume'),
+            ],
+          ),
+        ],
+      );
+    }
 
-    return LayoutBuilder(
-      builder: (context, c) {
-        final twoCol = c.maxWidth < 560;
-        final w = twoCol ? (c.maxWidth - AppSpacing.sm) / 2 : null;
-        return Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            for (final s in stats)
-              SizedBox(
-                width: w,
-                child: _HomeStat(icon: s.$3, label: s.$1, value: s.$2),
-              ),
-          ],
-        );
-      },
+    // IntrinsicHeight + stretch: the four tiles size to their tallest
+    // content (the two-line "cash games" label) instead of a fixed height
+    // that clipped it on narrow phones.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _MetricCard(value: '$past', label: 'games'),
+          const SizedBox(width: 8),
+          _MetricCard(value: '$members', label: 'members'),
+          const SizedBox(width: 8),
+          _MetricCard(value: '$cash', label: 'cash\ngames'),
+          const SizedBox(width: 8),
+          // Money is white, not gold (no-gold rule, B4.9).
+          _MetricCard(
+            value: volumeStr,
+            label: 'volume',
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _HomeStat extends StatelessWidget {
-  const _HomeStat({
-    required this.icon,
-    required this.label,
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({
     required this.value,
+    required this.label,
   });
 
-  final IconData icon;
-  final String label;
   final String value;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: AppColors.primary),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    value,
-                    style: AppTypography.mono(
-                      size: AppFontSizes.md,
-                      weight: FontWeight.w700,
-                      color: AppColors.foreground,
-                    ),
-                  ),
+    return Expanded(
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 76),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderSubtle),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                style: AppTypography.mono(
+                  size: AppFontSizes.xxl,
+                  weight: FontWeight.w700,
+                  color: AppColors.foreground,
                 ),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    label,
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: TextStyle(
+                color: AppColors.mutedForeground,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                height: 1.1,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -514,92 +1143,241 @@ class _NextActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final game = _target();
-    if (game == null) return const SizedBox.shrink();
-
-    final pending = game.players
-        .where((p) => p.checkedIn && !p.confirmed)
-        .length;
-    final confirmed = game.players.where((p) => p.confirmed).length;
-    final going = game.goingCount;
-
-    final (title, subtitle, actionLabel, path) = switch (game.status) {
-      LiveGameStatus.running || LiveGameStatus.paused => (
-        '${game.settings.name} is live',
-        'Level ${game.currentLevel} · ${game.activePlayers.length} players remaining',
-        isAdmin ? 'Open Dashboard' : 'View Game',
-        RoutePaths.adminDashboard,
-      ),
-      LiveGameStatus.rebuypause => (
-        'Settlement required',
-        'Rebuys closed — record add-ons and confirm the prize pool',
-        'Complete Break',
-        RoutePaths.rebuySettlement,
-      ),
-      LiveGameStatus.finaltable => (
-        'Final table',
-        'Nine players remain — redraw the seats',
-        'Redraw Table',
-        RoutePaths.finalTable,
-      ),
-      LiveGameStatus.checkin || LiveGameStatus.ready => (
-        pending > 0
-            ? '$pending check-in${pending == 1 ? '' : 's'} waiting'
-            : 'Check-in is open',
-        '$confirmed confirmed · $going going so far',
-        'Open Check-in',
-        RoutePaths.checkIn,
-      ),
-      _ => (
-        'RSVPs are open',
-        '$going going · structure unlocks 30 min before start',
-        'Review Event',
-        RoutePaths.invitation,
-      ),
-    };
-
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      glow: game.status.isActiveLive,
-      color: AppColors.primarySoft,
-      borderColor: AppColors.primary.withValues(alpha: 0.3),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Next up',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                    letterSpacing: 1,
-                  ),
+    if (game == null) {
+      if (isAdmin) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.25),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  title,
-                  style: AppTypography.bodyLg.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (subtitle.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      subtitle,
-                      style: AppTypography.bodyXs.copyWith(
+                alignment: Alignment.center,
+                child: Icon(Icons.add, color: AppColors.primary, size: 22),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Ready for the next game?',
+                      style: TextStyle(
+                        color: AppColors.foreground,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Schedule a tournament or start a quick poker timer for your club.',
+                      style: AppTypography.bodySm.copyWith(
                         color: AppColors.mutedForeground,
                       ),
                     ),
-                  ),
-              ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              AppButton(
+                size: AppButtonSize.sm,
+                onPressed: () => context.push(RoutePaths.createTournament),
+                child: const Text('Schedule game'),
+              ),
+            ],
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    }
+
+    final going = game.goingCount;
+    final (title, subtitle, actionLabel) = switch (game.status) {
+      LiveGameStatus.running || LiveGameStatus.paused => (
+        game.settings.name,
+        '${game.settings.date} ${game.settings.time} · $going going',
+        'Open dashboard',
+      ),
+      LiveGameStatus.rebuypause => (
+        game.settings.name,
+        'Settlement required · $going going',
+        'Complete break',
+      ),
+      LiveGameStatus.finaltable => (
+        game.settings.name,
+        'Final table · 9 remain · $going going',
+        'Redraw table',
+      ),
+      LiveGameStatus.checkin || LiveGameStatus.ready => (
+        game.settings.name,
+        '${game.settings.date} ${game.settings.time} · $going going',
+        'Open check-in',
+      ),
+      _ => (
+        game.settings.name,
+        '${game.settings.date} ${game.settings.time} · $going going',
+        'Open dashboard',
+      ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.35),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.2),
+            blurRadius: 16,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'NEXT UP',
+            style: TextStyle(
+              color: AppColors.primaryText,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
             ),
           ),
-          const SizedBox(width: AppSpacing.md),
-          AppButton(
-            size: AppButtonSize.sm,
-            onPressed: () => onOpen(game),
-            child: Text(actionLabel),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title.isNotEmpty ? title : 'Friday Night Freezeout',
+                  style: TextStyle(
+                    color: AppColors.foreground,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (game.status.isActiveLive) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.successSoft,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: AppColors.successText,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'LIVE',
+                        style: TextStyle(
+                          color: AppColors.successText,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: TextStyle(color: AppColors.mutedForeground, fontSize: 13),
+          ),
+          if (going > group.tableSettings.maxPerTable) ...[
+            const SizedBox(height: 10),
+            Text(
+              "That's a second table — Premium covers 2+ tables. Sort it now, days before the game, never at the door.",
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.primary,
+                  onPressed: () => context.push(RoutePaths.upgrade),
+                  child: const Text('See Premium'),
+                ),
+                AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () {
+                    app.updateGroupTableSettings(
+                      group.tableSettings.copyWith(maxPerTable: 10),
+                    );
+                  },
+                  child:
+                      const Text('Seat 10 at one table instead (free)'),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 16),
+          InkWell(
+            onTap: () => onOpen(game),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: double.infinity,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.25),
+                    blurRadius: 12,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                actionLabel,
+                style: TextStyle(
+                  color: AppColors.foreground,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -626,32 +1404,27 @@ class _UpcomingGames extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Expanded(
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.calendar_month_outlined,
-                    color: AppColors.primary,
-                    size: 24,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    'Upcoming Games',
-                    style: AppTypography.display(
-                      size: AppFontSizes.xl,
-                      weight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+            Text(
+              'Upcoming',
+              style: TextStyle(
+                color: AppColors.foreground,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            if (isAdmin)
-              AppButton(
-                size: AppButtonSize.sm,
-                onPressed: () => context.go(RoutePaths.createTournament),
-                child: const Text('+ New game'),
+            InkWell(
+              onTap: () => context.go(RoutePaths.group),
+              child: Text(
+                'See all',
+                style: TextStyle(
+                  color: AppColors.primaryText,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
+            ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -666,7 +1439,7 @@ class _UpcomingGames extends StatelessWidget {
                   'The tables are empty. Create a tournament to get the action started.',
               action: isAdmin
                   ? AppButton(
-                      onPressed: () => context.go(RoutePaths.createTournament),
+                      onPressed: () => context.push(RoutePaths.createTournament),
                       child: const Text('Create First Game'),
                     )
                   : null,
@@ -677,20 +1450,11 @@ class _UpcomingGames extends StatelessWidget {
             children: [
               for (var i = 0; i < games.length; i++) ...[
                 _GameRow(
-                      game: games[i],
-                      isAdmin: isAdmin,
-                      userId: userId,
-                      onOpen: () => onOpen(games[i]),
-                    )
-                    .animate()
-                    .fadeIn(delay: (i * 100).ms, duration: 450.ms)
-                    .slideX(
-                      begin: -0.06,
-                      end: 0,
-                      delay: (i * 100).ms,
-                      duration: 450.ms,
-                      curve: Curves.easeOutCubic,
-                    ),
+                  game: games[i],
+                  isAdmin: isAdmin,
+                  userId: userId,
+                  onOpen: () => onOpen(games[i]),
+                ),
                 const SizedBox(height: AppSpacing.md),
               ],
             ],
@@ -713,197 +1477,99 @@ class _GameRow extends StatelessWidget {
   final String? userId;
   final VoidCallback onOpen;
 
-  AppBadgeVariant _colorFor(LiveGameStatus s) {
-    switch (s) {
-      case LiveGameStatus.running:
-        return AppBadgeVariant.green;
-      case LiveGameStatus.paused:
-      case LiveGameStatus.rebuypause:
-      case LiveGameStatus.finaltable:
-      case LiveGameStatus.published:
-      case LiveGameStatus.checkin:
-      case LiveGameStatus.ready:
-        return AppBadgeVariant.accent;
-      case LiveGameStatus.draft:
-      case LiveGameStatus.completed:
-        return AppBadgeVariant.muted;
-      case LiveGameStatus.cancelled:
-        return AppBadgeVariant.red;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final going = game.goingCount;
-    // One dominant next action per card (user-flow spec §7.2, §9).
-    final me = userId == null
-        ? null
-        : game.players.where((p) => p.id == userId).firstOrNull;
-    final action = mainActionFor(
-      isAdmin ? MainButtonRole.admin : MainButtonRole.member,
-      game,
-      memberRow: me,
-    );
-    return AppCard(
+    return Semantics(
+      button: true,
+      label: 'Open game ${game.settings.date}',
       onTap: onOpen,
-      padding: EdgeInsets.zero,
-      glow: game.status == LiveGameStatus.running,
+      child: InkWell(
+        onTap: onOpen,
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(
-              width: 5,
-              color: game.status == LiveGameStatus.running
-                  ? AppColors.success
-                  : AppColors.primary.withValues(alpha: 0.5),
-            ),
-          ),
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderSubtle),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            game.settings.name,
-                            style: AppTypography.bodyLg.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        AppBadge(
-                          label: game.status.label,
-                          variant: _colorFor(game.status),
-                          border: true,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: AppSpacing.md,
-                      runSpacing: AppSpacing.xs,
-                      children: [
-                        _InfoChip(
-                          icon: Icons.calendar_today_outlined,
-                          text: game.settings.date,
-                        ),
-                        _InfoChip(
-                          icon: Icons.access_time_outlined,
-                          text: game.settings.time,
-                        ),
-                        _InfoChip(
-                          icon: Icons.location_on_outlined,
-                          text: game.settings.location,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: AppSpacing.md,
-                      runSpacing: AppSpacing.xs,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.secondary,
-                            borderRadius: BorderRadius.circular(AppRadius.sm),
-                          ),
-                          child: Text(
-                            'Buy-in: ${game.settings.buyIn}',
-                            style: AppTypography.mono(
-                              size: AppFontSizes.xs,
-                              color: AppColors.foreground,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '$going going',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                        Text(
-                          'Code: ${game.publicCode}',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (game.status == LiveGameStatus.running) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                          border: Border.all(
-                            color: AppColors.success.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: AppColors.success,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.xs),
-                            Text(
-                              'LIVE · Level ${game.currentLevel}',
-                              style: AppTypography.mono(
-                                size: AppFontSizes.xs,
-                                weight: FontWeight.w700,
-                                color: AppColors.success,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            Flexible(
-              child: Padding(
-                padding: const EdgeInsets.only(right: AppSpacing.lg),
-                child: AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.primary,
-                  onPressed: action.enabled ? onOpen : null,
-                  child: Text(
-                    action.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
+        clipBehavior: Clip.antiAlias,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
                   ),
                 ),
               ),
-            ),
-          ],
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        game.settings.name,
+                        style: TextStyle(
+                          color: AppColors.foreground,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${game.settings.date} ${game.settings.time} · Buy-in ${Formatters.prize(game.settings.buyIn)} · $going going',
+                        style: TextStyle(
+                          color: AppColors.mutedForeground,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.borderSubtle,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      'RSVP',
+                      style: TextStyle(
+                        color: AppColors.mutedForeground,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
+    ),
     );
   }
 }
@@ -1043,11 +1709,10 @@ class _GroupCard extends StatelessWidget {
                                     g.members[i].name.isNotEmpty
                                         ? g.members[i].name[0].toUpperCase()
                                         : '?',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.foreground,
-                                    ),
+                                    style: AppTypography.body(
+                                      size: 12,
+                                      weight: FontWeight.w700,
+                                    ).copyWith(color: AppColors.foreground),
                                   ),
                                 ),
                               ),
@@ -1195,7 +1860,7 @@ class _AlertsPreview extends StatelessWidget {
               child: Text(
                 'See all',
                 style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.primary,
+                  color: AppColors.primaryText,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1237,7 +1902,7 @@ class _AlertsPreview extends StatelessWidget {
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: AppSpacing.xxs),
                               Row(
                                 children: [
                                   Expanded(
@@ -1282,89 +1947,43 @@ class _AlertsPreview extends StatelessWidget {
   }
 }
 
-class _LuxuryDecorations extends StatelessWidget {
-  const _LuxuryDecorations();
+class _NotificationBellButton extends StatelessWidget {
+  const _NotificationBellButton({required this.app});
+  final AppProvider app;
 
   @override
   Widget build(BuildContext context) {
-    final rng = Random(7);
-    return Positioned.fill(
-      child: IgnorePointer(
+    return InkWell(
+      onTap: () => context.go(RoutePaths.notifications),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.borderSubtle),
+        ),
         child: Stack(
+          alignment: Alignment.center,
           children: [
-            // Deep background glow - Primary color pulsing
-            Positioned(
-              top: -150,
-              right: -150,
-              child:
-                  Container(
-                        width: 600,
-                        height: 600,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              AppColors.primary.withValues(alpha: 0.15),
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                      )
-                      .animate(
-                        onPlay: (controller) =>
-                            controller.repeat(reverse: true),
-                      )
-                      .scaleXY(
-                        begin: 1.0,
-                        end: 1.15,
-                        duration: 4.seconds,
-                        curve: Curves.easeInOut,
-                      ),
+            Icon(
+              Icons.notifications_outlined,
+              color: AppColors.foreground,
+              size: 20,
             ),
-            // Deep background glow - Destructive color pulsing
-            Positioned(
-              bottom: -200,
-              left: -150,
-              child:
-                  Container(
-                        width: 700,
-                        height: 700,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              AppColors.destructive.withValues(alpha: 0.12),
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                      )
-                      .animate(
-                        onPlay: (controller) =>
-                            controller.repeat(reverse: true),
-                      )
-                      .scaleXY(
-                        begin: 1.0,
-                        end: 1.2,
-                        duration: 5.seconds,
-                        curve: Curves.easeInOut,
-                      ),
-            ),
-
-            // Spinning Wheel / Rays effect
-            Positioned(top: -150, right: -150, child: _SpinningRays()),
-
-            // Floating elements
-            for (var i = 0; i < 14; i++)
+            if (app.notifications.any((n) => !n.read))
               Positioned(
-                left: rng.nextInt(100) / 100 * 2000 - 400,
-                top: rng.nextInt(90) / 100 * 700,
-                child: i % 3 == 0
-                    ? _FloatCard(delay: Duration(milliseconds: i * 600))
-                    : _FloatChip(
-                        delay: Duration(milliseconds: i * 600),
-                        label: i % 2 == 0 ? '500' : '100',
-                      ),
+                top: 10,
+                right: 11,
+                child: Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
               ),
           ],
         ),
@@ -1373,259 +1992,62 @@ class _LuxuryDecorations extends StatelessWidget {
   }
 }
 
-class _SpinningRays extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-          width: 600,
-          height: 600,
-          decoration: const BoxDecoration(shape: BoxShape.circle),
-          child: Stack(
-            alignment: Alignment.center,
-            children: List.generate(12, (index) {
-              return Transform.rotate(
-                angle: (index * pi) / 6,
-                child: Container(
-                  height: 600,
-                  width: 8,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        AppColors.primary.withValues(alpha: 0.0),
-                        AppColors.primary.withValues(alpha: 0.04),
-                        AppColors.primary.withValues(alpha: 0.0),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        )
-        .animate(onPlay: (controller) => controller.repeat())
-        .rotate(duration: 40.seconds, curve: Curves.linear);
-  }
-}
+class _ToolkitCard extends StatelessWidget {
+  const _ToolkitCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
 
-class _FloatCard extends StatefulWidget {
-  const _FloatCard({required this.delay});
-
-  final Duration delay;
-
-  @override
-  State<_FloatCard> createState() => _FloatCardState();
-}
-
-class _FloatCardState extends State<_FloatCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  final rng = Random();
-  late final String suit;
-  late final bool isRed;
-  late final double _rotationOffset;
-
-  @override
-  void initState() {
-    super.initState();
-    final suits = ['♠', '♥', '♦', '♣'];
-    suit = suits[rng.nextInt(4)];
-    isRed = suit == '♥' || suit == '♦';
-    _rotationOffset = rng.nextDouble() * 0.5 - 0.25;
-
-    _controller =
-        AnimationController(
-          vsync: this,
-          duration: Duration(seconds: 7 + rng.nextInt(3)),
-        )..addStatusListener((status) {
-          if (status == AnimationStatus.completed) _controller.repeat();
-        });
-    Future.delayed(widget.delay, () {
-      if (mounted) _controller.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: TweenSequence<double>([
-        TweenSequenceItem(
-          tween: Tween(
-            begin: 0.0,
-            end: 0.4,
-          ).chain(CurveTween(curve: Curves.easeOut)),
-          weight: 30,
-        ),
-        TweenSequenceItem(tween: ConstantTween(0.4), weight: 40),
-        TweenSequenceItem(
-          tween: Tween(
-            begin: 0.4,
-            end: 0.0,
-          ).chain(CurveTween(curve: Curves.easeIn)),
-          weight: 30,
-        ),
-      ]).animate(_controller),
-      child: SlideTransition(
-        position: Tween(
-          begin: const Offset(0, 1.2),
-          end: const Offset(0, -0.8),
-        ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear)),
-        child: RotationTransition(
-          turns: Tween(
-            begin: _rotationOffset,
-            end: _rotationOffset + 0.5,
-          ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear)),
-          child: Container(
-            width: 32,
-            height: 46,
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: AppColors.border, width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.card.withValues(alpha: 0.5),
-                  blurRadius: 4,
-                ),
-              ],
+    return Expanded(
+      child: AppCard(
+        onTap: onTap,
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, color: AppColors.primary, size: 20),
             ),
-            alignment: Alignment.center,
-            child: Text(
-              suit,
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isRed ? AppColors.destructive : AppColors.foreground,
+                color: AppColors.foreground,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FloatChip extends StatefulWidget {
-  const _FloatChip({required this.delay, required this.label});
-
-  final Duration delay;
-  final String label;
-
-  @override
-  State<_FloatChip> createState() => _FloatChipState();
-}
-
-class _FloatChipState extends State<_FloatChip>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(seconds: 6))
-          ..addStatusListener((status) {
-            if (status == AnimationStatus.completed) _controller.repeat();
-          });
-    Future.delayed(widget.delay, () {
-      if (mounted) _controller.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: TweenSequence<double>([
-        TweenSequenceItem(
-          tween: Tween(
-            begin: 0.0,
-            end: 0.5,
-          ).chain(CurveTween(curve: Curves.easeOut)),
-          weight: 30,
-        ),
-        TweenSequenceItem(tween: ConstantTween(0.5), weight: 40),
-        TweenSequenceItem(
-          tween: Tween(
-            begin: 0.5,
-            end: 0.0,
-          ).chain(CurveTween(curve: Curves.easeIn)),
-          weight: 30,
-        ),
-      ]).animate(_controller),
-      child: SlideTransition(
-        position: Tween(
-          begin: const Offset(0, 1.0),
-          end: const Offset(0, -0.6),
-        ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear)),
-        child: RotationTransition(
-          turns: Tween(
-            begin: 0.0,
-            end: 1.0,
-          ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear)),
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.card,
-              border: Border.all(color: AppColors.border, width: 2.5),
-              boxShadow: [
-                BoxShadow(
-                  color: widget.label == '500'
-                      ? AppColors.primary.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                  blurRadius: 8,
-                ),
-              ],
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              widget.label,
-              style: AppTypography.mono(
-                size: 9,
-                weight: FontWeight.w700,
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodyXs.copyWith(
                 color: AppColors.mutedForeground,
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: AppColors.mutedForeground),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: AppTypography.bodyXs.copyWith(
-            color: AppColors.mutedForeground,
-          ),
-        ),
-      ],
-    );
-  }
-}

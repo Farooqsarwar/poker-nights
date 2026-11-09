@@ -1,10 +1,17 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_eyebrow.dart';
+import '../../widgets/legal_page.dart';
 import '../../constants/app_constants.dart';
+
+const _supportEmail = 'support@pokernight.app';
 
 class SupportScreen extends StatelessWidget {
   const SupportScreen({super.key});
@@ -13,26 +20,40 @@ class SupportScreen extends StatelessWidget {
     (
       q: 'How do I start a tournament?',
       a:
-          'Go to the Home screen and tap "Create Tournament". Choose a blind structure, '
-          'pick a chip set, invite players, and you are ready to check in and deal.',
+          'Tap "Start a game now" for tonight, or "New tournament" to plan one: pick '
+          'the date, the finish time and your chips; the app builds the blinds, the '
+          'payouts and the schedule.',
     ),
     (
-      q: 'I lost my tournament mid-game — can I get it back?',
+      q: 'Lost my game mid-way — recoverable?',
       a:
-          'Yes. Poker Night saves your active tournament locally and restores it '
-          'automatically the next time you open the app, right where you left off.',
+          'Yes. The running game is saved on the phone that runs the clock and synced '
+          'to your group; open the app and tap Resume.',
     ),
     (
       q: 'Can I track cash games too?',
       a:
-          'Absolutely. Start a cash game from the Home screen, track buy-ins and '
-          'top-ups, and settle up at the end of the night.',
+          'Yes — buy-ins, top-ups and cash-outs, and the fewest payments to settle at '
+          'the end.',
     ),
     (
-      q: 'How are results kept private?',
+      q: 'Who sees the prizes?',
       a:
-          'Prize amounts and the full results table are only shown to the tournament '
-          'admin. Players see their position without anyone else\'s payouts.',
+          'Everyone in the game sees the prize pool and the payouts. Only the host '
+          'sees the organiser contribution, if one is set.',
+    ),
+    (
+      q: 'Is this gambling?',
+      a:
+          'Poker Night doesn\'t take bets or move money. It is a clock and a '
+          'calculator for your own game. Check the rules where you play.',
+    ),
+    (
+      q: 'How do I report an abusive message?',
+      a:
+          'Press and hold the message and tap Report. The group\'s host is told; if '
+          'nothing happens within a day, we are too. You can also Block someone to '
+          'hide their messages.',
     ),
     (
       q: 'I found a bug. What do I do?',
@@ -42,82 +63,130 @@ class SupportScreen extends StatelessWidget {
     ),
   ];
 
+  Future<void> _emailSupport() async {
+    // H3: the platform is pre-filled where the person can read and edit it
+    // before sending; nothing personal is added behind their back.
+    final body = 'Platform: ${defaultTargetPlatform.name}\n\n'
+        'What happened:\n';
+    final uri = Uri.parse(
+      'mailto:$_supportEmail'
+      '?subject=${Uri.encodeComponent('Poker Night support')}'
+      '&body=${Uri.encodeComponent(body)}',
+    );
+    await launchUrl(uri);
+  }
+
+  void _back(BuildContext context) {
+    if (GoRouter.of(context).canPop()) {
+      context.pop();
+    } else {
+      context.go(RoutePaths.home);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text('Support', style: AppTypography.displaySm),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (GoRouter.of(context).canPop()) {
-              context.pop();
-            } else {
-              context.go(RoutePaths.home);
-            }
-          },
+    return LegalPage(
+      onBack: () => _back(context),
+      children: [
+        const LegalTitle('Need help?'),
+        const SizedBox(height: AppSpacing.md),
+        Text.rich(
+          TextSpan(
+            children: [
+              const TextSpan(
+                text: 'Search the answers below, or reach us any time at ',
+              ),
+              TextSpan(
+                text: _supportEmail,
+                style: TextStyle(
+                  color: AppColors.primaryText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const TextSpan(
+                text: ' — we usually reply within one business day.',
+              ),
+            ],
+          ),
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+            height: 1.6,
+          ),
         ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
+        const SizedBox(height: AppSpacing.xl),
+        const AppEyebrow('Frequently asked questions', muted: true),
+        const SizedBox(height: AppSpacing.md),
+        for (final faq in _faqs) ...[
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Need help?', style: AppTypography.display(size: 28)),
-                const SizedBox(height: AppSpacing.md),
                 Text(
-                  'Search the answers below, or reach us any time at '
-                  'support@pokernight.app — we usually reply within one business day.',
-                  style: AppTypography.body(),
-                ),
-                const SizedBox(height: AppSpacing.xxl),
-                Text(
-                  'Frequently asked questions',
-                  style: AppTypography.displaySm,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                for (final faq in _faqs) ...[
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(faq.q, style: AppTypography.bodyBold),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(faq.a, style: AppTypography.body()),
-                      ],
-                    ),
+                  faq.q,
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
-                const SizedBox(height: AppSpacing.md),
-                AppButton(
-                  onPressed: () {
-                    if (GoRouter.of(context).canPop()) {
-                      context.pop();
-                    } else {
-                      context.go(RoutePaths.home);
-                    }
-                  },
-                  variant: AppButtonVariant.secondary,
-                  child: const Text('Back'),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  faq.a,
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                    height: 1.55,
+                  ),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        // "Found a bug?" — the H3 closing card, carrying the Email us action.
+        AppCard(
+          color: AppColors.primarySoft,
+          borderColor: AppColors.primary,
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Found a bug?',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _supportEmail,
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              AppButton(
+                onPressed: _emailSupport,
+                size: AppButtonSize.sm,
+                child: const Text('Email us'),
+              ),
+            ],
+          ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          onPressed: () => _back(context),
+          variant: AppButtonVariant.ghost,
+          fullWidth: true,
+          child: const Text('Back'),
+        ),
+      ],
     );
   }
 }

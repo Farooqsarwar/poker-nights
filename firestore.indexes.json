@@ -7,6 +7,23 @@
         { "fieldPath": "gid", "order": "ASCENDING" },
         { "fieldPath": "consumed", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "games",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "playersScrubbed", "order": "ASCENDING" },
+        { "fieldPath": "settings.date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "games",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "payments", "order": "ASCENDING" },
+        { "fieldPath": "playersScrubbed", "order": "ASCENDING" },
+        { "fieldPath": "settings.date", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

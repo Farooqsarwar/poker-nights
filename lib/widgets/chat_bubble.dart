@@ -13,6 +13,7 @@ import 'app_avatar.dart';
 import 'app_badge.dart';
 import 'app_button.dart';
 import 'app_modal.dart';
+import 'min_tap_target.dart';
 import 'rsvp_badge.dart';
 import 'glass_styles.dart';
 
@@ -28,12 +29,16 @@ class ChatBubble extends StatelessWidget {
     required this.onDelete,
     required this.app,
     required this.userId,
+    this.onReport,
   });
 
   final ChatMessage message;
   final bool isMine;
   final bool canDelete;
   final VoidCallback onDelete;
+
+  /// Null when this message cannot be reported (mine, pinned, or removed).
+  final VoidCallback? onReport;
   final AppProvider app;
   final String? userId;
 
@@ -52,52 +57,28 @@ class ChatBubble extends StatelessWidget {
 
     final bubble = Container(
       constraints: BoxConstraints(maxWidth: maxWidth),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: mine ? AppColors.primary : AppColors.secondary,
-        borderRadius: BorderRadius.circular(18).copyWith(
-          bottomRight: mine ? const Radius.circular(5) : null,
-          bottomLeft: mine ? null : const Radius.circular(5),
+        color: mine ? AppColors.primary : AppColors.muted,
+        borderRadius: BorderRadius.circular(AppRadius.lg).copyWith(
+          bottomRight: mine ? const Radius.circular(4) : null,
+          bottomLeft: mine ? null : const Radius.circular(4),
         ),
-        border: mine ? null : Border.all(color: AppColors.border),
+        border: mine ? null : Border.all(color: AppColors.borderSubtle),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: mine
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          if (!mine)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Text(
-                message.authorName,
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.primary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          Text(
-            message.body,
-            style: AppTypography.bodySm.copyWith(
-              color: mine ? AppColors.primaryForeground : AppColors.foreground,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            Formatters.relativeTime(message.timestamp),
-            style: AppTypography.bodyXs.copyWith(
-              color: mine
-                  ? AppColors.primaryForeground.withValues(alpha: 0.75)
-                  : AppColors.mutedForeground,
-              fontSize: 10,
-            ),
-          ),
-        ],
+      child: Text(
+        message.body,
+        style: AppTypography.bodySm.copyWith(
+          color: mine ? AppColors.primaryForeground : AppColors.foreground,
+        ),
       ),
     );
+
+    final metaStyle = AppTypography.bodyXs.copyWith(
+      color: AppColors.mutedForeground,
+      fontSize: 11,
+    );
+    final time = Formatters.relativeTime(message.timestamp);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -108,7 +89,10 @@ class ChatBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!mine) ...[
-            AppAvatar(name: message.authorName, size: AppAvatarSize.sm),
+            Padding(
+              padding: const EdgeInsets.only(top: 18),
+              child: AppAvatar(name: message.authorName, size: AppAvatarSize.sm),
+            ),
             const SizedBox(width: AppSpacing.sm),
           ],
           Flexible(
@@ -117,21 +101,60 @@ class ChatBubble extends StatelessWidget {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                bubble,
-                if (canDelete)
-                  InkWell(
-                    onTap: onDelete,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 2, right: 4, left: 4),
-                      child: Text(
-                        'delete',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                          fontSize: 10,
-                        ),
-                      ),
+                if (!mine)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 4),
+                    child: Text(
+                      message.authorName,
+                      style: metaStyle.copyWith(fontWeight: FontWeight.w600),
                     ),
                   ),
+                bubble,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(mine ? 'You · $time' : time, style: metaStyle),
+                    ),
+                    if (onReport != null)
+                      Semantics(
+                        button: true,
+                        label: 'Report this message',
+                        excludeSemantics: true,
+                        child: InkWell(
+                          onTap: onReport,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          child: MinTapTarget(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              child: Text('· Report', style: metaStyle),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (canDelete)
+                      Semantics(
+                        button: true,
+                        label: 'Delete this message',
+                        excludeSemantics: true,
+                        child: InkWell(
+                          onTap: onDelete,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          child: MinTapTarget(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              child: Text('· Delete', style: metaStyle),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -231,7 +254,7 @@ class _EventCard extends StatelessWidget {
                   Text(
                     'Pinned event',
                     style: AppTypography.monoXs.copyWith(
-                      color: AppColors.primary,
+                      color: AppColors.primaryText,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -267,7 +290,7 @@ class _EventCard extends StatelessWidget {
                                 : '${game.settings.rebuyLimit} rebuys to L${game.settings.rebuysCloseLevel}${game.settings.rebuyCost != null ? ' @ ${game.settings.rebuyCost}' : ''}')
                           : 'No rebuys',
                       variant: game.settings.rebuys
-                          ? AppBadgeVariant.gold
+                          ? AppBadgeVariant.highlight
                           : AppBadgeVariant.muted,
                     ),
                     AppBadge(
@@ -275,7 +298,7 @@ class _EventCard extends StatelessWidget {
                           ? 'Add-on to L${game.settings.addOnCloseLevel}'
                           : 'No add-on',
                       variant: game.settings.addOn
-                          ? AppBadgeVariant.gold
+                          ? AppBadgeVariant.highlight
                           : AppBadgeVariant.muted,
                     ),
                     AppBadge(
@@ -283,7 +306,7 @@ class _EventCard extends StatelessWidget {
                           ? 'Ante L${game.settings.anteAfterLevel}'
                           : 'No ante',
                       variant: game.settings.anteEnabled
-                          ? AppBadgeVariant.gold
+                          ? AppBadgeVariant.highlight
                           : AppBadgeVariant.muted,
                     ),
                   ],
@@ -292,10 +315,9 @@ class _EventCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 'Posted by ${message.authorName} · ${Formatters.relativeTime(message.timestamp)}',
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                  fontSize: 10,
-                ),
+                style: AppTypography.body(
+                  size: 10,
+                ).copyWith(color: AppColors.mutedForeground),
               ),
               // RSVP is set on the game screen (tap this card) — shown here
               // read-only so chat and the hub never carry a second control.

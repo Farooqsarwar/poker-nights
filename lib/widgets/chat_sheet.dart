@@ -4,12 +4,12 @@ import 'package:provider/provider.dart';
 import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
-import '../models/game.dart';
 import '../providers/app_provider.dart';
-import 'app_avatar.dart';
 import 'app_button.dart';
 import 'app_text_field.dart';
+import 'chat_bubble.dart';
 import 'glass_styles.dart';
+import 'report_message.dart';
 
 class ChatSheet extends StatefulWidget {
   const ChatSheet({super.key, required this.gameId});
@@ -128,6 +128,7 @@ class _ChatSheetState extends State<ChatSheet> {
                 style: AppTypography.display(size: AppFontSizes.lg),
               ),
               IconButton(
+                tooltip: 'Close chat',
                 icon: Icon(Icons.close, color: AppColors.foreground),
                 onPressed: () => Navigator.pop(context),
               ),
@@ -136,11 +137,10 @@ class _ChatSheetState extends State<ChatSheet> {
         ),
         Divider(height: 1, color: AppColors.border),
         Expanded(
-          child: SingleChildScrollView(
-            reverse: true,
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: messages.isEmpty
-                ? Padding(
+          child: messages.isEmpty
+              ? SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Padding(
                     padding: const EdgeInsets.all(AppSpacing.xxl),
                     child: Text(
                       'No messages yet. Start the conversation!',
@@ -149,21 +149,32 @@ class _ChatSheetState extends State<ChatSheet> {
                         color: AppColors.mutedForeground,
                       ),
                     ),
-                  )
-                : Column(
-                    children: [
-                      for (final msg in messages)
-                        _ChatBubble(
-                          message: msg,
-                          isMine: msg.authorId == userId,
-                          canDelete:
-                              (app.isAdmin) &&
-                              msg.authorId != userId,
-                          onDelete: () => app.deleteMessage(msg.id),
-                        ),
-                    ],
                   ),
-          ),
+                )
+              // The chat collection streams unbounded — a group that has been
+              // running for a year has every message in it. `reverse: true`
+              // keeps the newest at the bottom AND makes that end index 0, so
+              // the rows that build first are the ones actually on screen;
+              // hence the walk backwards through `messages`.
+              : ListView.builder(
+                  reverse: true,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  itemCount: messages.length,
+                  itemBuilder: (context, i) {
+                    final msg = messages[messages.length - 1 - i];
+                    return ChatBubble(
+                      message: msg,
+                      isMine: msg.authorId == userId,
+                      canDelete: (app.isAdmin) && msg.authorId != userId,
+                      onDelete: () => app.deleteMessage(msg.id),
+                      app: app,
+                      userId: userId,
+                      onReport: app.canReport(msg)
+                          ? () => confirmReportMessage(context, app, msg)
+                          : null,
+                    );
+                  },
+                ),
         ),
         if (userId != null)
           Container(
@@ -184,7 +195,7 @@ class _ChatSheetState extends State<ChatSheet> {
                     child: Text(
                       _chatError!,
                       style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.destructive,
+                        color: AppColors.destructiveText,
                       ),
                     ),
                   ),
@@ -258,143 +269,9 @@ class ChatUnreadBadge extends StatelessWidget {
       ),
       child: Text(
         '$count',
-        style: AppTypography.bodyXs.copyWith(
+        style: AppTypography.body(size: 10).copyWith(
           color: AppColors.destructiveForeground,
-          fontSize: 10,
         ),
-      ),
-    );
-  }
-}
-
-class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({
-    required this.message,
-    required this.isMine,
-    required this.canDelete,
-    required this.onDelete,
-  });
-
-  final ChatMessage message;
-  final bool isMine;
-  final bool canDelete;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final avatar = AppAvatar(name: message.authorName, size: AppAvatarSize.sm);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Row(
-        mainAxisAlignment: isMine
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isMine) ...[
-            avatar,
-            const SizedBox(width: AppSpacing.sm),
-          ],
-          Flexible(
-            child: Column(
-              crossAxisAlignment: isMine
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isMine ? 'You' : message.authorName,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                    fontSize: 10,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isMine
-                        ? AppColors.primary
-                        : Glass.solid(AppColors.card, Glass.surfaceOpacity),
-                    borderRadius: BorderRadius.circular(AppRadius.lg).copyWith(
-                      topRight: isMine ? const Radius.circular(2) : null,
-                      topLeft: !isMine ? const Radius.circular(2) : null,
-                    ),
-                    border: isMine
-                        ? null
-                        : Border.all(
-                            color: AppColors.border.withValues(alpha: Glass.borderOpacity),
-                          ),
-                    boxShadow: isMine
-                        ? [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.25),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Text(
-                    message.body,
-                    style: AppTypography.bodySm.copyWith(
-                      color: isMine
-                          ? AppColors.primaryForeground
-                          : AppColors.foreground,
-                    ),
-                  ),
-                ),
-                if (canDelete)
-                  InkWell(
-                    onTap: () async {
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          backgroundColor: AppColors.card,
-                          title: const Text('Delete message?'),
-                          content: Text(
-                            'This message will be removed from the chat.',
-                            style: AppTypography.bodySm,
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(ctx).pop(false),
-                              child: Text('Cancel',
-                                style: AppTypography.bodySm.copyWith(
-                                  color: AppColors.mutedForeground)),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.of(ctx).pop(true),
-                              child: Text('Delete',
-                                style: AppTypography.bodySm.copyWith(
-                                  color: AppColors.destructive)),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirmed == true) onDelete();
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        'delete',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (isMine) ...[
-            const SizedBox(width: AppSpacing.sm),
-            avatar,
-          ],
-        ],
       ),
     );
   }

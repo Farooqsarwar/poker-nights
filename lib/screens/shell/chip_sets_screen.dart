@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
+import '../../app/colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
 import '../../models/chip_color.dart';
-import '../../widgets/app_button.dart';
-import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/chip_token.dart';
+import '../../widgets/app_back_button.dart';
+import '../../widgets/squircle_icon_button.dart';
 
+/// Chip sets screen matching mobile-first design.
 class ChipSetsScreen extends StatelessWidget {
   const ChipSetsScreen({super.key});
 
@@ -25,10 +25,17 @@ class ChipSetsScreen extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.card,
-        title: const Text('Delete chip set?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: AppColors.borderSubtle),
+        ),
+        title: Text(
+          'Delete chip set?',
+          style: TextStyle(color: AppColors.foreground),
+        ),
         content: Text(
           '"${cs.name}" will be removed. Games already played with it stay in history unchanged.',
-          style: AppTypography.bodySm,
+          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
         ),
         actions: [
           TextButton(
@@ -44,8 +51,9 @@ class ChipSetsScreen extends StatelessWidget {
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(
               'Delete',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructive,
+              style: TextStyle(
+                color: AppColors.destructiveText,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -61,41 +69,87 @@ class ChipSetsScreen extends StatelessWidget {
     final chipSets = app.savedChipSets;
 
     return AppPage(
-      maxWidth: 720,
+      maxWidth: 560,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Header with Squircle Back button & New button
           Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => context.go(RoutePaths.settings),
+              AppBackButton(
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(RoutePaths.settings);
+                  }
+                },
+                label: 'Back to settings',
               ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  'Chip Sets',
+                  'Chip sets',
                   style: AppTypography.display(
-                    size: AppFontSizes.xxl,
+                    size: 28,
                     weight: FontWeight.w700,
+                    color: AppColors.foreground,
                   ),
                 ),
               ),
-              AppButton(
-                onPressed: () => context.push(RoutePaths.editChipSet),
-                child: const Text('New Chip Set'),
+              InkWell(
+                onTap: () => context.push(RoutePaths.editChipSet),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.33),
+                        blurRadius: 10,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    '+ New',
+                    style: TextStyle(
+                      color: AppColors.foreground,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: 24),
+
           if (chipSets.isEmpty)
             Center(
               child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: Text(
-                  'No saved chip sets.',
-                  style: AppTypography.bodyLg.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
+                padding: const EdgeInsets.all(AppSpacing.xxl),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.casino_outlined,
+                      size: 48,
+                      color: AppColors.onSurfaceHint,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No saved chip sets.',
+                      style: AppTypography.bodyLg.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             )
@@ -104,62 +158,210 @@ class ChipSetsScreen extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: chipSets.length,
-              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+              separatorBuilder: (_, _) => const SizedBox(height: 16),
               itemBuilder: (context, index) {
                 final cs = chipSets[index];
-                return AppCard(
-                  child: Row(
+                final isDefault =
+                    cs.id == (app.defaultChipSetId ?? 'cs-default');
+                final totalChips = cs.chips.fold(
+                  0,
+                  (sum, c) => sum + c.quantity,
+                );
+
+                return Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.borderSubtle),
+                  ),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              cs.name,
-                              style: AppTypography.bodyLg.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Wrap(
-                              spacing: AppSpacing.sm,
-                              runSpacing: AppSpacing.sm,
-                              children: cs.chips
-                                  .map(
-                                    (c) => ChipToken(
-                                      colorName: c.color,
-                                      hex: c.colorValue,
-                                      value: c.value,
-                                      count: c.quantity,
+                      // Chip set title & actions row
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    cs.name,
+                                    style: AppTypography.body(
+                                      size: 18,
+                                      weight: FontWeight.w700,
+                                      color: AppColors.foreground,
                                     ),
-                                  )
-                                  .toList(),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isDefault) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.successSoft,
+                                      borderRadius: BorderRadius.circular(
+                                        AppRadius.pill,
+                                      ),
+                                      border: Border.all(
+                                        color: AppColors.successSoftBorder,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'DEFAULT',
+                                      style: TextStyle(
+                                        color: AppColors.successText,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          SquircleIconButton(
+                            icon: Icons.edit_outlined,
+                            size: 36,
+                            iconSize: 18,
+                            iconColor: AppColors.mutedForeground,
+                            tooltip: 'Edit ${cs.name}',
+                            onPressed: () => context.push(
+                              RoutePaths.editChipSet,
+                              extra: cs.id,
+                            ),
+                          ),
+                          if (cs.id != 'cs-default') ...[
+                            const SizedBox(width: 8),
+                            SquircleIconButton(
+                              icon: Icons.delete_outline,
+                              size: 36,
+                              iconSize: 18,
+                              iconColor: AppColors.destructiveText,
+                              tooltip: 'Delete ${cs.name}',
+                              onPressed: () => _confirmDelete(context, app, cs),
                             ),
                           ],
-                        ),
+                        ],
                       ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.edit,
+                      const SizedBox(height: 6),
+                      Text(
+                        '${cs.chips.length} denominations · $totalChips total chips',
+                        style: AppTypography.bodyXs.copyWith(
                           color: AppColors.mutedForeground,
                         ),
-                        onPressed: () =>
-                            context.push(RoutePaths.editChipSet, extra: cs.id),
                       ),
-                      if (cs.id != 'cs-default')
-                        IconButton(
-                          icon: Icon(
-                            Icons.delete,
-                            color: AppColors.destructive,
-                          ),
-                          onPressed: () => _confirmDelete(context, app, cs),
-                        ),
+                      const SizedBox(height: 16),
+
+                      // Visual chip tokens display
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: cs.chips.map((c) {
+                          return _buildVisualChipToken(c);
+                        }).toList(),
+                      ),
                     ],
                   ),
                 );
               },
             ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  static Widget _buildVisualChipToken(ChipColor c) {
+    final chipColor = c.colorValue;
+    final valueText = c.value >= 1000
+        ? '${(c.value / 1000).toStringAsFixed(c.value % 1000 == 0 ? 0 : 1)}K'
+        : '${c.value}';
+
+    // Decide contrasting text color for chip center
+    final luminance = chipColor.computeLuminance();
+    final textColor = luminance > 0.6 ? Colors.black87 : AppColors.foreground;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.muted,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Visual Poker Chip Token Disc
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: chipColor,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.foreground.withValues(alpha: 0.35),
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadowSoft,
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppColors.foreground.withValues(alpha: 0.4),
+                  width: 1,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                valueText,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: textColor,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                c.color,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.foreground,
+                ),
+              ),
+              Text(
+                '×${c.quantity}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.mutedForeground,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

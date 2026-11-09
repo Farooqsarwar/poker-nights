@@ -9,13 +9,12 @@ import '../../providers/app_provider.dart';
 
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
-import '../../widgets/coin_animation_widget.dart';
-import '../../widgets/coin_shuffle_animation.dart';
+import '../../app/typography.dart';
 
 /// Splash screen reproducing the Poker Night Tools product mockup:
-/// a rounded matte-black card with a metal rim that spins on its Y axis,
-/// showing the red bracket + spade face on one side and the
-/// POKER / NIGHT / TOOLS lockup on the other.
+/// a rounded matte-black card that spins on its Y axis, showing the red
+/// bracket + spade face on one side and the POKER / NIGHT / TOOLS lockup on
+/// the other with the "SCAN. TRADE. TRACK. WIN." tagline.
 ///
 /// All face geometry below is measured from the reference render, expressed as
 /// fractions of the card size so it scales to any screen.
@@ -43,6 +42,7 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _exitAnimation; // fade out before routing
 
   Timer? _timer;
+  Timer? _authTimeoutTimer;
   bool _navigated = false;
 
   @override
@@ -110,18 +110,38 @@ class _SplashScreenState extends State<SplashScreen>
 
     // ...with a safety net in case a frame stalls and the status never fires.
     _timer = Timer(_totalDuration + const Duration(milliseconds: 400), _goNext);
+
+    // 5s auth timeout fallback: if auth not resolved, continue to /start
+    // and retry silently in the background (§A1 rule).
+    _authTimeoutTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted || _navigated) return;
+      _navigated = true;
+      final authed = context.read<AppProvider>().isAuthenticated;
+      context.go(authed ? RoutePaths.home : RoutePaths.landing);
+    });
   }
 
   void _goNext() {
     if (_navigated || !mounted) return;
+    final app = context.read<AppProvider>();
+    if (!app.authReady) return;
     _navigated = true;
-    final authed = context.read<AppProvider>().isAuthenticated;
-    context.go(authed ? RoutePaths.home : RoutePaths.landing);
+    // If previous game was running and we can resume, do so
+    if (app.canResumePreviousGame) {
+      if (app.currentGame != null) {
+        context.go(app.isAdmin ? RoutePaths.hostDashboard : RoutePaths.playerLive);
+      } else {
+        context.go(RoutePaths.home);
+      }
+      return;
+    }
+    context.go(app.isAuthenticated ? RoutePaths.home : RoutePaths.landing);
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _authTimeoutTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -137,7 +157,18 @@ class _SplashScreenState extends State<SplashScreen>
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: GestureDetector(
+      body: DecoratedBox(
+        // The redesign's full-screen crimson bloom behind the tile.
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            radius: 0.9,
+            colors: <Color>[
+              AppColors.primary.withValues(alpha: 0.16),
+              AppColors.primary.withValues(alpha: 0.0),
+            ],
+          ),
+        ),
+        child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _goNext, // let impatient users skip the splash
         child: SafeArea(
@@ -167,7 +198,7 @@ class _SplashScreenState extends State<SplashScreen>
                           gradient: RadialGradient(
                             colors: <Color>[
                               AppColors.primary.withValues(alpha: 0.20),
-                              const Color(0x00000000),
+                              Colors.transparent,
                             ],
                             stops: const <double>[0.0, 1.0],
                           ),
@@ -196,6 +227,7 @@ class _SplashScreenState extends State<SplashScreen>
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -275,35 +307,27 @@ class _CardShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double radius = width * 0.155;
-    final double rim = width * 0.022;
+    final double rim = math.max(1.5, width * 0.008);
 
+    // The redesign's tile: a near-black plate with a crimson edge and a
+    // crimson glow, in place of the old gunmetal rim.
     return Container(
       width: width,
       height: height,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            Color(0xFF5A5A5E),
-            Color(0xFF232326),
-            Color(0xFF3C3C41),
-            Color(0xFF141416),
-          ],
-          stops: <double>[0.0, 0.35, 0.65, 1.0],
-        ),
+        color: AppColors.primary.withValues(alpha: 0.85),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.75),
+            color: AppColors.black.withValues(alpha: 0.70),
             blurRadius: width * 0.20,
             spreadRadius: width * 0.01,
             offset: Offset(0.0, height * 0.10),
           ),
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.10 + 0.10 * sheen),
-            blurRadius: width * 0.35,
-            spreadRadius: width * 0.02,
+            color: AppColors.primary.withValues(alpha: 0.35 + 0.15 * sheen),
+            blurRadius: width * 0.30,
+            spreadRadius: -width * 0.01,
           ),
         ],
       ),
@@ -313,12 +337,12 @@ class _CardShell extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            const DecoratedBox(
+            DecoratedBox(
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  center: Alignment(-0.3, -0.5),
+                  center: const Alignment(-0.3, -0.5),
                   radius: 1.3,
-                  colors: <Color>[Color(0xFF1A1A1C), Color(0xFF0A0A0B)],
+                  colors: <Color>[AppColors.card, AppColors.background],
                 ),
               ),
             ),
@@ -501,9 +525,9 @@ class _BackFace extends StatelessWidget {
 
     return Stack(
       children: <Widget>[
-        _word('POKER', Colors.white, 0, w, h, blockW, wordSize),
+        _word('POKER', AppColors.foreground, 0, w, h, blockW, wordSize),
         _word('NIGHT', AppColors.primary, 1, w, h, blockW, wordSize),
-        _word('TOOLS', Colors.white, 2, w, h, blockW, wordSize),
+        _word('TOOLS', AppColors.foreground, 2, w, h, blockW, wordSize),
 
         // Red rule under the lockup.
         Positioned(
@@ -529,21 +553,19 @@ class _BackFace extends StatelessWidget {
                   children: <TextSpan>[
                     TextSpan(
                       text: 'SCAN. TRADE. TRACK. ',
-                      style: TextStyle(
-                        color: Colors.white,
+                      style: _lockupStyle(
+                        color: AppColors.foreground,
                         fontSize: tagSize,
-                        height: 1.0,
-                        fontWeight: FontWeight.w600,
+                        weight: FontWeight.w600,
                         letterSpacing: tagSize * 0.10,
                       ),
                     ),
                     TextSpan(
                       text: 'WIN.',
-                      style: TextStyle(
+                      style: _lockupStyle(
                         color: AppColors.primary,
                         fontSize: tagSize,
-                        height: 1.0,
-                        fontWeight: FontWeight.w700,
+                        weight: FontWeight.w700,
                         letterSpacing: tagSize * 0.10,
                       ),
                     ),
@@ -555,6 +577,23 @@ class _BackFace extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// The lockup's type: the app's Space Grotesk at an exact pixel size. The
+  /// sizes here are fractions of the plate, so the theme's responsive
+  /// scaling is overridden rather than applied twice.
+  static TextStyle _lockupStyle({
+    required Color color,
+    required double fontSize,
+    required FontWeight weight,
+    double letterSpacing = 0,
+  }) {
+    return AppTypography.display(
+      weight: weight,
+      color: color,
+      height: 1.0,
+      letterSpacing: letterSpacing,
+    ).copyWith(fontSize: fontSize);
   }
 
   /// One justified word row.
@@ -584,11 +623,10 @@ class _BackFace extends StatelessWidget {
                   fit: BoxFit.scaleDown,
                   child: Text(
                     ch,
-                    style: TextStyle(
+                    style: _lockupStyle(
                       color: color,
                       fontSize: fontSize,
-                      height: 1.0,
-                      fontWeight: FontWeight.w400,
+                      weight: FontWeight.w500,
                     ),
                   ),
                 ),

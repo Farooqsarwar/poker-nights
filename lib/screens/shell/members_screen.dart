@@ -15,8 +15,19 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_tag.dart';
+import '../../widgets/icon_tile.dart';
+import '../../widgets/page_header.dart';
 import '../../widgets/app_text_field.dart';
-import '../../widgets/group_switcher.dart';
+
+/// Menu actions on a member card that are not role assignments.
+///
+/// Carried as the selected value through [PopupMenuButton.onSelected] so the
+/// handler runs with the screen's context. Handling them in
+/// [PopupMenuItem.onTap] with the `itemBuilder` context instead looks the
+/// same but never works: the tap dismisses the menu route first, leaving a
+/// deactivated context, and the confirm dialog never appears.
+enum _MemberMenuAction { remove }
 
 /// Group members as a full screen (single navigation layer — the Members item
 /// lives on the navbar, not duplicated in a hub tab bar).
@@ -27,6 +38,10 @@ class MembersScreen extends StatelessWidget {
     final app = context.read<AppProvider>();
     final controller = TextEditingController();
     String? error;
+    // Adding a member is a round trip. Without this the button stays live and
+    // idle-looking for its whole duration, so an impatient second tap fires a
+    // second add for the same address.
+    var adding = false;
     showAppModal(
       context: context,
       title: 'Add member',
@@ -57,13 +72,23 @@ class MembersScreen extends StatelessWidget {
             const SizedBox(height: AppSpacing.xl),
             AppButton(
               fullWidth: true,
+              loading: adding,
               onPressed: () async {
+                if (adding) return;
+                setState(() {
+                  adding = true;
+                  error = null;
+                });
                 final result = await app.addMemberByEmail(controller.text);
+                if (!context.mounted) return;
                 if (result != null) {
-                  setState(() => error = result);
+                  setState(() {
+                    adding = false;
+                    error = result;
+                  });
                   return;
                 }
-                if (context.mounted) Navigator.of(context).pop();
+                Navigator.of(context).pop();
               },
               child: const Text('Add to group'),
             ),
@@ -80,16 +105,23 @@ class MembersScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         insetPadding: dialogInsets,
-        backgroundColor: AppColors.card,
-        title: const Text('Remove Member'),
+        backgroundColor: AppColors.muted,
+        title: Text(
+          'Remove Member',
+          style: TextStyle(color: AppColors.foreground),
+        ),
         content: Text(
           'Remove ${member.name} from this group? '
           'They can rejoin with the group code.',
+          style: TextStyle(color: AppColors.mutedForeground),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.mutedForeground),
+            ),
           ),
           TextButton(
             onPressed: () {
@@ -98,7 +130,7 @@ class MembersScreen extends StatelessWidget {
             },
             child: Text(
               'Remove',
-              style: TextStyle(color: AppColors.destructive),
+              style: TextStyle(color: AppColors.destructiveText),
             ),
           ),
         ],
@@ -112,79 +144,102 @@ class MembersScreen extends StatelessWidget {
     AppUser m,
     Group group,
   ) {
+    final isMe = m.id == app.user?.id;
+    final isOwner = group.ownerId == m.id;
+    final isAdmin = m.isAdmin || isOwner;
+    final isCoAdmin = m.isCoAdmin && !isAdmin;
+    final canEditRoles = app.user?.id == group.ownerId && m.id != group.ownerId;
+
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        canEditRoles ? AppSpacing.xs : AppSpacing.lg,
+        AppSpacing.md,
+      ),
       child: Row(
         children: [
-          AppAvatar(name: m.name),
+          AppAvatar(name: m.name, size: AppAvatarSize.md),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  m.name,
+                  isMe ? '${m.name} · you' : m.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                Text(
-                  m.email,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
+                // No email line: members never see each other's addresses
+                // (Build Spec D-B3).
               ],
             ),
           ),
-          if (m.isAdmin) ...[
-            const AppBadge(
-              label: 'Admin',
-              variant: AppBadgeVariant.gold,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-          ] else if (m.isCoAdmin) ...[
-            const AppBadge(
-              label: 'Co-Admin',
-              variant: AppBadgeVariant.muted,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-          ],
-          Text(
-            '${m.stats.played}G · ${m.stats.wins}W',
-            style: AppTypography.mono(
-              size: AppFontSizes.xs,
-              color: AppColors.mutedForeground,
-            ),
+          const SizedBox(width: AppSpacing.sm),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // No gold anywhere (no-gold rule, B4.9), so the role marker
+              // uses the crimson accent rather than the PDF's amber.
+              if (isAdmin)
+                const AppTag('Host', tone: AppTagTone.primary)
+              else if (isCoAdmin)
+                const AppTag('Co-host'),
+              if (isAdmin || isCoAdmin) const SizedBox(height: AppSpacing.xs),
+              Text(
+                '${m.stats.played}G · ${m.stats.wins}W',
+                style: AppTypography.mono(
+                  size: AppFontSizes.xs,
+                  weight: FontWeight.w500,
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            ],
           ),
-          if (app.user?.id == group.ownerId && m.id != group.ownerId)
-            PopupMenuButton<GroupRole>(
+          if (canEditRoles)
+            // Typed as Object (not GroupRole) so the Remove action can ride
+            // through onSelected with the screen's context — see
+            // _MemberMenuAction. Role entries still carry GroupRole values.
+            PopupMenuButton<Object>(
+              tooltip: 'Member options',
               icon: Icon(
                 Icons.more_vert,
                 size: 18,
                 color: AppColors.mutedForeground,
               ),
-              onSelected: (role) => app.setGroupRole(m.id, role),
+              color: AppColors.muted,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                side: BorderSide(color: AppColors.borderSubtle),
+              ),
+              onSelected: (value) {
+                if (value is GroupRole) {
+                  app.setGroupRole(m.id, value);
+                } else if (value == _MemberMenuAction.remove) {
+                  _confirmRemoveMember(context, m);
+                }
+              },
               itemBuilder: (context) => [
                 for (final role in GroupRole.values)
-                  CheckedPopupMenuItem(
+                  CheckedPopupMenuItem<Object>(
                     value: role,
                     checked: app.roleOf(m) == role,
                     child: Text(role.label),
                   ),
-                PopupMenuItem<GroupRole>(
+                PopupMenuItem<Object>(
                   enabled: false,
                   height: 8,
-                  child: Divider(
-                    color: AppColors.border,
-                    height: 1,
-                  ),
+                  child: Divider(color: AppColors.borderSubtle, height: 1),
                 ),
-                PopupMenuItem<GroupRole>(
-                  onTap: () => _confirmRemoveMember(context, m),
+                PopupMenuItem<Object>(
+                  value: _MemberMenuAction.remove,
                   child: Text(
                     'Remove from Group',
-                    style: TextStyle(color: AppColors.destructive),
+                    style: TextStyle(color: AppColors.destructiveText),
                   ),
                 ),
               ],
@@ -208,16 +263,25 @@ class MembersScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.groups_outlined, size: 64, color: AppColors.mutedForeground),
+                const IconTile(
+                  icon: Icons.groups_outlined,
+                  size: 64,
+                  tone: IconTileTone.neutral,
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 Text(
                   'No group selected',
-                  style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w600),
+                  style: AppTypography.display(
+                    size: AppFontSizes.lg,
+                    weight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   'Join or create a group to see its members.',
-                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 AppButton(
@@ -231,46 +295,104 @@ class MembersScreen extends StatelessWidget {
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final twoCol = constraints.maxWidth >= 640;
-        final width = twoCol
-            ? (constraints.maxWidth - AppSpacing.sm) / 2
-            : constraints.maxWidth;
-        return AppPage(
-          maxWidth: 960,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return AppPage(
+      maxWidth: 960,
+      child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const GroupContextHeader(title: 'Members'),
-              const SizedBox(height: AppSpacing.lg),
-              if (app.canManageMembers) ...[
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: AppButton(
-                    size: AppButtonSize.sm,
-                    variant: AppButtonVariant.secondary,
-                    onPressed: () => _showAddMemberDialog(context),
-                    child: const Text('+ Add member'),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: [
-                  for (final m in group.members)
-                    SizedBox(
-                      width: width,
-                      child: _memberCard(context, app, m, group),
+              PageHeader(
+                onBack: () => context.go(RoutePaths.group),
+                title: 'Members',
+                count: group.members.length,
+                actions: [
+                  if (app.canManageMembers)
+                    AppButton(
+                      variant: AppButtonVariant.secondary,
+                      size: AppButtonSize.sm,
+                      onPressed: () => _showAddMemberDialog(context),
+                      child: const Text('+ Add member'),
                     ),
                 ],
               ),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  const AppTag('UNLIMITED', tone: AppTagTone.neutral),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'Groups have unlimited member capacity on both Free and Premium tiers.',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              if (app.isAdmin) ...[
+                AppCard(
+                  onTap: () => context.go(RoutePaths.reports),
+                  child: Row(
+                    children: [
+                      const IconTile(
+                        icon: Icons.flag_outlined,
+                        size: 40,
+                        tone: IconTileTone.soft,
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Reports', style: AppTypography.bodySm),
+                            Text(
+                              'Messages members have reported',
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (app.reportCount > 0)
+                        AppBadge(
+                          label: '${app.reportCount}',
+                          variant: AppBadgeVariant.red,
+                        ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Icon(
+                        Icons.chevron_right,
+                        color: AppColors.mutedForeground,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
+              // Measured here, at the grid itself, so the two-column split
+              // uses the page's real content width.
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final twoCol = constraints.maxWidth >= 640;
+                  final width = twoCol
+                      ? (constraints.maxWidth - AppSpacing.sm) / 2
+                      : constraints.maxWidth;
+                  return Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      for (final m in group.members)
+                        SizedBox(
+                          width: width,
+                          child: _memberCard(context, app, m, group),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ],
           ),
-        );
-      },
     );
   }
 }

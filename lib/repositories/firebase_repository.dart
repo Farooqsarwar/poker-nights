@@ -11,13 +11,17 @@ import 'package:localstore/localstore.dart' show Localstore;
 
 import '../models/app_notification.dart';
 import '../models/cash_game.dart';
+import '../models/chat_report.dart';
 import '../models/chip_color.dart';
 import '../models/game.dart';
 import '../models/group.dart';
+import '../models/imported_night.dart';
 import '../models/live_game.dart';
+import '../models/payment_record.dart';
 import '../models/table_settings.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
+import '../utils/live_play_rules.dart';
 import '../utils/model_codec.dart';
 
 /// A membership row mirrored under [users/{uid}/groups/{groupId}] so the
@@ -51,7 +55,7 @@ class GroupMembership {
       GroupMembership(
         groupId: m['groupId'] as String? ?? gid,
         name: (m['name'] as String?) ?? '',
-        icon: (m['icon'] as String?) ?? '♠️',
+        icon: (m['icon'] as String?) ?? '♠',
         pinned: (m['pinned'] as bool?) ?? false,
         role: (m['role'] as String?) ?? 'member',
       );
@@ -118,7 +122,8 @@ class GameRequest {
 
 /// One settled tournament from the signed-in player's point of view, mirrored
 /// under `users/{uid}/results/{gameId}` so every device can aggregate the same
-/// lifetime stats (played / wins / podium / avgFinish / knockouts).
+/// lifetime stats (played / wins / podium / avgFinish / knockouts) and own
+/// lifetime P&L (§E14: place, entries, knockouts, bustLevel, prize, buyInsPaid).
 class GameResultRow {
   const GameResultRow({
     required this.gameId,
@@ -127,6 +132,10 @@ class GameResultRow {
     required this.playerCount,
     required this.knockouts,
     required this.finishedAt,
+    this.eliminatedAtLevel,
+    this.prize = 0,
+    this.buyInsPaid = 0,
+    this.hasExplicitBuyIns = true,
   });
 
   final String gameId;
@@ -137,6 +146,15 @@ class GameResultRow {
   final int playerCount;
   final int knockouts;
   final DateTime? finishedAt;
+  final int? eliminatedAtLevel;
+  final int prize;
+  final int buyInsPaid;
+
+  /// False for older legacy result rows written before buyInsPaid was tracked,
+  /// preventing them from defaulting to 0 and overstating P&L.
+  final bool hasExplicitBuyIns;
+
+  int get net => prize - buyInsPaid;
 
   Map<String, dynamic> toMap() => {
     'gameId': gameId,
@@ -144,21 +162,40 @@ class GameResultRow {
     'position': position,
     'playerCount': playerCount,
     'knockouts': knockouts,
+    'finishedAt': finishedAt?.toIso8601String(),
+    'eliminatedAtLevel': eliminatedAtLevel,
+    'prize': prize,
+    'buyInsPaid': buyInsPaid,
+    'hasExplicitBuyIns': hasExplicitBuyIns,
   };
 
-  static GameResultRow fromMap(String id, Map<String, dynamic> m) =>
-      GameResultRow(
-        gameId: m['gameId'] as String? ?? id,
-        groupId: (m['groupId'] as String?) ?? '',
-        position: (m['position'] as num?)?.toInt() ?? 0,
-        playerCount: (m['playerCount'] as num?)?.toInt() ?? 0,
-        knockouts: (m['knockouts'] as num?)?.toInt() ?? 0,
-        finishedAt: switch (m['finishedAt']) {
-          final DateTime dt => dt,
-          _ => null,
-        },
-      );
+  static GameResultRow fromMap(String id, Map<String, dynamic> m) {
+    final explicit = (m['hasExplicitBuyIns'] as bool?) ?? m.containsKey('buyInsPaid');
+    return GameResultRow(
+      gameId: m['gameId'] as String? ?? id,
+      groupId: (m['groupId'] as String?) ?? '',
+      position: (m['position'] as num?)?.toInt() ?? 0,
+      playerCount: (m['playerCount'] as num?)?.toInt() ?? 0,
+      knockouts: (m['knockouts'] as num?)?.toInt() ?? 0,
+      finishedAt: switch (m['finishedAt']) {
+        final DateTime dt => dt,
+        final String s => DateTime.tryParse(s),
+        final Timestamp ts => ts.toDate(),
+        _ => null,
+      },
+      eliminatedAtLevel: (m['eliminatedAtLevel'] as num?)?.toInt(),
+      prize: (m['prize'] as num?)?.toInt() ?? 0,
+      buyInsPaid: (m['buyInsPaid'] as num?)?.toInt() ?? 0,
+      hasExplicitBuyIns: explicit,
+    );
+  }
 }
+
+/// A document that lives OUTSIDE `groups/{gid}`, named without a Firestore
+/// handle so the set of them a delete must remove can be asserted in a unit
+/// test. Both fields are an existing Firestore path segment: [collection] is a
+/// top-level collection name and [id] is a non-empty document id.
+typedef ExternalRef = ({String collection, String id});
 
 /// Single Firestore access point for the whole app. Screens never touch
 /// Firestore directly; [AppProvider] calls these methods optimistically after
@@ -253,9 +290,47 @@ class FirebaseRepository {
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   Stream<fa.User?> authStateChanges() => _auth.authStateChanges();
-  fa.User? get currentUser => _auth.currentUser;
-  String? get currentUid => _auth.currentUser?.uid;
-  bool get isSignedInAsGuest => _auth.currentUser?.isAnonymous ?? false;
+
+  /// Guarded like the constructor's own `authStateChanges()` subscription:
+  /// widget tests mount screens before `Firebase.initializeApp()` runs, and
+  /// `FirebaseAuth.instance` throws `[core/no-app]` the instant it is
+  /// touched — not just when a network call is made. Unlike that
+  /// subscription, this getter has call sites reachable straight from
+  /// `build()` (`AppProvider.isGuest`), so without a guard of its own the
+  /// same "Firebase unavailable" case that the constructor already tolerates
+  /// crashes on the first read here. Falls back to "no user", the same
+  /// answer as a fresh, unauthenticated session.
+  fa.User? get currentUser {
+    try {
+      return _auth.currentUser;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? get currentUid => currentUser?.uid;
+
+  /// The signed-in user's Premium entitlement, as held on the server.
+  ///
+  /// `entitlements/{uid}` is READ-ONLY to every client (`allow write: if
+  /// false` in firestore.rules), so this value cannot be forged from the app
+  /// however the device is tampered with. It is granted out of band — the
+  /// Firebase console, or the Admin SDK from a machine the owner controls.
+  ///
+  /// Returns false when absent, unreadable or offline: the safe answer to
+  /// "has this person paid?" is no.
+  Future<bool> fetchPremiumEntitlement() async {
+    final uid = currentUid;
+    if (uid == null) return false;
+    try {
+      final doc = await _db.collection('entitlements').doc(uid).get();
+      return (doc.data()?['premium'] as bool?) ?? false;
+    } catch (e) {
+      debugPrint('fetchPremiumEntitlement failed: $e');
+      return false;
+    }
+  }
+  bool get isSignedInAsGuest => currentUser?.isAnonymous ?? false;
 
   Future<fa.UserCredential> signUp({
     required String name,
@@ -299,26 +374,27 @@ class FirebaseRepository {
 
   // ── Google Sign-In (v7 API) ────────────────────────────────────────────────
 
+  // Web OAuth 2.0 client ID (type 3 in google-services.json / GoogleService-Info.plist).
+  // Used on Android & iOS as the serverClientId so Firebase receives a valid
+  // ID-token audience.  On web the popup flow uses the same ID.
+  // clientSecret is only required for the desktop PKCE flow — leave it null
+  // on mobile so the package uses the native Google Sign-In SDK instead.
+  static const _webClientId =
+      '885018943861-j9abh2tqc4eiqr58bc9ihel3l2d3q89f.apps.googleusercontent.com';
+
   static final GoogleSignIn googleSignIn = GoogleSignIn(
     params: const GoogleSignInParams(
-      clientId:
-          'YOUR_CLIENT_ID.apps.googleusercontent.com', // Replace with your Client ID
-      clientSecret:
-          'YOUR_CLIENT_SECRET', // Replace with your Client Secret for desktop
+      clientId: _webClientId,
       scopes: ['openid', 'profile', 'email'],
     ),
   );
 
   /// Initialises the [GoogleSignIn] singleton.
-  /// The new package handles initialization automatically, so this can be a no-op or silentSignIn.
+  /// The package handles initialization automatically — no pre-warming needed.
   static Future<void> initGoogleSignIn() async {
-    try {
-      if (!kIsWeb) {
-        await googleSignIn.silentSignIn();
-      }
-    } catch (_) {
-      // Ignore
-    }
+    // Intentionally empty: calling silentSignIn() here would cache a session
+    // and cause signIn() to skip the account chooser on the next explicit
+    // sign-in attempt. The package self-initializes on first use.
   }
 
   /// Builds a Firebase credential from [GoogleSignInCredentials].
@@ -332,21 +408,24 @@ class FirebaseRepository {
   }
 
   /// Signs in (or creates) a Firebase account via Google OAuth. Returns
-  /// `null` when the user cancels the flow.
+  /// `null` when the user cancels the flow. Throws on real errors so the
+  /// caller can surface a meaningful message.
   Future<fa.UserCredential?> signInWithGoogle() async {
-    try {
-      if (kIsWeb) {
-        return await _auth.signInWithPopup(fa.GoogleAuthProvider());
-      } else {
-        final credentials = await googleSignIn.signIn();
-        if (credentials == null) return null;
-        final credential = await _googleCredential(credentials);
-        return _auth.signInWithCredential(credential);
-      }
-    } catch (e) {
-      debugPrint('signInWithGoogle failed: $e');
-      return null;
+    if (kIsWeb) {
+      return await _auth.signInWithPopup(
+        fa.GoogleAuthProvider()..setCustomParameters({'prompt': 'select_account'}),
+      );
     }
+    // Clear any stored token first so there's no leftover session.
+    try {
+      await googleSignIn.signOut();
+    } catch (_) {}
+    // signInOnline() always triggers the full OAuth web flow, bypassing the
+    // "use previously selected account" shortcut that signIn() uses.
+    final credentials = await googleSignIn.signInOnline();
+    if (credentials == null) return null;
+    final credential = await _googleCredential(credentials);
+    return _auth.signInWithCredential(credential);
   }
 
   /// Signs in to Firebase with existing credentials.
@@ -369,19 +448,18 @@ class FirebaseRepository {
     if (user == null || !user.isAnonymous) {
       throw StateError('No anonymous session to upgrade.');
     }
-    try {
-      if (kIsWeb) {
-        return await user.linkWithPopup(fa.GoogleAuthProvider());
-      } else {
-        final credentials = await googleSignIn.signIn();
-        if (credentials == null) return null;
-        final credential = await _googleCredential(credentials);
-        return user.linkWithCredential(credential);
-      }
-    } catch (e) {
-      debugPrint('linkGuestWithGoogle failed: $e');
-      return null;
+    if (kIsWeb) {
+      return await user.linkWithPopup(
+        fa.GoogleAuthProvider()..setCustomParameters({'prompt': 'select_account'}),
+      );
     }
+    try {
+      await googleSignIn.signOut();
+    } catch (_) {}
+    final credentials = await googleSignIn.signInOnline();
+    if (credentials == null) return null;
+    final credential = await _googleCredential(credentials);
+    return user.linkWithCredential(credential);
   }
 
   /// Signs out from Firebase **and** clears the Google Sign-In session so the
@@ -399,9 +477,75 @@ class FirebaseRepository {
   /// Deletes the profile doc, membership mirrors and rows, then the auth user.
   /// Throws [fa.FirebaseException] code `requires-recent-login` when the
   /// caller must re-authenticate first.
-  Future<void> deleteAccount() async {
+  /// The provider ids backing the signed-in account, e.g. `password`,
+  /// `google.com`. Empty for an anonymous guest.
+  Set<String> get signInProviders =>
+      _auth.currentUser?.providerData.map((p) => p.providerId).toSet() ??
+      const {};
+
+  /// True when deleting requires the user to retype their password. Google and
+  /// guest accounts re-authenticate without one.
+  bool get deleteNeedsPassword =>
+      signInProviders.contains('password') &&
+      !signInProviders.contains('google.com');
+
+  /// Re-establishes a "recent login". Firebase rejects [deleteAccount] with
+  /// `requires-recent-login` when the credential is more than a few minutes
+  /// old, which is the normal case for anyone who did not just sign in.
+  Future<void> reauthenticate({String? password}) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final providers = signInProviders;
+
+    if (providers.contains('google.com')) {
+      if (kIsWeb) {
+        await user.reauthenticateWithPopup(
+          fa.GoogleAuthProvider()
+            ..setCustomParameters({'prompt': 'select_account'}),
+        );
+        return;
+      }
+      final credentials = await googleSignIn.signInOnline();
+      if (credentials == null) {
+        throw fa.FirebaseAuthException(
+          code: 'user-cancelled',
+          message: 'Re-authentication was cancelled.',
+        );
+      }
+      await user.reauthenticateWithCredential(
+        await _googleCredential(credentials),
+      );
+      return;
+    }
+
+    if (providers.contains('password')) {
+      final email = user.email;
+      if (email == null || password == null || password.isEmpty) {
+        throw fa.FirebaseAuthException(
+          code: 'missing-password',
+          message: 'Please enter your password to confirm.',
+        );
+      }
+      await user.reauthenticateWithCredential(
+        fa.EmailAuthProvider.credential(email: email, password: password),
+      );
+      return;
+    }
+    // Anonymous guest: there is no credential to re-present, and Firebase
+    // allows an anonymous user to delete itself without one.
+  }
+
+  Future<void> deleteAccount({String? password}) async {
     final uid = currentUid;
     if (uid == null) return;
+    final email = _auth.currentUser?.email;
+
+    // BEFORE anything is destroyed. The auth user can only be removed after
+    // the Firestore cleanup (every rule keys off `request.auth.uid`), so a
+    // `requires-recent-login` discovered at that point would leave the profile
+    // deleted and the credential alive. Proving freshness up front means a
+    // failed re-auth costs nothing -- no data has been touched yet.
+    await reauthenticate(password: password);
     final userDoc = _db.collection('users').doc(uid);
 
     final memberships = await userDoc.collection('groups').get();
@@ -412,13 +556,33 @@ class FirebaseRepository {
         _db.collection('groups').doc(m.id).collection('members').doc(uid),
       );
     }
-    for (final sub in const ['presets', 'chipSets', 'notifications']) {
+    // `results` belongs here: it is the player's private per-game finish
+    // mirror. Left behind it is unreadable by anyone — the read rule keys off
+    // a uid that no longer exists — but still stored, which is exactly the
+    // residue account deletion is supposed to remove.
+    for (final sub in const [
+      'presets',
+      'chipSets',
+      'notifications',
+      'results',
+      'soloGames',
+    ]) {
       final docs = await userDoc.collection(sub).get();
       for (final d in docs.docs) {
         batch.delete(d.reference);
       }
     }
+    // The public email -> uid row written by [ensureUserDoc]. Without this the
+    // address stayed resolvable after deletion and `findUserByEmail` kept
+    // handing admins a uid with no account behind it.
+    if (email != null && email.trim().isNotEmpty) {
+      batch.delete(_db.collection('emailIndex').doc(emailIndexKey(email)));
+    }
     batch.delete(userDoc);
+    // Firestore first, auth last: the order is forced because every rule above
+    // keys off `request.auth.uid`, so removing the auth user first would strip
+    // the permission needed to clean up. The re-auth above is what makes this
+    // order safe.
     await batch.commit();
     await _auth.currentUser?.delete();
   }
@@ -528,8 +692,8 @@ class FirebaseRepository {
           .doc(uid)
           .set(
             _stamp({
-              if (name != null) 'name': name,
-              if (email != null) 'email': email,
+              'name': ?name,
+              'email': ?email,
               if (email != null) 'emailLower': email.trim().toLowerCase(),
             }),
             SetOptions(merge: true),
@@ -639,18 +803,72 @@ class FirebaseRepository {
       'kind': 'group',
       'name': group.name,
       'icon': group.icon,
+      // Shown on the invite preview before anyone joins (E6). Kept fresh by
+      // the host's device, see [updateInvitePreview].
+      'hostName': owner.name,
+      'memberCount': 1,
+      'gamesPlayed': 0,
     });
 
     await batch.commit();
+  }
+
+  /// Refreshes the public numbers on a group's `joinCodes` doc so the invite
+  /// preview shows the group as it is now. Host-only by rule (there is no
+  /// Cloud Function to do it); never carries anything a code holder cannot
+  /// already see on the join screen.
+  Future<void> updateInvitePreview(
+    String code, {
+    required String name,
+    required String icon,
+    required String hostName,
+    required int memberCount,
+    required int gamesPlayed,
+  }) => _db.collection('joinCodes').doc(code.trim().toUpperCase()).update({
+    'name': name,
+    'icon': icon,
+    'hostName': hostName,
+    'memberCount': memberCount,
+    'gamesPlayed': gamesPlayed,
+  });
+
+  static final List<DateTime> _codeLookupHistory = [];
+  static const int _maxCodeLookupsPerMinute = 20;
+
+  static bool _isValidJoinCode(String code) =>
+      code.isNotEmpty &&
+      code.length >= 4 &&
+      code.length <= 12 &&
+      RegExp(r'^[A-Z0-9]+$').hasMatch(code);
+
+  static bool _checkCodeLookupRateLimit() {
+    final now = DateTime.now();
+    _codeLookupHistory.removeWhere(
+      (t) => now.difference(t) > const Duration(minutes: 1),
+    );
+    if (_codeLookupHistory.length >= _maxCodeLookupsPerMinute) {
+      return false;
+    }
+    _codeLookupHistory.add(now);
+    return true;
   }
 
   /// Reads the raw `joinCodes/{code}` document without joining anything.
   /// Returns `{kind, gid, gameId?, name?, icon?}` or `null` when unknown.
   /// Used by the unified join screen to classify a code (group vs game/tv)
   /// before deciding which flow to run.
+  /// E7 migration seam: when Cloud Functions exist, set
+  /// [useFunctionsForCodes] to route this through the `resolveJoinCode`
+  /// callable (App Check + rate_limits) instead of the direct get below.
+  static bool useFunctionsForCodes = false;
+
   Future<Map<String, dynamic>?> peekJoinCode(String code) async {
     final key = code.trim().toUpperCase();
-    if (key.isEmpty) return null;
+    if (!_isValidJoinCode(key)) return null;
+    if (!_checkCodeLookupRateLimit()) {
+      debugPrint('peekJoinCode: rate limit exceeded for $key');
+      return null;
+    }
     final snap = await _db.collection('joinCodes').doc(key).get();
     if (!snap.exists) return null;
     return Map<String, dynamic>.from(snap.data()!);
@@ -661,6 +879,11 @@ class FirebaseRepository {
   /// the code does not exist.
   Future<String?> joinByCode(String code, AppUser user) async {
     final key = code.trim().toUpperCase();
+    if (!_isValidJoinCode(key)) return null;
+    if (!_checkCodeLookupRateLimit()) {
+      debugPrint('joinByCode: rate limit exceeded for $key');
+      return null;
+    }
     final codeSnap = await _db.collection('joinCodes').doc(key).get();
     if (!codeSnap.exists) return null;
     final data = Map<String, dynamic>.from(codeSnap.data()!);
@@ -669,7 +892,7 @@ class FirebaseRepository {
     // Read name/icon from the joinCodes doc (world-readable for signed-in users)
     // so we never have to touch groups/{gid} — non-members cannot read that doc.
     final name = (data['name'] as String?) ?? '';
-    final icon = (data['icon'] as String?) ?? '♠️';
+    final icon = (data['icon'] as String?) ?? 'Spade';
     // The code travels onto the membership row so the RULES can verify it
     // against `groups/{gid}.joinCode`. Checking it only here (client-side) let
     // any signed-in user — including an anonymous guest — join any group by id
@@ -772,10 +995,10 @@ class FirebaseRepository {
     bool? pinned,
     String? role,
   }) => userGroupIndexRef(uid, gid).set({
-    if (name != null) 'name': name,
-    if (icon != null) 'icon': icon,
-    if (pinned != null) 'pinned': pinned,
-    if (role != null) 'role': role,
+    'name': ?name,
+    'icon': ?icon,
+    'pinned': ?pinned,
+    'role': ?role,
   }, SetOptions(merge: true));
 
   Future<void> setMemberRole(String gid, String targetUid, String role) => _db
@@ -800,6 +1023,346 @@ class FirebaseRepository {
       _db.collection('groups').doc(gid).update({
         'tableSettings': tableSettingsToMap(settings),
       });
+
+  Future<void> updateGroupLearningOptOut(String gid, bool optOut) => _db
+      .collection('groups')
+      .doc(gid)
+      .update({'learningOptOut': optOut});
+
+  /// B10: points the group at one of the owner's saved chip sets.
+  ///
+  /// Passing null clears the pointer, which is what the Standard box on the
+  /// chips screen means by "no saved set". The field is deleted rather than
+  /// written as null so the stored document matches what `groupToMap` produces
+  /// for a null pointer -- the codec omits the key entirely, and a stored null
+  /// would come back as a key that never matches that shape.
+  Future<void> updateGroupDefaultChipSet(String gid, String? id) => _db
+      .collection('groups')
+      .doc(gid)
+      .update({
+        'defaultChipSetId': id ?? FieldValue.delete(),
+      });
+
+  /// B9: retires [oldCode] and issues [newCode] for the same group in one
+  /// commit.
+  ///
+  /// "Re-roll the code - the old code and link stop working at once" (§B9,
+  /// §3143). That "at once" is the whole requirement, and it is why this is a
+  /// transaction rather than two writes: the group document has to start
+  /// handing out the new code in the same commit that deletes the old
+  /// `joinCodes` row, or there is a window where the old invite link still
+  /// resolves a group whose own document disagrees with it.
+  ///
+  /// Returns false when [newCode] is already taken, so the caller can draw
+  /// another. The rules would refuse such a write anyway -- `joinCodes` allows
+  /// `create` but not `update` -- so this is checked to report a retry rather
+  /// than an error, and the read is inside the transaction so two hosts
+  /// re-rolling at the same moment cannot both win.
+  Future<bool> rerollGroupJoinCode({
+    required String gid,
+    required String oldCode,
+    required String newCode,
+    required String name,
+    required String icon,
+    required String hostName,
+    required int memberCount,
+    required int gamesPlayed,
+  }) =>
+      _db.runTransaction<bool>((txn) async {
+        final codes = _db.collection('joinCodes');
+        final next = newCode.toUpperCase();
+        final previous = oldCode.toUpperCase();
+        // Every read first: a transaction may not read after it has written.
+        final clash = await txn.get(codes.doc(next));
+        if (clash.exists) return false;
+
+        txn.update(_db.collection('groups').doc(gid), {'joinCode': next});
+        txn.set(codes.doc(next), {
+          'gid': gid,
+          'kind': 'group',
+          'name': name,
+          'icon': icon,
+          'hostName': hostName,
+          'memberCount': memberCount,
+          'gamesPlayed': gamesPlayed,
+        });
+        if (previous != next) txn.delete(codes.doc(previous));
+        return true;
+      });
+
+  /// The rows one game leaves behind OUTSIDE `groups/{gid}` — the only two kinds
+  /// a recursive group delete cannot reach by walking the group document.
+  ///
+  ///  * `publicGames/{gameId}` — the sanitized projection, written by
+  ///    `publishPublicProjections` and readable under `allow read: if true`,
+  ///    which is to say by anyone at all, with no group context. Delete the game
+  ///    document without it and the row still answers a GET with the group's
+  ///    gid, the event name, the date, the time and the chip structure: an
+  ///    orphan that is both unresolvable and still readable. E7 (spec line
+  ///    3143) gives the projection the lifetime of the game, and a group delete
+  ///    has to honour that for every game the group ever ran, not just the live
+  ///    one.
+  ///  * `joinCodes/{publicCode}` and `joinCodes/{tvCode}` — the lookup rows
+  ///    `upsertGameCodes` writes, under `allow get: if true` because an invite
+  ///    link and a TV QR must resolve before sign-in. A dead code keeps
+  ///    resolving to a gid and a gameId whose game no longer exists.
+  ///
+  /// A blank code yields no ref at all rather than an empty document id:
+  /// `collection('')` addresses the collection, not a document.
+  ///
+  /// A MISSING code must be just as unremarkable as a blank one. E7 releases a
+  /// game's projection and both its codes once the game is completed or
+  /// cancelled — that release is not built yet, so today these rows are simply
+  /// never removed, but the moment it is, a group with a finished night in its
+  /// history hands this function absent codes. Naming a ref that is not there is
+  /// not harmless (see [_existingRefs]), so "no such document" and "no such
+  /// code" both have to resolve to no ref.
+  ///
+  /// Pure, so the reference set can be pinned by a test without a Firestore.
+  @visibleForTesting
+  static List<ExternalRef> externalGameRefs({
+    required String gameId,
+    String? publicCode,
+    String? tvCode,
+  }) {
+    final refs = <ExternalRef>[];
+    final id = gameId.trim();
+    if (id.isNotEmpty) {
+      refs.add((collection: 'publicGames', id: id));
+    }
+    for (final code in [publicCode, tvCode]) {
+      final key = code?.trim().toUpperCase() ?? '';
+      if (key.isEmpty) continue;
+      // The public and TV codes share one namespace (E7), and a game that was
+      // never re-rolled can hold the same value in both slots. `joinCodes/{code}`
+      // is a single document, so a second delete of it is redundant work the
+      // rules would evaluate again.
+      if (refs.any((r) => r.collection == 'joinCodes' && r.id == key)) continue;
+      refs.add((collection: 'joinCodes', id: key));
+    }
+    return refs;
+  }
+
+  /// Of [refs], only the ones whose document is actually there.
+  ///
+  /// This is not an optimisation, it is a correctness requirement. A delete of
+  /// a document that does not exist is NOT a no-op in the rules engine: the
+  /// rule is still evaluated, `resource` is null, and `resource.data.gid` on a
+  /// null `resource` is a rules error, so the rule denies — and one denied
+  /// write fails the WHOLE batch. Every rule these refs are deleted under reads
+  /// `resource.data`, which is available and populated on a delete precisely
+  /// because the document is there; it is only the missing-document case that
+  /// breaks. Both collections are world-readable, so these are plain `get()`s.
+  static Future<List<DocumentReference<Map<String, dynamic>>>> _existingRefs(
+    List<DocumentReference<Map<String, dynamic>>> refs,
+  ) async {
+    // Bounded fan-out: a group with a long history yields hundreds of these and
+    // a burst that wide is its own failure mode.
+    const fanOut = 20;
+    final found = <DocumentReference<Map<String, dynamic>>>[];
+    for (var i = 0; i < refs.length; i += fanOut) {
+      final window = refs.skip(i).take(fanOut).toList();
+      final snaps = await Future.wait(window.map((r) => r.get()));
+      for (var j = 0; j < window.length; j++) {
+        if (snaps[j].exists) found.add(window[j]);
+      }
+    }
+    return found;
+  }
+
+  /// B9: deletes a group and everything under it.
+  ///
+  /// Firestore's `delete()` on a document does NOT touch its subcollections, so
+  /// a plain delete of `groups/{gid}` would leave the roster, every night, all
+  /// the chat, the reports and the imported history readable to anyone who
+  /// already had a membership row. Hence the walk.
+  ///
+  /// Two ordering facts make this a single batch rather than a loop of writes:
+  ///
+  ///  * Every rule here is `isGroupAdmin(gid)`, which reads BOTH the group doc
+  ///    and the caller's own member row. If those were deleted in separate
+  ///    writes, the second write would be evaluated against a group that no
+  ///    longer exists and would be refused -- and the owner's own row is itself
+  ///    one of the rows being deleted.
+  ///  * Firestore evaluates every rule in a batch against the state *before* the
+  ///    batch commits, so one batch authorises cleanly whatever the order
+  ///    inside it. The group doc is queued last anyway so a partial failure
+  ///    leaves the group intact rather than a headless one.
+  ///
+  /// The rows OUTSIDE the group are not optional extras, and they carry the same
+  /// ordering constraint as everything else. `publicGames/{gameId}` and
+  /// `joinCodes/{code}` delete under `isGroupOwner(resource.data.gid)` (or, for a
+  /// code, `request.auth.uid == resource.data.ownerId`), and `isGroupOwner`
+  /// reads `groups/{gid}` -- so they authorise only while the group document
+  /// still exists. That is why they are queued above the final
+  /// `deletes.add(groupRef)`, and why they may never be moved below it.
+  ///
+  /// `resource.data` is available on a delete of a document that is there, which
+  /// is what every rule here reads, and is null for one that is not -- so the
+  /// hand-named rows outside the group are presence-checked first ([_existingRefs])
+  /// rather than deleted blind. A rules error in any one write denies the whole
+  /// batch it is in, and a denied batch leaves the group half-deleted.
+  ///
+  /// `groups/{gid}` stays the very last element of [deletes], which makes it the
+  /// last element of the LAST chunk. That is what makes the 500-per-batch
+  /// chunking below safe for a group of any size: every earlier chunk is
+  /// evaluated while `groups/{gid}` still exists, and within the final chunk
+  /// every rule is evaluated against the pre-batch state, so the group document
+  /// authorizes its own delete. Only the caller's OWN member row is a second
+  /// dependency, and `deleteGroup` is owner-only
+  /// (`AppProvider.deleteGroup` compares the uid against `group.ownerId`), so
+  /// `isGroupAdmin` short-circuits on the `ownerId` disjunct for the whole walk
+  /// — deleting the roster in an earlier chunk cannot strand a later one.
+  ///
+  /// Chunked at 500 writes, the batch limit.
+  Future<void> deleteGroupRecursive(String gid, {String? joinCode}) async {
+    final groupRef = _db.collection('groups').doc(gid);
+    final deletes = <DocumentReference>[];
+
+    Future<void> addAll(DocumentReference parent, String collection) async {
+      final snap = await parent.collection(collection).get();
+      for (final doc in snap.docs) {
+        deletes.add(doc.reference);
+      }
+    }
+
+    /// A collection that may itself hold subcollections.
+    Future<void> addTree(
+      DocumentReference parent,
+      String collection,
+      List<String> nested, {
+      void Function(DocumentSnapshot<Map<String, dynamic>> doc)? onDoc,
+    }) async {
+      final snap = await parent.collection(collection).get();
+      for (final doc in snap.docs) {
+        deletes.add(doc.reference);
+        onDoc?.call(doc);
+        for (final sub in nested) {
+          await addAll(doc.reference, sub);
+        }
+      }
+    }
+
+    // Every row OUTSIDE the group, named by hand rather than walked. Collected
+    // here rather than lazily, because after the walk the game documents are
+    // about to be deleted and their codes are the only remaining record of them.
+    final external = <ExternalRef>[];
+
+    /// A code read off a stored game, tolerating both a document that never had
+    /// one and one that carries a non-string. A bad cast here would abort the
+    /// whole walk and orphan every row this call exists to clean up — the one
+    /// place where being lenient costs nothing and being strict is expensive.
+    String? codeOf(DocumentSnapshot<Map<String, dynamic>> doc, String key) {
+      final value = doc.data()?[key];
+      return value is String ? value : null;
+    }
+
+    // Groups with real history have games with their own subcollections; the
+    // list mirrors the nesting in firestore.rules.
+    await addTree(groupRef, 'games', const [
+      'memberViews',
+      'players',
+      'chat',
+      'admin',
+      'meta',
+      'settlements',
+    ], onDoc: (doc) {
+      external.addAll(externalGameRefs(
+        gameId: doc.id,
+        publicCode: codeOf(doc, 'publicCode'),
+        tvCode: codeOf(doc, 'tvCode'),
+      ));
+    });
+    for (final collection in const [
+      'members',
+      'chat',
+      'reports',
+      'importedNights',
+      'polls',
+      'cashSessions',
+      'notifications',
+    ]) {
+      await addAll(groupRef, collection);
+    }
+
+    // The request queue is top-level and keyed by GAME, not by group, so the
+    // walk above never sees it. Each item is a guest slot claim or a member's
+    // rebuy/add-on/check-in request, and it carries the requester's name — so
+    // an orphaned queue is personal data belonging to a group that no longer
+    // exists, readable by the person who made the claim and by nobody who could
+    // now clear it.
+    //
+    // This one is a QUERY rather than a hand-named row, and the rules allow it:
+    // `requests/{gameId}/items/{reqId}` has `allow list: if isGroupAdmin(gid)`
+    // evaluated per returned document, so constraining on `gid` proves the
+    // result set, and `allow delete: if isGroupAdmin(gid)` authorises the
+    // deletes. The caller is the owner, so both hold.
+    final requestSnaps = await _db
+        .collection('requests')
+        .where('gid', isEqualTo: gid)
+        .get();
+    for (final requestDoc in requestSnaps.docs) {
+      await addAll(requestDoc.reference, 'items');
+    }
+
+    // `pendingInvites/{inviteId}` is deliberately NOT cleaned here, and this is
+    // a rules limit rather than an oversight. Every row's read rule is
+    // `resource.data.uid == request.auth.uid`, so a `where('gid', ...)` query
+    // can only ever return the CALLER's own invitations -- the owner has no way
+    // to enumerate, let alone delete, invitations the group admin sent to
+    // somebody else. There is no client-side fix: it needs either the rows to
+    // live under `groups/{gid}` (a data-model migration) or a server-side
+    // sweep, which is out of scope. The residue is a dead invitation pointing
+    // at a group that no longer exists, readable only by the person it was sent
+    // to.
+
+    // The public invite row outlives the group otherwise, and the code would
+    // still resolve to a name and a member count for a group nobody can enter.
+    if (joinCode != null && joinCode.trim().isNotEmpty) {
+      external.add((
+        collection: 'joinCodes',
+        id: joinCode.trim().toUpperCase(),
+      ));
+    }
+
+    // A game's projection and its two codes are the same leak one level up: the
+    // projection is readable by anyone, and each code still resolves to a
+    // group and a game that are being deleted in this same walk. As is the
+    // group's own invite row above.
+    //
+    // Every one of these is named rather than walked, so every one of them may
+    // ALREADY be gone — E7 releases a game's projection and both its codes once
+    // the game completes or is cancelled, and `updateGroupJoinCode` deletes the
+    // previous row. A delete of a document that is not there is not a no-op in
+    // the rules engine: the rule is still evaluated, `resource` is null, and
+    // `resource.data.gid` on a null `resource` is a rules error, so the rule
+    // denies — and one denied write fails the WHOLE batch, including every
+    // other row queued with it. `resource.data` is available and populated for
+    // every row that IS there, which is the only case that reaches a rule.
+    // Both collections are `allow get: if true`, so the presence check is a
+    // plain read and needs no authority of its own.
+    //
+    // A Set, so a code that two games somehow share — or a game code equal to
+    // the group's invite code — is one delete rather than the same rule
+    // evaluated twice for one document.
+    if (external.isNotEmpty) {
+      deletes.addAll(await _existingRefs([
+        for (final ref in external.toSet())
+          _db.collection(ref.collection).doc(ref.id),
+      ]));
+    }
+
+    // MUST STAY LAST — see the ordering notes above.
+    deletes.add(groupRef);
+
+    for (var i = 0; i < deletes.length; i += 500) {
+      final batch = _db.batch();
+      for (final ref in deletes.skip(i).take(500)) {
+        batch.delete(ref);
+      }
+      await batch.commit();
+    }
+  }
 
   /// Atomically transfers group ownership to [newOwnerId]: updates the group
   /// doc's `ownerId` field and promotes the new owner's member row to `admin`.
@@ -860,18 +1423,10 @@ class FirebaseRepository {
     String gid,
     AppUser user, {
     String groupName = '',
-    String groupIcon = '♠️',
+    String groupIcon = '?',
+    String joinCode = '',
   }) async {
     final batch = _db.batch();
-    batch.set(
-      _db.collection('groups').doc(gid).collection('members').doc(user.id),
-      {
-        'name': user.name,
-        'role': 'member',
-        'joinedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
     batch.set(_db.collection('pendingInvites').doc('$gid:${user.id}'), {
       'uid': user.id,
       'gid': gid,
@@ -879,6 +1434,7 @@ class FirebaseRepository {
       'icon': groupIcon,
       'role': 'member',
       'createdAt': FieldValue.serverTimestamp(),
+      'joinCode': joinCode,
     });
     await batch.commit();
   }
@@ -918,7 +1474,7 @@ class FirebaseRepository {
   /// into a single [Group]. Emits whenever any part changes. The first
   /// emission only happens once every source has delivered its initial
   /// snapshot.
-  Stream<Group> groupBundleStream(String gid) {
+  Stream<Group> groupBundleStream(String gid, {bool isAdmin = false}) {
     late StreamController<Group> controller;
     final subs = <StreamSubscription<dynamic>>[];
 
@@ -948,7 +1504,7 @@ class FirebaseRepository {
             name: (meta?['name'] as String?) ?? '',
             joinCode: (meta?['joinCode'] as String?) ?? '',
             ownerId: (meta?['ownerId'] as String?) ?? '',
-            icon: (meta?['icon'] as String?) ?? '♠️',
+            icon: (meta?['icon'] as String?) ?? '♠',
             members: members,
             chat: chat,
             polls: polls,
@@ -1069,12 +1625,39 @@ class FirebaseRepository {
         );
         section<QuerySnapshot<Map<String, dynamic>>>(
           'games',
-          () => groupRef
-              .collection('games')
-              .orderBy('settings.date', descending: true)
-              .limit(15)
-              .snapshots(),
-          (s) => games = [for (final d in s.docs) ?tryParseGameDoc(d)],
+          () {
+            Query<Map<String, dynamic>> q = groupRef.collection('games');
+            if (!isAdmin) {
+              q = q
+                  .where('playersScrubbed', isEqualTo: true)
+                  .where('payments', isEqualTo: const <dynamic>[]);
+            }
+            return q
+                .orderBy('settings.date', descending: true)
+                .limit(15)
+                .snapshots();
+          },
+          (s) {
+            final uid = currentUid;
+            final isOwner = meta?['ownerId'] == uid;
+            final userIsAdmin =
+                isAdmin || isOwner || members.any((m) => m.id == uid && m.isAdmin);
+            games = [
+              for (final d in s.docs)
+                ?tryParseGameDoc(d, scrubPayments: !userIsAdmin)
+            ];
+            if (userIsAdmin) {
+              for (final d in s.docs) {
+                final dData = d.data();
+                final p = dData['payments'];
+                final hasPayments = p is List && p.isNotEmpty;
+                final notScrubbed = dData['playersScrubbed'] != true;
+                if (hasPayments || notScrubbed) {
+                  unawaited(scrubLegacyGamePayments(gid, d.id, dData));
+                }
+              }
+            }
+          },
           () => gamesLoaded = true,
         );
       },
@@ -1094,9 +1677,16 @@ class FirebaseRepository {
   /// Parses a group game document defensively: a single malformed doc used to
   /// blank the whole games list (hub + chat card lookups). Returns null and
   /// logs so the rest of the bundle keeps loading.
-  LiveGame? tryParseGameDoc(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+  LiveGame? tryParseGameDoc(
+    QueryDocumentSnapshot<Map<String, dynamic>> d, {
+    bool scrubPayments = false,
+  }) {
     try {
-      return liveGameFromFirestoreDoc(Map<String, dynamic>.from(d.data()));
+      final data = Map<String, dynamic>.from(d.data());
+      if (scrubPayments) {
+        data['payments'] = const <Map<String, dynamic>>[];
+      }
+      return liveGameFromFirestoreDoc(data);
     } catch (e) {
       debugPrint('groupBundle: skipping malformed game doc ${d.id}: $e');
       return null;
@@ -1114,6 +1704,59 @@ class FirebaseRepository {
     });
     await batch.commit();
   }
+
+  // ── Reports (groups/{gid}/reports) ─────────────────────────────────────────
+  CollectionReference<Map<String, dynamic>> _reportsCol(String gid) =>
+      _db.collection('groups').doc(gid).collection('reports');
+
+  /// Files a report. The id is `<messageId>_<reporterUid>`, so the same member
+  /// reporting the same message twice is refused by the rules (create-only)
+  /// rather than duplicated.
+  Future<void> reportChatMessage(String gid, ChatReport report) =>
+      _reportsCol(gid).doc(report.id).set({
+        ...report.toMap(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+  /// Admin-only: reads are denied to plain members by the rules.
+  Stream<List<ChatReport>> reportsStream(String gid) =>
+      _reportsCol(gid).snapshots().map((s) {
+        final list = [
+          for (final d in s.docs)
+            ChatReport.fromMap(
+              d.id,
+              d.data(),
+              (d.data()['createdAt'] as Timestamp?)?.toDate() ??
+                  DateTime.now(),
+            ),
+        ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return list;
+      });
+
+  Future<void> clearReport(String gid, String reportId) =>
+      _reportsCol(gid).doc(reportId).delete();
+
+  // ── Imported nights (groups/{gid}/importedNights, B12) ─────────────────────
+  CollectionReference<Map<String, dynamic>> _importedNightsCol(String gid) =>
+      _db.collection('groups').doc(gid).collection('importedNights');
+
+  /// Host-only (rules). One batch, so a failed import leaves nothing behind.
+  Future<void> saveImportedNights(String gid, List<ImportedNight> nights) async {
+    final batch = _db.batch();
+    for (final n in nights) {
+      batch.set(_importedNightsCol(gid).doc(n.id), n.toMap());
+    }
+    await batch.commit();
+  }
+
+  /// Readable by every member, oldest night first.
+  Stream<List<ImportedNight>> importedNightsStream(String gid) =>
+      _importedNightsCol(gid).snapshots().map((s) {
+        final list = [
+          for (final d in s.docs) ImportedNight.fromMap(d.id, d.data()),
+        ]..sort((a, b) => a.date.compareTo(b.date));
+        return list;
+      });
 
   Future<void> markChatMessageDeleted(String gid, String msgId) => _db
       .collection('groups')
@@ -1306,7 +1949,7 @@ class FirebaseRepository {
             throw fa.FirebaseException(
               plugin: 'cloud_firestore',
               code: 'aborted',
-              message: 'Another admin is actively editing this game.',
+              message: 'Another host is actively editing this game.',
             );
           }
         }
@@ -1344,7 +1987,67 @@ class FirebaseRepository {
       debugPrint('saveGame: private sidecar rejected (continuing): $e');
     }
 
+    await _mirrorPlayerIndex(gameRef, written);
+
     return written;
+  }
+
+  /// Number of players occupying a seat right now — the figure addendum §3
+  /// caps at nine for free hosting ("one table / max 9 active players").
+  ///
+  /// Matches `Entitlements.canHost`'s definition exactly: somebody who busted
+  /// out has freed their seat, so they no longer count against the cap.
+  static int activePlayerCount(LiveGame game) =>
+      game.players.where((p) => p.active && !p.eliminated).length;
+
+  /// Stage 1 of the free-tier cap migration: mirror the players map into a
+  /// real subcollection plus a counter document.
+  ///
+  /// Why this exists at all. The cap is enforced today only by
+  /// `Entitlements.canHost` in Dart, which ships to the device and can be
+  /// deleted from a rebuilt client. It cannot be enforced in security rules
+  /// as things stand, because `players` is a MAP FIELD inside the one game
+  /// document and the rules language has no loop — it cannot count how many
+  /// entries have `active == true && eliminated == false`, so it has nothing
+  /// to compare against nine.
+  ///
+  /// A counter alone does not fix that either: a rule still could not tell
+  /// whether a self-reported number matched the map it claims to describe.
+  /// What makes it enforceable is giving each player their OWN document, so
+  /// that ADDING a player becomes its own discrete write with its own rule —
+  /// one that can require, via `getAfter`, that the counter moved up by
+  /// exactly one in the same atomic commit. Player ten then cannot be created
+  /// at all, because the commit that would register them is refused by
+  /// Firestore rather than skipped by app code.
+  ///
+  /// This method is deliberately WRITE-ONLY and best-effort. Nothing reads
+  /// these documents yet and no rule enforces them yet; the live app still
+  /// runs entirely off the `players` map. That is what makes this stage safe
+  /// to ship on its own — if the mirror is wrong or missing, nothing breaks.
+  Future<void> _mirrorPlayerIndex(
+    DocumentReference<Map<String, dynamic>> gameRef,
+    LiveGame game,
+  ) async {
+    try {
+      final batch = _db.batch();
+      for (final p in game.players) {
+        batch.set(gameRef.collection('players').doc(p.id), {
+          ...playerToMap(p),
+          'gameId': game.id,
+          'groupId': game.groupId,
+        }, SetOptions(merge: true));
+      }
+      batch.set(gameRef.collection('meta').doc('playerCount'), {
+        'active': activePlayerCount(game),
+        'total': game.players.length,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+      await batch.commit();
+    } catch (e) {
+      // Stage 1 is a shadow copy. A rejection here must never cost the host
+      // their game state, exactly as with the private sidecar above.
+      debugPrint('saveGame: player index mirror skipped: $e');
+    }
   }
 
   /// Admin-only companion document: everything scrubbed out of the public one.
@@ -1361,8 +2064,10 @@ class FirebaseRepository {
       // 5.6 / section 22), so the queue is admin-side state.
       'rebuyRequests': fullDoc['rebuyRequests'],
       'addOnRequests': fullDoc['addOnRequests'],
+      'addOnDeclined': fullDoc['addOnDeclined'],
       'prizes': fullDoc['structure']['prizes'],
       'organizerAmount': fullDoc['structure']['organizerAmount'],
+      'payments': game.payments.map(paymentRecordToMap).toList(),
     };
   }
 
@@ -1375,18 +2080,29 @@ class FirebaseRepository {
     publicDoc['auditHistory'] = const <Map<String, dynamic>>[];
     publicDoc['rebuyRequests'] = const <String>[];
     publicDoc['addOnRequests'] = const <String>[];
+    publicDoc['addOnDeclined'] = const <String>[];
+    publicDoc['payments'] = const <Map<String, dynamic>>[];
 
     final publicSettings = Map<String, dynamic>.from(
       publicDoc['settings'] as Map? ?? {},
     );
     publicSettings.remove('organizerPct');
+    // The overtime badge is host-side settlement state, not play state. The
+    // rules require this to be absent (publicGameDocSafe), so the client has
+    // to strip it too or every authority write is refused.
+    publicSettings.remove('addOnOvertime');
     publicDoc['settings'] = publicSettings;
 
     if (publicDoc['structure'] != null) {
       final publicStructure = Map<String, dynamic>.from(
         publicDoc['structure'] as Map,
       );
-      publicStructure.remove('prizes');
+      // D2: "Everyone - players, guests, the TV - sees the prize pool and the
+      // payouts. Only the host's organiser contribution stays hidden." So the
+      // payout ladder stays on the member-readable document; only
+      // `organizerAmount` is removed. This reverses the earlier decision to
+      // omit the whole `prizes` list, which made every non-host see an empty
+      // ladder while the spec promises them the amounts.
       publicStructure.remove('organizerAmount');
       publicDoc['structure'] = publicStructure;
     }
@@ -1408,6 +2124,9 @@ class FirebaseRepository {
         scrubbed[e.key] = value;
       }
       publicDoc['players'] = scrubbed;
+      publicDoc['playersScrubbed'] = true;
+    } else {
+      publicDoc['playersScrubbed'] = true;
     }
     return publicDoc;
   }
@@ -1481,6 +2200,290 @@ class FirebaseRepository {
     return snap.data();
   }
 
+  /// Writes authoritative per-player settlement records when a tournament completes.
+  /// Each participant's document can only be read by that participant and the group admin.
+  Future<void> saveGameSettlements(
+    String groupId,
+    String gameId,
+    Map<String, GameResultRow> settlements,
+  ) async {
+    final batch = _db.batch();
+    final gameRef = _db
+        .collection('groups')
+        .doc(groupId)
+        .collection('games')
+        .doc(gameId)
+        .collection('settlements');
+    for (final entry in settlements.entries) {
+      batch.set(
+        gameRef.doc(entry.key),
+        entry.value.toMap(),
+        SetOptions(merge: true),
+      );
+    }
+    await batch.commit();
+  }
+
+  /// Fetches the authenticated player's own authoritative settlement record.
+  Future<GameResultRow?> fetchMySettlement(
+    String groupId,
+    String gameId,
+    String uid,
+  ) async {
+    try {
+      final snap = await _db
+          .collection('groups')
+          .doc(groupId)
+          .collection('games')
+          .doc(gameId)
+          .collection('settlements')
+          .doc(uid)
+          .get();
+      if (!snap.exists || snap.data() == null) return null;
+      return GameResultRow.fromMap(
+        snap.id,
+        Map<String, dynamic>.from(snap.data()!),
+      );
+    } catch (e) {
+      debugPrint('fetchMySettlement failed: $e');
+      return null;
+    }
+  }
+
+  Map<String, GameResultRow> _buildSettlementsForLegacyGame(LiveGame game) {
+    final settlements = <String, GameResultRow>{};
+    final finishOrder = game.finishOrder;
+    if (finishOrder.isEmpty) return settlements;
+
+    for (final p in game.players) {
+      if (p.isGuest) continue;
+      final index = finishOrder.indexOf(p.id);
+      if (index == -1) continue;
+      final position = finishPositionFromIndex(
+        index: index,
+        listLength: finishOrder.length,
+      );
+      final myPayments = game.payments
+          .where((pay) => pay.playerId == p.id && pay.status == PaymentStatus.paid)
+          .toList();
+
+      final rebuyUnit = game.settings.rebuyCost ?? game.settings.buyIn;
+      final addOnUnit = game.settings.addOnCost ?? game.settings.buyIn;
+      final buyInUnit = game.settings.buyIn;
+
+      int buyInsPaid;
+      if (game.payments.isEmpty) {
+        buyInsPaid = buyInUnit +
+            (p.rebuys * rebuyUnit) +
+            (p.reEntries * buyInUnit) +
+            (p.hasAddOn ? addOnUnit : 0);
+      } else {
+        int paidTotal = 0;
+        for (final pay in myPayments) {
+          paidTotal += pay.amount;
+        }
+        final hasBuyInPayment = myPayments.any(
+          (pay) => pay.purpose == PaymentPurpose.buyIn,
+        );
+        final paidRebuysCount = myPayments
+            .where((pay) => pay.purpose == PaymentPurpose.rebuy)
+            .length;
+        final paidReEntriesCount = myPayments
+            .where((pay) => pay.purpose == PaymentPurpose.reEntry)
+            .length;
+        final hasAddOnPayment = myPayments.any(
+          (pay) => pay.purpose == PaymentPurpose.addOn,
+        );
+
+        final unrecordedRebuys = (p.rebuys - paidRebuysCount).clamp(0, 999);
+        final unrecordedReEntries =
+            (p.reEntries - paidReEntriesCount).clamp(0, 999);
+        final unrecordedAddOn = (p.hasAddOn && !hasAddOnPayment) ? 1 : 0;
+
+        int unrecordedTotal = (unrecordedRebuys * rebuyUnit) +
+            (unrecordedReEntries * buyInUnit) +
+            (unrecordedAddOn * addOnUnit);
+
+        final isComped = game.payments.any(
+          (pay) =>
+              pay.playerId == p.id &&
+              (pay.amount == 0 || pay.failureReason == 'comp'),
+        );
+
+        if (!hasBuyInPayment && !isComped) {
+          unrecordedTotal += buyInUnit;
+        }
+        buyInsPaid = paidTotal + unrecordedTotal;
+      }
+
+      final prize = game.structure.prizes
+          .where((pr) => pr.place == position)
+          .firstOrNull
+          ?.amount ?? 0;
+
+      settlements[p.id] = GameResultRow(
+        gameId: game.id,
+        groupId: game.groupId,
+        position: position,
+        playerCount: finishOrder.length,
+        knockouts: p.knockouts,
+        finishedAt: game.endedAt ?? DateTime.now(),
+        eliminatedAtLevel: p.eliminatedAtLevel,
+        prize: prize,
+        buyInsPaid: buyInsPaid,
+        hasExplicitBuyIns: true,
+      );
+    }
+    return settlements;
+  }
+
+  /// Automatically backfills/scrubs legacy game documents that still hold
+  /// payment ledgers in their public document (Spec §B7, §E6, §E14).
+  /// Preserves payments, audit, and requests into admin privateData sidecar before clearing them.
+  Future<void> scrubLegacyGamePayments(
+    String gid,
+    String gameId,
+    Map<String, dynamic> docData,
+  ) async {
+    try {
+      final paymentsRaw = docData['payments'];
+      final auditRaw = docData['auditHistory'];
+      final rebuyReqRaw = docData['rebuyRequests'];
+      final addOnReqRaw = docData['addOnRequests'];
+      final addOnDeclinedRaw = docData['addOnDeclined'];
+      final playersRaw = docData['players'];
+
+      final gameRef =
+          _db.collection('groups').doc(gid).collection('games').doc(gameId);
+      final privateRef = gameRef.collection('admin').doc('privateData');
+
+      // Backup unscrubbed private data into admin privateData sidecar
+      final backup = <String, dynamic>{};
+      if (paymentsRaw is List && paymentsRaw.isNotEmpty) {
+        backup['payments'] = paymentsRaw;
+      }
+      if (auditRaw is List && auditRaw.isNotEmpty) {
+        backup['auditHistory'] = auditRaw;
+      }
+      if (rebuyReqRaw is List && rebuyReqRaw.isNotEmpty) {
+        backup['rebuyRequests'] = rebuyReqRaw;
+      }
+      if (addOnReqRaw is List && addOnReqRaw.isNotEmpty) {
+        backup['addOnRequests'] = addOnReqRaw;
+      }
+      if (addOnDeclinedRaw is List && addOnDeclinedRaw.isNotEmpty) {
+        backup['addOnDeclined'] = addOnDeclinedRaw;
+      }
+      // Save players as a List of maps matching _restorePrivatePlayerFinancials
+      if (playersRaw is Map) {
+        backup['players'] = [
+          for (final v in playersRaw.values)
+            if (v is Map) Map<String, dynamic>.from(v)
+        ];
+      } else if (playersRaw is List) {
+        backup['players'] = [
+          for (final v in playersRaw)
+            if (v is Map) Map<String, dynamic>.from(v)
+        ];
+      }
+      if (docData['structure'] is Map &&
+          (docData['structure'] as Map).containsKey('organizerAmount')) {
+        backup['organizerAmount'] = (docData['structure'] as Map)['organizerAmount'];
+      }
+      if (docData['settings'] is Map &&
+          (docData['settings'] as Map).containsKey('organizerPct')) {
+        backup['organizerPct'] = (docData['settings'] as Map)['organizerPct'];
+      }
+      // Always merge backup into admin privateData unconditionally
+      if (backup.isNotEmpty) {
+        await privateRef.set(backup, SetOptions(merge: true));
+      }
+
+      // Ensure authoritative settlements exist before scrubbing public document
+      // financial data. Check groups/{gid}/games/{gameId}/settlements subcollection.
+      final legacyGame = liveGameFromFirestoreDoc(docData);
+      final isCompleted = legacyGame.status == LiveGameStatus.completed ||
+          legacyGame.finishOrder.isNotEmpty ||
+          docData['endedAt'] != null;
+      if (isCompleted) {
+        if (legacyGame.finishOrder.isEmpty) {
+          // Without finishOrder, authoritative settlements cannot be computed.
+          // Abort scrub so financial data is preserved on docData.
+          debugPrint('scrubLegacyGamePayments: completed game $gameId has empty finishOrder, preserving raw document.');
+          return;
+        }
+        final settCol = gameRef.collection('settlements');
+        final settSnap = await settCol.get();
+        if (settSnap.docs.length < legacyGame.finishOrder.length) {
+          final settlements = _buildSettlementsForLegacyGame(legacyGame);
+          if (settlements.isNotEmpty) {
+            await saveGameSettlements(gid, gameId, settlements);
+          }
+        }
+      }
+
+      // Prepare fully scrubbed doc satisfying publicGameDocSafe()
+      dynamic scrubbedPlayers;
+      if (playersRaw is Map) {
+        final map = <String, dynamic>{};
+        for (final e in playersRaw.entries) {
+          if (e.value is Map) {
+            final pMap = Map<String, dynamic>.from(e.value as Map);
+            pMap['rebuys'] = 0;
+            pMap['reEntries'] = 0;
+            pMap['hasAddOn'] = false;
+            pMap['knockouts'] = 0;
+            map[e.key] = pMap;
+          }
+        }
+        scrubbedPlayers = map;
+      } else if (playersRaw is List) {
+        final list = <Map<String, dynamic>>[];
+        for (final item in playersRaw) {
+          if (item is Map) {
+            final pMap = Map<String, dynamic>.from(item);
+            pMap['rebuys'] = 0;
+            pMap['reEntries'] = 0;
+            pMap['hasAddOn'] = false;
+            pMap['knockouts'] = 0;
+            list.add(pMap);
+          }
+        }
+        scrubbedPlayers = list;
+      }
+
+      final updates = <String, dynamic>{
+        'payments': const <Map<String, dynamic>>[],
+        'auditHistory': const <Map<String, dynamic>>[],
+        'rebuyRequests': const <Map<String, dynamic>>[],
+        'addOnRequests': const <Map<String, dynamic>>[],
+        'addOnDeclined': const <String>[],
+        'playersScrubbed': true,
+      };
+      if (scrubbedPlayers != null) {
+        updates['players'] = scrubbedPlayers;
+      }
+
+      if (docData['structure'] is Map &&
+          (docData['structure'] as Map).containsKey('organizerAmount')) {
+        final struct = Map<String, dynamic>.from(docData['structure'] as Map);
+        struct.remove('organizerAmount');
+        updates['structure'] = struct;
+      }
+
+      if (docData['settings'] is Map) {
+        final stg = Map<String, dynamic>.from(docData['settings'] as Map);
+        stg.remove('organizerPct');
+        stg.remove('addOnOvertime');
+        updates['settings'] = stg;
+      }
+
+      await gameRef.update(updates);
+    } catch (e) {
+      debugPrint('scrubLegacyGamePayments failed: $e');
+    }
+  }
+
   Map<String, dynamic> _unflatten(Map<String, dynamic> flat) {
     final unflattened = <String, dynamic>{};
     for (final entry in flat.entries) {
@@ -1538,9 +2541,8 @@ class FirebaseRepository {
   /// it; this build runs without functions.)
   Stream<DocumentSnapshot<Map<String, dynamic>>> gameDocSnapshots(
     String gid,
-    String gameId, {
-    bool isAdmin = false,
-  }) => _db
+    String gameId,
+  ) => _db
       .collection('groups')
       .doc(gid)
       .collection('games')
@@ -1561,14 +2563,21 @@ class FirebaseRepository {
   }
 
   /// Registers the game's public/tv codes for lookup flows.
+  /// Spark-plan client-side only: spec E7 wants callable-only `codes/` with
+  /// App Check + rate_limits. Until Functions exist this stays client-readable
+  /// (get-public/list-denied in rules, unguessable codes, H6-guarded creation).
+  /// Move to Functions when server exists; do not loosen rules in the meantime.
   Future<void> upsertGameCodes(LiveGame game) async {
+    final pubKey = game.publicCode.trim().toUpperCase();
+    final tvKey = game.tvCode.trim().toUpperCase();
+    if (!_isValidJoinCode(pubKey) || !_isValidJoinCode(tvKey)) return;
     final batch = _db.batch();
-    batch.set(_db.collection('joinCodes').doc(game.publicCode.toUpperCase()), {
+    batch.set(_db.collection('joinCodes').doc(pubKey), {
       'gid': game.groupId,
       'gameId': game.id,
       'kind': 'game',
     });
-    batch.set(_db.collection('joinCodes').doc(game.tvCode.toUpperCase()), {
+    batch.set(_db.collection('joinCodes').doc(tvKey), {
       'gid': game.groupId,
       'gameId': game.id,
       'kind': 'tv',
@@ -1609,6 +2618,11 @@ class FirebaseRepository {
     String code,
   ) async {
     final key = code.trim().toUpperCase();
+    if (!_isValidJoinCode(key)) return null;
+    if (!_checkCodeLookupRateLimit()) {
+      debugPrint('findGameByCode: rate limit exceeded for $key');
+      return null;
+    }
     final snap = await _db.collection('joinCodes').doc(key).get();
     if (!snap.exists) return null;
     final data = Map<String, dynamic>.from(snap.data()!);
@@ -1734,6 +2748,38 @@ class FirebaseRepository {
       .where('isCompleted', isEqualTo: true)
       .snapshots()
       .map((s) => [for (final d in s.docs) cashSessionFromMap(d.data())]);
+
+  // ── Solo games (no group) ──────────────────────────────────────────────────
+  // A quick game finished with no group selected has nowhere under `groups/` to
+  // live, so it is kept on the host's own user doc and shown in /history tagged
+  // "Solo" (Addendum 1).
+  Future<void> saveSoloSession(String uid, CashSession session) => _db
+      .collection('users')
+      .doc(uid)
+      .collection('soloGames')
+      .doc(session.id)
+      .set(_stamp(cashSessionToMap(session)));
+
+  Stream<List<CashSession>> soloSessionsStream(String uid) => _db
+      .collection('users')
+      .doc(uid)
+      .collection('soloGames')
+      .snapshots()
+      .map((s) => [for (final d in s.docs) cashSessionFromMap(d.data())]);
+
+  Future<void> saveSoloTournament(String uid, LiveGame game) => _db
+      .collection('users')
+      .doc(uid)
+      .collection('soloTournaments')
+      .doc(game.id)
+      .set(_stamp(liveGameToMap(game)));
+
+  Stream<List<LiveGame>> soloTournamentsStream(String uid) => _db
+      .collection('users')
+      .doc(uid)
+      .collection('soloTournaments')
+      .snapshots()
+      .map((s) => [for (final d in s.docs) liveGameFromMap(d.data())]);
 
   // ── Presets / chip sets ────────────────────────────────────────────────────
   Future<void> savePreset(String uid, TournamentPreset preset) => _db
@@ -1948,3 +2994,4 @@ class FirebaseRepository {
 /// Debug logger used by repository callers to trace sync behaviour.
 @visibleForTesting
 void logRepo(Object message) => debugPrint('[FirebaseRepository] $message');
+

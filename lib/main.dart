@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -27,7 +29,9 @@ import 'providers/app_provider.dart';
 import 'repositories/firebase_repository.dart';
 import 'responsive/responsive.dart';
 import 'services/push_service.dart';
+import 'services/telemetry.dart';
 import 'theme/theme_palette.dart';
+import 'constants/app_constants.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,22 +50,28 @@ Future<void> main() async {
     defaultValue: 9099,
   );
 
+  Telemetry.install();
+
   // Production error handling — show a friendly error overlay instead of a red screen.
   ErrorWidget.builder = (FlutterErrorDetails details) {
     return Material(
-      color: const Color(0xFF131315),
+      color: const Color(0xFF0A0A0A),
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.xl),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(
-                Icons.warning_amber_rounded,
-                color: Color(0xFFFACC15),
+                // §B1 / T141: no amber anywhere in the app's own colours.
+                // At 48 px this is a large element, so §B1 says `red`
+                // (#D53032), not `redText`. Literal rather than AppColors:
+                // this screen renders when construction has already failed.
+                Icons.error_outline_rounded,
+                color: Color(0xFFD53032),
                 size: 48,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 kDebugMode
                     ? details.exception.toString()
@@ -76,7 +86,29 @@ Future<void> main() async {
     );
   };
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Every await between here and runApp() is a chance to never reach runApp()
+  // at all — and a main() that never calls runApp() leaves the user staring at
+  // a blank page with no error, because ErrorWidget.builder above only catches
+  // failures INSIDE a widget tree that exists. A hung Firebase handshake on a
+  // captive-portal Wi-Fi is enough to do it.
+  //
+  // So every startup step is now bounded. A step that times out degrades the
+  // feature it belongs to; it no longer takes the whole app down with it. The
+  // budgets are generous — this is a backstop against hanging, not a
+  // performance tuning knob.
+  await _boot(
+    'Firebase',
+    () async {
+      try {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      } catch (e) {
+        debugPrint('Firebase init degraded: $e');
+      }
+    },
+    const Duration(seconds: 15),
+  );
 
   // Enable Firestore offline persistence (tech spec §4.1 — local recovery).
   try {
@@ -108,46 +140,75 @@ Future<void> main() async {
     // ignore: avoid_print
     print('[AppCheck] Skipped -- local emulator mode.');
   } else {
-    await _initAppCheck();
+    await _boot('AppCheck', _initAppCheck, const Duration(seconds: 10));
   }
 
   // Initialize Google Sign-In singleton (must happen before signInWithGoogle).
-  await FirebaseRepository.initGoogleSignIn();
+  await _boot(
+    'GoogleSignIn',
+    FirebaseRepository.initGoogleSignIn,
+    const Duration(seconds: 10),
+  );
 
   // Restore the persisted per-install device id before any Firestore write so
   // echo-prevention and the single-active-editor claim stay stable across
   // restarts.
-  await FirebaseRepository.instance.initDeviceId();
+  await _boot(
+    'DeviceId',
+    FirebaseRepository.instance.initDeviceId,
+    const Duration(seconds: 10),
+  );
 
   // Read the locally cached theme preference before booting the app so the
   // splash screen doesn't jitter while waiting for Firebase.
   String? cachedColorTheme;
   String? cachedThemePref;
-  try {
+  await _boot('ThemeCache', () async {
     final db = Localstore.instance;
     final prefs = await db.collection('app').doc('prefs').get();
     if (prefs != null) {
       cachedColorTheme = prefs['colorTheme'] as String?;
       cachedThemePref = prefs['themePreference'] as String?;
     }
-  } catch (e) {
-    debugPrint('Failed to load local theme cache: $e');
-  }
+  }, const Duration(seconds: 5));
 
-  final appProvider = AppProvider(
-    initialColorTheme: cachedColorTheme,
-    initialThemePreference: cachedThemePref,
-  );
-  final router = buildAppRouter(appProvider);
+  // Construction is the last place a blank page can still be produced. The
+  // timeouts above stop a startup step from hanging, but AppProvider and the
+  // router are built synchronously and can THROW — and a throw here is worse
+  // than a hang, because ErrorWidget.builder only replaces a widget that
+  // failed inside a tree that exists. Before runApp() there is no tree, so the
+  // exception escapes to the browser console and the user is left looking at
+  // the same white page with no indication anything went wrong.
+  //
+  // Showing something is always better than showing nothing, so a failure here
+  // renders a real screen that says so.
+  late final AppProvider appProvider;
+  late final GoRouter router;
+  try {
+    appProvider = AppProvider(
+      initialColorTheme: cachedColorTheme,
+      initialThemePreference: cachedThemePref,
+    );
+    router = buildAppRouter(appProvider);
+    // Framework §14. Fire-and-forget: the forecasts fall back to §F1's stated
+    // defaults until it lands, so nothing waits on it.
+    unawaited(appProvider.hydrateCalibrationHistory());
+    unawaited(appProvider.hydrateDevicePrefs());
+  } catch (e, stack) {
+    // ignore: avoid_print
+    print('[Boot] fatal during app construction: $e\n$stack');
+    runApp(_BootFailureApp(error: e));
+    return;
+  }
 
   // Initialize OneSignal push notifications (Android / iOS / Web). Free-plan
   // replacement for a Cloud Function fan-out — see services/push_service.dart
   // and services/onesignal_sender.dart.
-  try {
-    await PushService.instance.initialize(appProvider, router);
-  } catch (e) {
-    debugPrint('Push init failed: $e');
-  }
+  await _boot(
+    'Push',
+    () => PushService.instance.initialize(appProvider, router),
+    const Duration(seconds: 12),
+  );
 
   runApp(
     ScreenUtilInit(
@@ -162,11 +223,100 @@ Future<void> main() async {
   );
 }
 
+/// Last-resort screen for a startup that could not build the app at all.
+///
+/// Deliberately depends on nothing but Flutter itself — no theme, no palette,
+/// no provider, no router. Whatever broke during construction must not be able
+/// to break the screen that reports it.
+class _BootFailureApp extends StatelessWidget {
+  const _BootFailureApp({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: const Color(0xFF0A0A0A),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                // §B1 / T141: no amber anywhere in the app's own colours.
+                // At 48 px this is a large element, so §B1 says `red`
+                // (#D53032), not `redText`. Literal rather than AppColors:
+                // this screen renders when construction has already failed.
+                Icons.error_outline_rounded,
+                color: Color(0xFFD53032),
+                size: 48,
+              ),
+                const SizedBox(height: AppSpacing.lg),
+                const Text(
+                  "Poker Night couldn't start",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  kDebugMode
+                      ? error.toString()
+                      : 'Please close the tab and open the link again.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xB3FFFFFF)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Runs one startup step so that it can fail or hang without preventing
+/// [runApp] from ever being called.
+///
+/// A startup step gets three outcomes instead of two: it succeeds, it throws,
+/// or it never answers. The third is the dangerous one — an unawaited-forever
+/// future produces no exception, no log and no frame, so the app looks like it
+/// crashed when in fact it is still politely waiting. Bounding each step turns
+/// that silent hang into a named, logged degradation.
+///
+/// [label] appears in the log line so a timeout in the wild names its own
+/// culprit rather than requiring a bisect.
+Future<void> _boot(
+  String label,
+  Future<void> Function() step,
+  Duration budget,
+) async {
+  try {
+    await step().timeout(budget);
+  } on TimeoutException {
+    // ignore: avoid_print
+    print('[Boot] $label timed out after ${budget.inSeconds}s — continuing.');
+  } catch (e) {
+    // ignore: avoid_print
+    print('[Boot] $label failed: $e — continuing.');
+  }
+}
+
 /// Initialises Firebase App Check with the appropriate provider for the
 /// current platform and build mode.
 Future<void> _initAppCheck() async {
   const isDebugMode = bool.fromEnvironment('APP_CHECK_DEBUG');
   const siteKey = String.fromEnvironment('APP_CHECK_RECAPTCHA_SITE_KEY');
+  const allowWebBypass = bool.fromEnvironment(
+    'ALLOW_WEB_APP_CHECK_BYPASS',
+    defaultValue: false,
+  );
 
   // On Flutter WEB the ReCaptchaV3Provider requires a REAL reCAPTCHA
   // Enterprise site key — there is no "debug" web provider (unlike
@@ -175,21 +325,27 @@ Future<void> _initAppCheck() async {
   // try to load ReCAPTCHA and fail with appCheck/recaptcha-error, which blocks
   // google sign-in and Firestore locally.
   //
-  // So on web we skip activating App Check in DEBUG builds AND whenever no real
-  // site key is supplied. This project does not enforce App Check, so skipping
-  // is non-blocking; web keeps App Check only when a genuine reCAPTCHA
-  // Enterprise site key is provided via --dart-define.
-  if (kIsWeb && (kDebugMode || siteKey.isEmpty)) {
-    // ignore: avoid_print
-    print('[AppCheck] Skipped on web (debug or no site key) -- not enforced.');
-    return;
+  // A missing site key is NOT a valid production configuration. We still allow
+  // a deliberate, explicit bypass for local-only development via
+  // --dart-define=ALLOW_WEB_APP_CHECK_BYPASS=true so emulator-driven testing
+  // remains easy without turning App Check off by accident.
+  if (kIsWeb && siteKey.isEmpty) {
+    if (allowWebBypass) {
+      // ignore: avoid_print
+      print('[AppCheck] Web bypass enabled for local dev only.');
+      return;
+    }
+
+    throw StateError(
+      'App Check is required on web when no site key is configured. '
+      'Supply APP_CHECK_RECAPTCHA_SITE_KEY or set '
+      'ALLOW_WEB_APP_CHECK_BYPASS=true for local-only development.',
+    );
   }
 
   try {
     await FirebaseAppCheck.instance.activate(
-      webProvider: siteKey.isNotEmpty
-          ? ReCaptchaV3Provider(siteKey)
-          : ReCaptchaV3Provider('MISSING_SITE_KEY'),
+      webProvider: ReCaptchaV3Provider(siteKey),
       androidProvider: isDebugMode
           ? AndroidProvider.debug
           : AndroidProvider.playIntegrity,
@@ -232,18 +388,14 @@ class PokerNightApp extends StatelessWidget {
     // Resolve the active palette from the stored color-theme id and push it
     // into AppColors so every static accessor returns the correct value.
     final palette = ThemePalettes.forId(colorTheme);
-    AppColors.currentPalette = palette;
+    AppColors.setPalette(palette);
 
     return MaterialApp.router(
       title: 'Poker Night',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.forPalette(palette, brightness: Brightness.light),
+      theme: AppTheme.forPalette(palette, brightness: Brightness.dark),
       darkTheme: AppTheme.forPalette(palette, brightness: Brightness.dark),
-      themeMode: switch (themePreference) {
-        'light' => ThemeMode.light,
-        'system' => ThemeMode.system,
-        _ => ThemeMode.dark,
-      },
+      themeMode: ThemeMode.dark,
       routerConfig: router,
       builder: (context, child) => ResponsiveBreakpoints.builder(
         child: Builder(
@@ -251,7 +403,7 @@ class PokerNightApp extends StatelessWidget {
             width: ResponsiveValue<double?>(
               innerContext,
               conditionalValues: [
-                const Condition.equals(name: MOBILE, value: 450),
+                const Condition.equals(name: MOBILE, value: AppBreakpoints.tablet),
               ],
             ).value,
             child: BouncingScrollWrapper.builder(

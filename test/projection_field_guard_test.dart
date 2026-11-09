@@ -1,0 +1,140 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+/// A tripwire on `LiveGame`'s shape (§23).
+///
+/// `projectionFor` scrubs by omission: it calls `copyWith` and overrides the
+/// fields that must not travel. Everything it does not name rides through
+/// untouched. That is a reasonable way to write it and a dangerous way to
+/// maintain it — a field added to `LiveGame` months from now reaches every
+/// player, guest and TV screen with nobody having decided that it should.
+///
+/// It has already happened once: `payments` was added, rode through
+/// `copyWith`, and handed members the rebuy and add-on totals §23 explicitly
+/// withholds, plus the gross, to anyone willing to sum a list.
+///
+/// So this test fails when the shape changes. It is not checking that the new
+/// field is wrong — it cannot know — only that a human looked at it.
+void main() {
+  /// Every field `LiveGame`'s constructor accepts, as declared.
+  ///
+  /// When this test fails, decide which of the two the new field is and then
+  /// update this list:
+  ///
+  ///  * **Public** — every viewer may see it (the level, the clock, who is
+  ///    still in). Nothing more to do.
+  ///  * **Private** — it belongs to the host (money, identities, anything
+  ///    derived from what people paid). Add an override to `projectionFor` in
+  ///    `lib/services/projections.dart` AND a case to
+  ///    `projection_boundary_test.dart` proving it does not travel.
+  const known = <String>{
+    // Identity and wiring — public.
+    'id', 'groupId', 'publicCode', 'tvCode', 'revision',
+    // Play state — public, this is what the screens are for.
+    'settings', 'structure', 'status', 'currentLevel', 'timerRunning',
+    'secondsRemaining', 'players', 'totalChipsInPlay', 'finishOrder',
+    'levelEndTime', 'startedAt', 'actualDurationMins', 'speedRecommendation', 'dealerPlayerId',
+    'originalLevels', 'shotClock',
+    // Social — chat is gated by role inside the projection.
+    'chat', 'announcements',
+    // Host-side flow. Scrubbed or harmless; each already has a decision.
+    'auditHistory', 'pendingGuests', 'guestSlots', 'rebuyRequests',
+    'addOnRequests', 'settlementConfirmed', 'seatingConfirmed',
+    'checkInClosed', 'structureConfirmed', 'finalTableRedrawCompleted',
+    'changeLog', 'organizerIds',
+    // Money. PRIVATE — stripped in projectionFor, asserted next door.
+    'payments',
+    // An agreed deal (C-deal). PRIVATE, and for a different reason than the
+    // ladder: `structure.prizes` is public because the whole table may see
+    // what 1st pays, but this is what each NAMED person actually received,
+    // which is the host-only decision the results screen already makes
+    // ("showAmounts = app.isAdmin"). A single amount beside a player id is
+    // the thing §23's pattern says must not travel.
+    'dealAmounts',
+    // Concurrency bookkeeping — never rendered.
+    'lastIdempotencyKey', 'editorDeviceId', 'editorClaimedAt',
+    'audioMasterDeviceId',
+    // Document-version stamp (§E2 rule 1). Wire plumbing like the group above:
+    // no viewer benefits from seeing the build number, and it reveals nothing
+    // sensitive, so it rides through unscrubbed.
+    'codecVersion',
+    // Addendum 2 §1 add-on-window state. Play state on the same footing as
+    // `status`/`currentLevel` — every viewer benefits from knowing whether the
+    // add-on window is still open, so it is public.
+    'addOnWindowClosed',
+    // §11.4. Which stage of a shootout is live — play state, same footing as
+    // `status`/`currentLevel` above. Not money, not an identity: every
+    // viewer benefits from knowing whether Stage A or the final table is
+    // running, so it rides through unscrubbed like the rest of this group.
+    'shootoutStage',
+    // A2-1's declined-add-on ids. PRIVATE, and like `pendingGuests` above this
+    // is a per-person record of a financial decision: who refused to buy an
+    // add-on is nobody else's business, so it is stripped in projectionFor and
+    // asserted in projection_boundary_test.dart. (The paired `addOnOvertime`
+    // flag is on GameSettings and is zeroed there with the other money terms.)
+    'addOnDeclined',
+    // C-bubble hand-for-hand state + bubble-save flag. PUBLIC play state on
+    // the same footing as `status`/`currentLevel`: players, guests and the TV
+    // render their banners from these fields, and they carry no money and no
+    // identities — so they ride through unscrubbed like the rest of this group.
+    'handForHandActive', 'handForHandHand', 'handForHandDoneTables',
+    'bubbleSaveRecorded',
+    // §C3 the RSVP seating queue. PUBLIC, and structurally identical to
+    // `finishOrder`: an ordered list of rsvp/player ids carrying no money and
+    // nothing derived from what anyone paid, so there is nothing here to
+    // withhold. The screens need it — the RSVP screen lists "Waitlist (#1,
+    // #2.)" to any member, the game card renders a player's own "WAITLIST #n"
+    // pill, and promotion on a drop (T89) is only meaningful if the order is
+    // legible to the table. `pendingGuests` is scrubbed above for a different
+    // reason: it is the approval queue, and a non-guest must not see other
+    // people's unapproved bookings.
+    'waitlist',
+  };
+
+  test('no field joins LiveGame without a projection decision', () {
+    final source = File('lib/models/live_game.dart').readAsStringSync();
+
+    final start = source.indexOf('  const LiveGame({');
+    expect(
+      start,
+      greaterThan(-1),
+      reason: 'the constructor moved or was renamed — this guard needs '
+          'updating before it can protect anything',
+    );
+    final end = source.indexOf('});', start);
+    expect(end, greaterThan(start));
+
+    final body = source.substring(start, end);
+    final declared = RegExp(r'this\.(\w+)')
+        .allMatches(body)
+        .map((m) => m.group(1)!)
+        .toSet();
+
+    expect(
+      declared,
+      isNotEmpty,
+      reason: 'parsed nothing — the guard is broken, not the model',
+    );
+
+    final added = declared.difference(known);
+    final removed = known.difference(declared);
+
+    expect(
+      added,
+      isEmpty,
+      reason: 'New LiveGame field(s): ${added.join(', ')}.\n'
+          'Decide whether each is public or private. If private, override it '
+          'in projectionFor (lib/services/projections.dart) and assert it in '
+          'projection_boundary_test.dart. Then add it to `known` here.\n'
+          'This is the check that `payments` did not have.',
+    );
+
+    expect(
+      removed,
+      isEmpty,
+      reason: 'LiveGame no longer has: ${removed.join(', ')}. Remove them '
+          'from `known`, and from projectionFor if they were scrubbed there.',
+    );
+  });
+}

@@ -22,7 +22,10 @@ import '../../widgets/app_page.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/chip_token.dart';
 
-enum _SettlementStep { confirmPlayers, addOns, colorUp, confirm }
+/// Spec C6. The label of the control that ends the break early, given exactly
+/// as the clause writes it. Named so the wording is one constant rather than a
+/// string buried in a build method, and so a test can pin it.
+const String kConfirmAndResumeClock = 'Confirm & resume clock';
 
 /// Client feedback (07-018): the AI suggests an add-on price from the current
 /// player count, blinds and average stack. Stack depth (avg stack / big blind)
@@ -65,16 +68,28 @@ class RebuySettlementScreen extends StatefulWidget {
 }
 
 class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
-  _SettlementStep _step = _SettlementStep.confirmPlayers;
+  bool _playersConfirmed = false;
+  bool _addOnsConfirmed = false;
+  bool _colorUpConfirmed = false;
   final Set<String> _addOnSelections = {};
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
-    final isAdmin = app.isAdmin;
+    // C6's "Who" column is host, co-host — D15's co-host runs the table, and
+    // settlement is the host's job being done for them. Gating on `isAdmin`
+    // put a co-host on the invitation screen mid-break.
+    final canSettle = app.isHostOrCoHost;
+    // D15 withholds payouts from a co-host, and `confirmSettlement()` writes
+    // `prizes`, `prizePool` and `organizerAmount` -- terms the rules now pin
+    // against a co-host. So the co-host keeps the operational steps (check the
+    // field, grant rebuys, take add-ons, call colour-up) and the host signs the
+    // money. Without this the last step is co-host reachable and the write
+    // would be refused by the rules after the UI had already said yes.
+    final isHost = app.isAdmin;
 
-    if (!isAdmin) {
+    if (!canSettle) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) context.go(RoutePaths.invitation);
       });
@@ -84,7 +99,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
     if (game == null) {
       // No game in provider — redirect back to a safe screen.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.go(RoutePaths.adminDashboard);
+        if (mounted) context.go(RoutePaths.hostDashboard);
       });
       return const SizedBox.shrink();
     }
@@ -100,7 +115,38 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
     final estPrizePool =
         structure.prizePool +
         (settings.addOn ? totalAddOns * settings.effectiveAddOnCost : 0);
-    final stepIndex = _SettlementStep.values.indexOf(_step);
+
+    // DECISION: M7 - Compute average stack at close and warn if < 30 BB
+    final totalRebuysAtClose = game.players.fold<int>(0, (s, p) => s + p.rebuys + p.reEntries);
+    final totalAddOnsGranted = game.players.where((p) => p.hasAddOn).length + _addOnSelections.length;
+    final totalChipsAtClose = settings.players * structure.startingStack +
+        totalRebuysAtClose * structure.rebuyStack +
+        totalAddOnsGranted * structure.addOnStack;
+    final avgStackAtClose = activePlayers.isNotEmpty ? totalChipsAtClose / activePlayers.length : 0.0;
+    final nextLevelIdx = settings.rebuysCloseLevel;
+    final closeBB = (nextLevelIdx < structure.levels.length)
+        ? structure.levels[nextLevelIdx].bb
+        : (game.currentLevelData?.bb ?? structure.levels.first.bb);
+    final avgStackAtCloseBB = closeBB > 0 ? avgStackAtClose / closeBB : 0.0;
+    // §25.4a is a strict sequence and each step is gated on the previous one's
+    // submission: attendance fixes the field, the add-on step fixes
+    // `totalAddOns`, and only then can §18's grossEligible — and so the prize
+    // pool — be computed at all.
+    final stepIndex = !_playersConfirmed
+        ? 0
+        : !_addOnsConfirmed
+        ? 1
+        : !_colorUpConfirmed
+        ? 2
+        : 3;
+    // What the pool will be once the selected add-ons are granted. The counts
+    // already recorded on the players come from the provider; the selections
+    // on this screen have not been granted yet, so they are passed in as the
+    // pending count. Granting them below and then calling `confirmSettlement`
+    // (which previews with 0 pending) reaches exactly these numbers.
+    final preview = app.previewSettlementPrizes(
+      settings.addOn ? _addOnSelections.length : 0,
+    );
 
     return AppPage(
       maxWidth: 560,
@@ -109,7 +155,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
         children: [
           Row(
             children: [
-              AppBackButton(onTap: () => context.go(RoutePaths.adminDashboard)),
+              AppBackButton(onTap: () => context.go(RoutePaths.hostDashboard)),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -125,7 +171,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                       ),
                     ),
                     Text(
-                      'Confirm players → add-ons → color-up → continue',
+                      'Confirm players → add-ons → color-up → prize pool',
                       style: AppTypography.bodySm.copyWith(
                         color: AppColors.mutedForeground,
                       ),
@@ -141,11 +187,66 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
             message:
                 'Rebuys are now closed. No new players may join after this point.',
           ),
+          if (avgStackAtCloseBB > 0 && avgStackAtCloseBB < 30) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppAlertBanner(
+              type: AppAlertType.warning,
+              message:
+                  'Average stack at close is under 30 BB (\${avgStackAtCloseBB.toStringAsFixed(1)} BB). The game may run fast or play shallow.',
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          // Spec C6. The break does not have to be played out, and the four
+          // steps below are a sequence the host can be slow at — a table
+          // waiting on somebody to work out a payout should not also be
+          // waiting on a countdown nobody asked for.
+          //
+          // `resumeTimer` is the real early end: it leaves `rebuypause`,
+          // starts the clock on the level the break interrupted, and — through
+          // the existing `_settingsAfterLeavingBreak` — flips the add-on
+          // window to overtime rather than forfeiting anybody's add-on to a
+          // host who settles after play resumes (addendum 2). Nothing here
+          // marks the settlement confirmed, so the money is still the host's
+          // to confirm afterwards.
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Ready to play on?',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  'End the break now and start Level '
+                  '${game.currentLevel} on the clock. Settlement stays open '
+                  'afterwards — you can finish it while the level runs.',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppButton(
+                  fullWidth: true,
+                  size: AppButtonSize.lg,
+                  // The label is itself the confirmation — a second "are you
+                  // sure?" under a button that already says "Confirm" reads as
+                  // the app not trusting its own copy. What it cannot undo is
+                  // spelled out above instead.
+                  onPressed: () => _confirmResumeClock(context, app),
+                  child: const Text(kConfirmAndResumeClock),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: AppSpacing.lg),
           // Progress
           Row(
             children: [
-              for (var i = 0; i < _SettlementStep.values.length; i++)
+              for (var i = 0; i < 4; i++)
                 Expanded(
                   child: Container(
                     height: 4,
@@ -161,31 +262,61 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          // Step 0: Confirm final eliminations & rebuys
-          if (_step == _SettlementStep.confirmPlayers)
-            _ConfirmPlayersStep(
-              game: game,
-              onGrantRebuy: settings.rebuys
-                  ? (id) => app.grantRebuy(
-                      id,
-                      idempotencyKey:
-                          'final-rebuy-$id-${DateTime.now().microsecondsSinceEpoch}',
-                    )
-                  : null,
-              onConfirm: () => setState(() => _step = _SettlementStep.addOns),
-            ),
-          // Step 1: Add-ons
-          if (_step == _SettlementStep.addOns)
+          // Step 1: Confirm final eliminations & rebuys
+          _ConfirmPlayersStep(
+            game: game,
+            isConfirmed: _playersConfirmed,
+            onEdit: () => setState(() {
+              // Re-opening an earlier step invalidates every later one: the
+              // add-on price and the prize pool are both functions of the
+              // confirmed field (§25.4a).
+              _playersConfirmed = false;
+              _addOnsConfirmed = false;
+              _colorUpConfirmed = false;
+            }),
+            onGrantRebuy: settings.rebuys
+                ? (id) => app.grantRebuy(
+                    id,
+                    idempotencyKey:
+                        'final-rebuy-$id-${DateTime.now().microsecondsSinceEpoch}',
+                  )
+                : null,
+            onConfirm: () {
+              // D15 withholds the structure from a co-host, and the rules now
+              // pin `structure` for a co-host, so applying the add-on chip
+              // recommendation is the host's call. The rest of the step --
+              // checking the field, granting rebuys -- stays shared.
+              if (app.isAdmin) app.applyRecommendedAddOnStack();
+              setState(() => _playersConfirmed = true);
+            },
+          ),
+          // Step 2: Add-ons
+          if (_playersConfirmed) ...[
+            const SizedBox(height: AppSpacing.md),
             _AddOnsStep(
+              isConfirmed: _addOnsConfirmed,
+              onEdit: () => setState(() {
+                _addOnsConfirmed = false;
+                _colorUpConfirmed = false;
+              }),
               activePlayers: activePlayers,
-              // 09-032 / 10-043: the engine recommends the CHIP AMOUNT from
-              // the live table, and the composition is rebuilt for the level
-              // actually being played rather than reused from setup.
               addOnStack: app.recommendedAddOnStack,
               addOnChipPlan: app.liveAddOnChipPlan,
               selections: _addOnSelections,
               onToggle: (id) => setState(() {
-                if (!_addOnSelections.remove(id)) _addOnSelections.add(id);
+                final taking = !_addOnSelections.remove(id);
+                if (taking) {
+                  _addOnSelections.add(id);
+                  // Taking it settles the question, so any earlier decline is
+                  // withdrawn rather than left to contradict the selection.
+                  app.undeclineAddOn(id);
+                } else {
+                  // Unticking means "no add-on" — which A2-1 counts as an
+                  // answer, so the overtime close can stop waiting on this
+                  // player. Before addOnDeclined existed a decline was just
+                  // an absence and the window could never close on its own.
+                  app.declineAddOn(id);
+                }
               }),
               totalAddOns: totalAddOns,
               addOnChips: addOnChips,
@@ -206,72 +337,118 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                         activePlayers.length)
                   : structure.startingStack,
               onApplySuggestion: () {
-                // Price stays the admin's input (09-033, defaulting to the
-                // buy-in); applying the suggestion also pins the recommended
-                // chip amount so grantAddOn hands out that many chips.
                 app.updateEventSettings(
                   settings.copyWith(addOnCost: suggestedPrice),
                 );
-                app.applyRecommendedAddOnStack();
               },
-              onConfirm: () => setState(() => _step = _SettlementStep.colorUp),
+              onConfirm: () {
+                app.closeAddOnWindow();
+                setState(() => _addOnsConfirmed = true);
+              },
             ),
-          // Step 2: Color-up
-          if (_step == _SettlementStep.colorUp)
+          ],
+          // Step 3: Color-up
+          if (_addOnsConfirmed) ...[
+            const SizedBox(height: AppSpacing.md),
             _ColorUpStep(
+              isConfirmed: _colorUpConfirmed,
+              onEdit: () => setState(() => _colorUpConfirmed = false),
               instructions: structure.colorUpInstructions,
               anteEnabled: settings.anteEnabled,
               anteStyle: settings.anteStyle,
               onAnteChanged: (v) => app.updateEventSettings(
                 settings.copyWith(anteEnabled: v),
               ),
-              onNext: () => setState(() => _step = _SettlementStep.confirm),
+              // This used to call `confirmSettlement()` outright, which locked
+              // the pool without the host ever seeing it. Color-up is a
+              // physical instruction, not a financial decision — it only
+              // unlocks the confirmation below.
+              onNext: () => setState(() => _colorUpConfirmed = true),
             ),
-          // Step 3: Confirm
-          if (_step == _SettlementStep.confirm)
-            Builder(
-              builder: (context) {
-                // Prices are calculated HERE — from the exact field, the actual
-                // rebuys already recorded, and the add-ons just selected.
-                final finalPrizes = app.previewSettlementPrizes(
-                  _addOnSelections.length,
-                );
-                return _ConfirmStep(
-                  activeCount: activePlayers.length,
-                  // Already-granted add-ons plus the ones selected in this step.
-                  addOnsTaken:
-                      activePlayers.where((p) => p.hasAddOn).length +
-                      _addOnSelections.length,
-                  anteEnabled: settings.anteEnabled,
-                  prizePool: finalPrizes.prizePool,
-                  prizes: finalPrizes.prizes,
-                  organizerPct: settings.organizerPct,
-                  organizerAmount: finalPrizes.organizerAmount,
-                  onStart: () {
-                    for (final id in _addOnSelections) {
-                      app.grantAddOn(
-                        id,
-                        idempotencyKey:
-                            'addon-$id-${DateTime.now().microsecondsSinceEpoch}',
-                      );
-                    }
-                    app.confirmSettlement();
-                    // Spec §3.2: timer must NOT auto-resume — admin manually
-                    // starts the next level from the dashboard.
-                    context.go(RoutePaths.adminDashboard);
-                  },
-                );
-              },
-            ),
+          ],
+          // Step 4: Confirm the prize pool. §25.4a's last gate — nothing about
+          // the money is written until the host has read these numbers and
+          // said yes.
+          if (_colorUpConfirmed) ...[
+            const SizedBox(height: AppSpacing.md),
+            if (isHost)
+              _ConfirmPrizePoolStep(
+                organizerAmount: preview.organizerAmount,
+                prizePool: preview.prizePool,
+                roundingRemainder: preview.roundingRemainder,
+                prizes: preview.prizes,
+                addOnsTaken: settings.addOn
+                    ? game.players.where((p) => p.hasAddOn).length +
+                          _addOnSelections.length
+                    : 0,
+                organizerPct: settings.effectiveOrganizerPct,
+                onConfirm: () {
+                  for (final id in _addOnSelections) {
+                    app.grantAddOn(
+                      id,
+                      idempotencyKey:
+                          'addon-$id-${DateTime.now().microsecondsSinceEpoch}',
+                    );
+                  }
+                  app.confirmSettlement();
+                  context.go(RoutePaths.hostDashboard);
+                },
+              )
+            else
+              // Read-only for a co-host rather than hidden: they still need to
+              // see the numbers they just helped produce.
+              AppCard(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Prize pool',
+                      style: AppTypography.bodySm
+                          .copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Pool ${Formatters.prize(preview.prizePool)}, organiser '
+                      '${Formatters.prize(preview.organizerAmount)}, rounding '
+                      '${Formatters.prize(preview.roundingRemainder)}.',
+                      style: AppTypography.bodySm,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'A co-host runs the table but cannot confirm payouts. '
+                      'The host confirms the prize pool.',
+                      style: AppTypography.bodyXs
+                          .copyWith(color: AppColors.mutedForeground),
+                    ),
+                  ],
+                ),
+              ),
+          ],
           const SizedBox(height: AppSpacing.xxl),
         ],
       ),
     );
   }
+
+  /// The escape hatch from a break nobody wants to sit through. Delegates
+  /// straight to [AppProvider.resumeTimer], which is the same call the clock
+  /// itself makes when a scheduled break runs out — so "resume the clock" is
+  /// one code path, not two that can disagree.
+  ///
+  /// Navigating straight to the dashboard rather than staying put: the level
+  /// is now on the clock, and the host's next job is watching it, not reading
+  /// a settlement form with a stale "Rebuys are now closed" banner.
+  void _confirmResumeClock(BuildContext context, AppProvider app) {
+    app.resumeTimer();
+    context.go(RoutePaths.hostDashboard);
+  }
 }
 
 class _AddOnsStep extends StatelessWidget {
   const _AddOnsStep({
+    required this.isConfirmed,
+    required this.onEdit,
     required this.activePlayers,
     required this.addOnStack,
     required this.addOnChipPlan,
@@ -289,6 +466,8 @@ class _AddOnsStep extends StatelessWidget {
     required this.onConfirm,
   });
 
+  final bool isConfirmed;
+  final VoidCallback onEdit;
   final List<Player> activePlayers;
   final int addOnStack;
   final List<ChipPlanEntry> addOnChipPlan;
@@ -307,6 +486,29 @@ class _AddOnsStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isConfirmed) {
+      return AppCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          children: [
+            Icon(Icons.check_circle, color: AppColors.success),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              'Add-ons selected: $totalAddOns',
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            AppButton(
+              size: AppButtonSize.sm,
+              variant: AppButtonVariant.secondary,
+              onPressed: onEdit,
+              child: const Text('Edit'),
+            ),
+          ],
+        ),
+      );
+    }
+    
     final isSuggestionNew =
         suggestedPrice > 0 && suggestedPrice != currentAddOnCost;
     return AppCard(
@@ -380,7 +582,7 @@ class _AddOnsStep extends StatelessWidget {
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.secondary,
                         onPressed: onApplySuggestion,
-                        child: Text('Use ${Formatters.chips(suggestedPrice)}'),
+                        child: const Text('Apply suggested price'),
                       ),
                   ],
                 ),
@@ -513,7 +715,7 @@ class _AddOnsStep extends StatelessWidget {
                     Text('$totalAddOns', style: AppTypography.monoSm),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [
                     Text(
@@ -526,12 +728,12 @@ class _AddOnsStep extends StatelessWidget {
                     Text(
                       Formatters.chips(addOnChips),
                       style: AppTypography.monoSm.copyWith(
-                        color: AppColors.primary,
+                        color: AppColors.primaryText,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [
                     Text(
@@ -542,9 +744,9 @@ class _AddOnsStep extends StatelessWidget {
                     ),
                     const Spacer(),
                     Text(
-                      Formatters.chips(estPrizePool),
+                      Formatters.prize(estPrizePool),
                       style: AppTypography.monoSm.copyWith(
-                        color: AppColors.primary,
+                        color: AppColors.primaryText,
                       ),
                     ),
                   ],
@@ -569,6 +771,8 @@ class _AddOnsStep extends StatelessWidget {
 
 class _ColorUpStep extends StatelessWidget {
   const _ColorUpStep({
+    required this.isConfirmed,
+    required this.onEdit,
     required this.instructions,
     required this.anteEnabled,
     required this.anteStyle,
@@ -576,6 +780,8 @@ class _ColorUpStep extends StatelessWidget {
     required this.onNext,
   });
 
+  final bool isConfirmed;
+  final VoidCallback onEdit;
   final List<String> instructions;
   final bool anteEnabled;
   final AnteStyle anteStyle;
@@ -591,6 +797,28 @@ class _ColorUpStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isConfirmed) {
+      return AppCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          children: [
+            Icon(Icons.check_circle, color: AppColors.success),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              'Color-up complete',
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            AppButton(
+              size: AppButtonSize.sm,
+              variant: AppButtonVariant.secondary,
+              onPressed: onEdit,
+              child: const Text('Edit'),
+            ),
+          ],
+        ),
+      );
+    }
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
@@ -635,7 +863,7 @@ class _ColorUpStep extends StatelessWidget {
                       Text(
                         '${i + 1}.',
                         style: AppTypography.bodySm.copyWith(
-                          color: AppColors.primary,
+                          color: AppColors.primaryText,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -687,7 +915,7 @@ class _ColorUpStep extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
                   anteEnabled
                       ? (anteStyle == AnteStyle.individual
@@ -716,30 +944,43 @@ class _ColorUpStep extends StatelessWidget {
   }
 }
 
-class _ConfirmStep extends StatelessWidget {
-  const _ConfirmStep({
-    required this.activeCount,
-    required this.addOnsTaken,
-    required this.anteEnabled,
-    required this.prizePool,
-    required this.prizes,
-    required this.organizerPct,
+
+/// Step 4 — the host reads the prize pool and confirms it.
+///
+/// §25.4a's third gate. It is locked until the add-on step submits because
+/// §18's `grossEligible` needs `totalAddOns` fixed, and that is exactly what
+/// the add-on step fixes. This step previously did not exist: color-up called
+/// `confirmSettlement()` directly, so the pool — the one number the whole
+/// settlement break exists to produce — was written without the host ever
+/// seeing it, and nothing can reopen it afterwards (§25.4a is one-way).
+///
+/// The figures are the provider's own settlement preview, so what is shown
+/// here is what gets stored.
+class _ConfirmPrizePoolStep extends StatelessWidget {
+  const _ConfirmPrizePoolStep({
     required this.organizerAmount,
-    required this.onStart,
+    required this.prizePool,
+    required this.roundingRemainder,
+    required this.prizes,
+    required this.addOnsTaken,
+    required this.organizerPct,
+    required this.onConfirm,
   });
 
-  final int activeCount;
-  final int addOnsTaken;
-  final bool anteEnabled;
-  final int prizePool;
-
-  /// The distribution calculated at this moment from the exact field,
-  /// actual rebuys and the selected add-ons (client rule: prices are only
-  /// calculated here, at the end of the rebuy level).
-  final List<Prize> prizes;
-  final int organizerPct;
   final int organizerAmount;
-  final VoidCallback onStart;
+  final int prizePool;
+  final int roundingRemainder;
+  final List<Prize> prizes;
+  final int addOnsTaken;
+  final num organizerPct;
+  final VoidCallback onConfirm;
+
+  /// Gross eligible is not returned by the preview, but it is recoverable
+  /// exactly: the engine splits gross into the organizer cut, the sub-10
+  /// residue carried out of the pool, and the pool itself (§18, 14-022).
+  /// Deriving it here rather than re-running `grossEligibleFor` keeps the
+  /// three lines guaranteed to add up on screen.
+  int get _grossEligible => prizePool + organizerAmount + roundingRemainder;
 
   @override
   Widget build(BuildContext context) {
@@ -749,134 +990,169 @@ class _ConfirmStep extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Ready to continue?',
+            'Step 4 — Confirm the prize pool',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Built from the confirmed field, the recorded rebuys and re-entries '
+            'and the $addOnsTaken add-on${addOnsTaken == 1 ? '' : 's'} above. '
+            'Confirming locks it: no further rebuys, re-entries or add-ons, and '
+            'players stop seeing "Estimated".',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              color: AppColors.secondary,
+              color: AppColors.muted,
               borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(color: AppColors.border),
             ),
             child: Column(
               children: [
-                _ConfirmRow(label: 'Active players', value: '$activeCount'),
-                const SizedBox(height: 4),
-                _ConfirmRow(label: 'Add-ons taken', value: '$addOnsTaken'),
-                const SizedBox(height: 4),
-                _ConfirmRow(
-                  label: 'Ante',
-                  value: anteEnabled ? 'Active from next level' : 'Not enabled',
-                ),
-                Divider(color: AppColors.border, height: AppSpacing.lg),
-                Row(
-                  children: [
-                    Text(
-                      'Prize pool',
-                      style: AppTypography.bodySm.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      Formatters.chips(prizePool),
-                      style: AppTypography.monoSm.copyWith(
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                _ConfirmRow(
-                  label: 'Organizational costs · $organizerPct%',
-                  value: Formatters.chips(organizerAmount),
-                ),
-                if (prizes.isNotEmpty) ...[
-                  Divider(color: AppColors.border, height: AppSpacing.lg),
-                  Text(
-                    'Final distribution (calculated now)',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                      letterSpacing: 1,
-                    ),
+                _MoneyRow(label: 'Gross eligible', amount: _grossEligible),
+                if (organizerAmount > 0) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  _MoneyRow(
+                    label: 'Organizational costs ($organizerPct%)',
+                    amount: -organizerAmount,
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  for (final p in prizes)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${p.place == 1
-                                  ? '1st'
-                                  : p.place == 2
-                                  ? '2nd'
-                                  : p.place == 3
-                                  ? '3rd'
-                                  : '${p.place}th'} place',
-                              style: AppTypography.bodyXs.copyWith(
-                                color: AppColors.mutedForeground,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            Formatters.chips(p.amount),
-                            style: AppTypography.monoXs.copyWith(
-                              color: AppColors.foreground,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                 ],
+                // 14-010 / 14-011: the residue is NOT an organizer cut and is
+                // never labelled as one. It is the change that cannot be split
+                // into payouts that are all multiples of 10.
+                if (roundingRemainder > 0) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  _MoneyRow(
+                    label: 'Rounding remainder (kept aside)',
+                    amount: -roundingRemainder,
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.sm),
+                Divider(color: AppColors.border, height: 1),
+                const SizedBox(height: AppSpacing.sm),
+                _MoneyRow(
+                  label: 'Final prize pool',
+                  amount: prizePool,
+                  emphasis: true,
+                ),
               ],
             ),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'Once you start the next level, no more rebuys or add-ons are possible.',
-            textAlign: TextAlign.center,
+            'Payouts',
             style: AppTypography.bodyXs.copyWith(
               color: AppColors.mutedForeground,
+              letterSpacing: 1,
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
+          if (prizes.isEmpty)
+            Text(
+              'No paid places — check the field size and the buy-in.',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            )
+          else
+            for (final prize in prizes)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${prize.place}${_ordinalSuffix(prize.place)} place',
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        Formatters.prize(prize.amount),
+                        style: AppTypography.monoSm.copyWith(
+                          color: AppColors.primaryText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          const SizedBox(height: AppSpacing.lg),
           AppButton(
-            size: AppButtonSize.lg,
             fullWidth: true,
-            onPressed: onStart,
+            onPressed: onConfirm,
             child: const AppIconLabel(
-              label: 'Start next level',
-              icon: Icons.play_arrow,
+              label: 'Confirm prize pool & resume play',
+              trailing: Icons.check,
             ),
           ),
         ],
       ),
     );
   }
+
+  static String _ordinalSuffix(int n) {
+    if (n >= 11 && n <= 13) return 'th';
+    return switch (n % 10) {
+      1 => 'st',
+      2 => 'nd',
+      3 => 'rd',
+      _ => 'th',
+    };
+  }
 }
 
-class _ConfirmRow extends StatelessWidget {
-  const _ConfirmRow({required this.label, required this.value});
+/// One line of the pool breakdown. Negative amounts render with a leading
+/// minus so a host can read the subtraction down the column.
+class _MoneyRow extends StatelessWidget {
+  const _MoneyRow({
+    required this.label,
+    required this.amount,
+    this.emphasis = false,
+  });
 
   final String label;
-  final String value;
+  final int amount;
+  final bool emphasis;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(
-          label,
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.mutedForeground,
+        Expanded(
+          child: Text(
+            label,
+            style: AppTypography.bodySm.copyWith(
+              color: emphasis
+                  ? AppColors.foreground
+                  : AppColors.mutedForeground,
+              fontWeight: emphasis ? FontWeight.w700 : FontWeight.w400,
+            ),
           ),
         ),
-        const Spacer(),
-        Text(value, style: AppTypography.monoSm),
+        Text(
+          '${amount < 0 ? '-' : ''}${Formatters.prize(amount.abs())}',
+          style: AppTypography.monoSm.copyWith(
+            color: emphasis ? AppColors.primary : AppColors.primaryText,
+            fontWeight: emphasis ? FontWeight.w700 : FontWeight.w400,
+          ),
+        ),
       ],
     );
   }
@@ -890,17 +1166,40 @@ class _ConfirmPlayersStep extends StatelessWidget {
     required this.game,
     required this.onConfirm,
     this.onGrantRebuy,
+    required this.isConfirmed,
+    required this.onEdit,
   });
 
   final LiveGame game;
   final VoidCallback onConfirm;
-
-  /// Records a final eligible rebuy during the settlement break. Null when
-  /// rebuys were never enabled for this tournament.
   final void Function(String playerId)? onGrantRebuy;
+  final bool isConfirmed;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
+    if (isConfirmed) {
+      return AppCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          children: [
+            Icon(Icons.check_circle, color: AppColors.success),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              'Players confirmed',
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            AppButton(
+              size: AppButtonSize.sm,
+              variant: AppButtonVariant.secondary,
+              onPressed: onEdit,
+              child: const Text('Edit'),
+            ),
+          ],
+        ),
+      );
+    }
     final active = game.activePlayers;
     final eliminated = [
       ...game.eliminatedPlayers,
@@ -960,14 +1259,19 @@ class _ConfirmPlayersStep extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
+                    // Glyphs as well as colour, matching the sheet's
+                    // Busted pill — this list is scanned quickly and the two
+                    // states sit in the same column.
                     p.rebuys > 0
                         ? const AppBadge(
                             label: 'Rebought',
                             variant: AppBadgeVariant.green,
+                            icon: Icons.refresh,
                           )
                         : const AppBadge(
                             label: 'Out',
                             variant: AppBadgeVariant.red,
+                            icon: Icons.close,
                           ),
                     // User Flow section 4.13 / 12-056: "the administrator
                     // records any final valid rebuy from a hand that began
@@ -1015,17 +1319,21 @@ class _ConfirmPlayersStep extends StatelessWidget {
                   color: AppColors.primary,
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Text(
-                  'Active players going to add-on phase: ',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.mutedForeground,
+                Expanded(
+                  child: Text(
+                    'Active players going to add-on phase: ',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ),
+                const SizedBox(width: AppSpacing.sm),
                 Text(
                   '${active.length}',
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
+                  style: AppTypography.mono(
+                    size: AppFontSizes.md,
+                    weight: FontWeight.w700,
+                    color: AppColors.primaryText,
                   ),
                 ),
               ],

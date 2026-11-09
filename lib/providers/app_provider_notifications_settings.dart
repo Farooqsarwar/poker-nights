@@ -125,10 +125,14 @@ extension AppProviderNotificationsSettings on AppProvider {
     // themselves. Broadcasts (null / empty audience) are unaffected.
     final me = _user?.id;
     final forMe = me == null || notification.isFor(me);
-    if (forMe) _notifications = [notification, ..._notifications];
+    if (forMe) {
+      _notifications = [notification, ..._notifications];
+      // Originator does not banner itself on send; incoming notifications banner via _deliverBrowserNotifications
+    }
     // This device originated the event — never re-banner it on itself when
     // the mirrored inbox copy arrives.
     _seenNotificationIds.add(notification.id);
+    _lastPushedNotification = notification;
     if (!_disposed) notifyListeners();
     if (_backendUp) {
       final gid = _currentGroup.id;
@@ -166,8 +170,124 @@ extension AppProviderNotificationsSettings on AppProvider {
   }
 
   bool get voiceEnabled => _voiceEnabled;
+  double get voiceVolume => _voiceVolume;
 
-  bool get showAppTour => _showAppTour;
+  /// D9 consent — whether this user's completed games may inform the structure
+  /// engine's forecasts (rebuy rate, add-on take-up). §F2 DATA. The per-group
+  /// opt-out lives in B9 and is separate from this account-wide switch.
+  bool get keepHistoryForStructures => _keepHistoryForStructures;
+
+  /// Framework §14 — the measured nights behind the forecasts, newest first.
+  List<CalibrationRecord> get calibrationHistory =>
+      List.unmodifiable(_calibrationHistory);
+
+  /// §F1's add-on take-up, learned from the last 8 games with an add-on, or
+  /// the stated 70 % default below that.
+  double get forecastAddOnTakeUp =>
+      CalibrationForecast.addOnTakeUp(_calibrationHistory);
+
+  /// The rebuy rate on the same eight-night window.
+  double get forecastRebuyRate =>
+      CalibrationForecast.rebuyRate(_calibrationHistory);
+
+  /// Records one completed night (Framework §14).
+  ///
+  /// Gated on the D9 consent: the Settings row says the history is kept "to
+  /// improve structures", so a host who has not agreed to that must not have
+  /// their nights measured. Silently doing it anyway would make the setting a
+  /// lie.
+  void recordCalibration(LiveGame game) {
+    if (!_keepHistoryForStructures) return;
+    final record = CalibrationRecord.fromCompletedGame(game);
+    if (record == null) return;
+    // One record per game — re-recording a game that syncs twice must not
+    // double-count it in the eight-night window.
+    _calibrationHistory.removeWhere((r) => r.gameId == record.gameId);
+    _calibrationHistory.insert(0, record);
+    if (_calibrationHistory.length > AppProvider._maxCalibrationRecords) {
+      _calibrationHistory.removeRange(
+        AppProvider._maxCalibrationRecords,
+        _calibrationHistory.length,
+      );
+    }
+    _persistCalibrationHistory();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Reads the measured nights back from the device at startup.
+  ///
+  /// Failures are swallowed on purpose: a missing or corrupt calibration file
+  /// means the forecasts fall back to §F1's stated defaults, which is exactly
+  /// what a host with no history gets anyway. It is never worth failing a
+  /// launch over.
+  Future<void> hydrateCalibrationHistory() async {
+    try {
+      final doc =
+          await Localstore.instance.collection('app').doc('calibration').get();
+      final raw = doc?['records'];
+      if (raw is! List) return;
+      _calibrationHistory
+        ..clear()
+        ..addAll(
+          raw.whereType<Map>().map(
+                (m) => CalibrationRecord.fromMap(
+                  m.map((k, v) => MapEntry('$k', v)),
+                ),
+              ),
+        );
+      if (!_disposed) notifyListeners();
+    } catch (e) {
+      debugPrint('Failed to load calibration history: $e');
+    }
+  }
+
+  void _persistCalibrationHistory() {
+    try {
+      Localstore.instance.collection('app').doc('calibration').set({
+        'records': _calibrationHistory.map((r) => r.toMap()).toList(),
+      });
+    } catch (e) {
+      debugPrint('Failed to save calibration history: $e');
+    }
+  }
+
+  /// The symbol this phone shows in front of money: '' (none), '€', '$'
+  /// or '£'. Lives on the phone only (F2, ON THIS PHONE): it is not part of
+  /// any game or account, so it is never synced.
+  String get currencySymbol => Formatters.currencySymbol;
+
+  void setCurrencySymbol(String symbol) {
+    if (Formatters.currencySymbol == symbol) return;
+    Formatters.currencySymbol = symbol;
+    try {
+      Localstore.instance.collection('app').doc('device').set({
+        'currencySymbol': symbol,
+      });
+    } catch (e) {
+      debugPrint('Failed to save currency symbol: $e');
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  Future<void> hydrateDevicePrefs() async {
+    try {
+      final doc = await Localstore.instance.collection('app').doc('device').get();
+      final symbol = doc?['currencySymbol'];
+      if (symbol is String && const {'', '€', '\$', '£'}.contains(symbol)) {
+        Formatters.currencySymbol = symbol;
+        if (!_disposed) notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Failed to load device preferences: $e');
+    }
+  }
+
+  void setKeepHistoryForStructures(bool value) {
+    if (_keepHistoryForStructures == value) return;
+    _keepHistoryForStructures = value;
+    _persistPref('keepHistoryForStructures', value);
+    if (!_disposed) notifyListeners();
+  }
 
   void toggleVoice() {
     _voiceEnabled = !_voiceEnabled;
@@ -175,10 +295,11 @@ extension AppProviderNotificationsSettings on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
-  void setAppTour(bool value) {
-    if (_showAppTour == value) return;
-    _showAppTour = value;
-    _persistPref('showAppTour', value);
+  void setVoiceVolume(double value) {
+    if (_voiceVolume == value) return;
+    _voiceVolume = value;
+    VoiceService.instance.setVolume(value);
+    _persistPref('voiceVolume', _voiceVolume);
     if (!_disposed) notifyListeners();
   }
 
@@ -245,8 +366,10 @@ extension AppProviderNotificationsSettings on AppProvider {
       _currentGame?.settings.announceEliminations ?? false;
 
   void setAnnounceEliminations(bool value) {
+    if (!isAdmin) return;
+    if (!isAdmin) return;
     final game = _currentGame;
-    if (game == null || game.settings.announceEliminations == value) return;
+    if (game == null || !isAdmin || game.settings.announceEliminations == value) return;
     _currentGame = game.copyWith(
       settings: game.settings.copyWith(announceEliminations: value),
     );
@@ -259,6 +382,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setSoundsEnabled(bool value) {
     if (_soundsEnabled == value) return;
     _soundsEnabled = value;
+    _persistPref('soundsEnabled', value);
     if (!_disposed) notifyListeners();
   }
 
@@ -267,14 +391,16 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setCompactSummary(bool value) {
     if (_compactSummary == value) return;
     _compactSummary = value;
+    _persistPref('compactSummary', value);
     if (!_disposed) notifyListeners();
   }
 
   bool get smsEnabled => _smsEnabled;
 
-  void setSmsEnabled(bool value) {
+  void setSmsEnabled(bool value) { // Fixed persistence
     if (_smsEnabled == value) return;
     _smsEnabled = value;
+    _persistPref('smsEnabled', value);
     if (!_disposed) notifyListeners();
   }
 
@@ -296,11 +422,19 @@ extension AppProviderNotificationsSettings on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  /// The user's own default chip set, used when the current group has not
+  /// chosen one of its own (`create_tournament_screen` and `quick_start_screen`
+  /// both fall back to this). Distinct from `Group.defaultChipSetId`, which is
+  /// the group's B10 pointer.
   String? get defaultChipSetId => _defaultChipSetId;
 
   void setDefaultChipSet(String? id) {
     if (_defaultChipSetId == id) return;
     _defaultChipSetId = id;
+    // Persisted like every other preference in this block. Without it the
+    // user's default survived only until the app was closed, while the theme
+    // and voice settings next to it came back.
+    _persistPref('defaultChipSetId', id);
     if (!_disposed) notifyListeners();
   }
 
@@ -309,6 +443,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setAvatarColor(int index) {
     if (_avatarColorIndex == index) return;
     _avatarColorIndex = index;
+    _persistPref('avatarColorIndex', index);
     if (!_disposed) notifyListeners();
   }
 

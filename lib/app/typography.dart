@@ -7,17 +7,45 @@ import 'colors.dart';
 
 /// Centralized typography for the Poker Night app.
 ///
-/// Three families (mirroring the web app):
-///  - Display: Space Grotesk (sans)  — headings & brand
-///  - Body:    Space Grotesk (sans)  — general UI
-///  - Mono:    Space Mono (mono)     — numbers, codes, timers
+/// ONE family everywhere — Space Grotesk — for headings, brand, body, labels
+/// and numerals alike. The client's product system states it flatly: "one
+/// typeface everywhere — numerals, wordmark, labels, and body copy. No second
+/// typeface."
+///
+/// [mono] used to be Space Mono, a genuinely different face. What a second
+/// family was buying us was column alignment on the timer and the chip counts,
+/// and that is what [numericFeatures] does instead: `tnum` gives every digit
+/// the same advance width, so a clock ticking 19:59 -> 20:00 does not shuffle
+/// sideways, and `zero` slashes the zero so it cannot be misread as an O. Both
+/// are named in the product system. Keep calling [mono] for numbers, codes and
+/// timers — it is still the right style, it is just no longer a second face.
 class AppTypography {
   AppTypography._();
 
   // ── Font family names ──────────────────────────────────────────────────────
   static const String displayFamily = 'Space Grotesk';
   static const String bodyFamily = 'Space Grotesk';
-  static const String monoFamily = 'Space Mono';
+  static const String monoFamily = 'Space Grotesk';
+
+  /// Tabular (fixed-advance) figures plus a slashed zero — the product
+  /// system's stated substitute for a monospaced face. A font that lacks
+  /// either feature simply ignores it, so this is safe on the fallbacks too.
+  static const List<FontFeature> numericFeatures = [
+    FontFeature.tabularFigures(),
+    FontFeature.slashedZero(),
+  ];
+
+  /// Standard font fallbacks for offline execution and emojis (Spec E9).
+  static const List<String> offlineFontFallbacks = [
+    'Roboto',
+    'Segoe UI',
+    'Helvetica Neue',
+    'Arial',
+    'sans-serif',
+    'Noto Color Emoji',
+    'Apple Color Emoji',
+    'Segoe UI Emoji',
+  ];
 
   static TextStyle display({
     double size = AppFontSizes.lg,
@@ -34,11 +62,8 @@ class AppTypography {
       // Space Grotesk display headers look premium with tighter tracking
       letterSpacing: letterSpacing ?? (size >= AppFontSizes.xl ? -0.8 : -0.3),
     ).copyWith(
-      fontFamilyFallback: const [
-        'Noto Color Emoji',
-        'Apple Color Emoji',
-        'Segoe UI Emoji',
-      ],
+      fontFeatures: numericFeatures,
+      fontFamilyFallback: offlineFontFallbacks,
     );
   }
 
@@ -57,11 +82,8 @@ class AppTypography {
       // Slight positive tracking for body text improves legibility
       letterSpacing: letterSpacing ?? 0.2,
     ).copyWith(
-      fontFamilyFallback: const [
-        'Noto Color Emoji',
-        'Apple Color Emoji',
-        'Segoe UI Emoji',
-      ],
+      fontFeatures: numericFeatures,
+      fontFamilyFallback: offlineFontFallbacks,
     );
   }
 
@@ -72,18 +94,43 @@ class AppTypography {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.spaceMono(
+    return GoogleFonts.spaceGrotesk(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
       color: color ?? AppColors.foreground,
       height: height,
       letterSpacing: letterSpacing,
     ).copyWith(
-      fontFamilyFallback: const [
-        'Noto Color Emoji',
-        'Apple Color Emoji',
-        'Segoe UI Emoji',
-      ],
+      fontFeatures: numericFeatures,
+      fontFamilyFallback: offlineFontFallbacks,
+    );
+  }
+
+  /// Small tracked capitals — the redesign's section and field label
+  /// ("PRIVATE HOME POKER", "GAME CODE", "GROUP INVITE"). Crimson by default,
+  /// using the text-safe [AppColors.primaryText]; pass a muted colour for a
+  /// quieter field label.
+  static TextStyle eyebrow({
+    double size = 12,
+    Color? color,
+    FontWeight weight = FontWeight.w600,
+  }) {
+    return body(
+      size: size,
+      weight: weight,
+      color: color ?? AppColors.primaryText,
+      height: 1.3,
+      letterSpacing: size * 0.16,
+    );
+  }
+
+  /// Large, widely tracked figures for typed invite and game codes.
+  static TextStyle code({double size = AppFontSizes.xl, Color? color}) {
+    return mono(
+      size: size,
+      weight: FontWeight.w600,
+      color: color,
+      letterSpacing: size * 0.22,
     );
   }
 
@@ -110,14 +157,17 @@ class AppTypography {
   static TextStyle crimsonShimmer({
     double size = AppFontSizes.lg,
     FontWeight weight = FontWeight.w700,
+    Rect? bounds,
   }) {
-    return GoogleFonts.spaceMono(
-      fontSize: AppScale.sp(size),
+    final scaled = AppScale.sp(size);
+    final rect = bounds ?? Rect.fromLTWH(0, 0, scaled * 8, scaled * 1.6);
+    return GoogleFonts.spaceGrotesk(
+      fontSize: scaled,
       fontWeight: weight,
       foreground: Paint()
-        ..shader = AppColors.crimsonShimmer.createShader(
-          const Rect.fromLTWH(0, 0, 240, 48),
-        ),
+        ..shader = AppColors.crimsonShimmer.createShader(rect),
+    ).copyWith(
+      fontFamilyFallback: offlineFontFallbacks,
     );
   }
 
@@ -161,7 +211,6 @@ class AppTypography {
         .copyWith(
           bodyLarge: base.bodyLarge!.copyWith(
             fontFamily: bodyFamily,
-            fontFamilyFallback: ['Space Mono', 'monospace'],
           ),
         );
   }

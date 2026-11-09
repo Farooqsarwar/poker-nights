@@ -7,19 +7,29 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
+import '../../models/tournament.dart';
+import '../../models/tournament_format.dart';
 import '../../models/tournament_preset.dart';
 import '../../providers/app_provider.dart';
+import '../../services/payment_service.dart';
 import '../../utils/mock_data.dart';
+import '../../utils/formatters.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
+import '../../widgets/app_slider.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/chip_token.dart';
+import '../../services/entitlements.dart';
+import '../../widgets/app_tag.dart';
+import '../../widgets/premium_gate.dart';
+import '../../widgets/app_tabs.dart';
 
 /// Tournament preset manager (checklist §9.1): create, edit, delete and use
 /// saved tournament templates. Presets store inputs only — the blind structure
@@ -32,7 +42,21 @@ class PresetsScreen extends StatefulWidget {
 }
 
 class _PresetsScreenState extends State<PresetsScreen> {
+  // DECISION: Presets hub organized strictly in order: chip stacks -> tournament presets -> tournament styles (spec P1, P3 / S5).
+  String _activeTab = 'stacks';
+
   void _editPreset(AppProvider app, TournamentPreset? preset) {
+    // D4: 3 saved templates free, unlimited on Premium. Editing/using an
+    // existing preset is never capped — only creating a new one past the
+    // free limit is. The count covers the host's OWN saved presets; the four
+    // app-shipped starters (§B6) are content, not slots, so a fresh free
+    // account does not open on the upgrade prompt.
+    if (preset == null &&
+        app.premiumTier != PremiumTier.premium &&
+        app.userSavedPresetCount >= PremiumBoundary.freeMaxSavedPresets) {
+      _showPresetLimitPrompt(app);
+      return;
+    }
     showAppModal(
       context: context,
       title: preset == null ? 'New preset' : 'Edit preset',
@@ -50,6 +74,23 @@ class _PresetsScreenState extends State<PresetsScreen> {
     );
   }
 
+  void _showPresetLimitPrompt(AppProvider app) {
+    showAppModal(
+      context: context,
+      title: 'Preset limit reached',
+      maxWidth: 560,
+      child: PremiumGate(
+        tier: app.premiumTier,
+        feature: PremiumFeature.savedPresets,
+        blurb:
+            'Free covers ${PremiumBoundary.freeMaxSavedPresets} saved '
+            'presets. Premium removes the limit — save as many tournament '
+            'setups as you like.',
+        child: const SizedBox.shrink(),
+      ),
+    );
+  }
+
   List<String> _chipSetNames(AppProvider app) => [
     ...TournamentEngine.presetNames,
     for (final cs in app.savedChipSets) cs.name,
@@ -60,7 +101,8 @@ class _PresetsScreenState extends State<PresetsScreen> {
     TournamentPreset? existing,
     _PresetDraft data,
   ) {
-    return TournamentPreset(
+    final base = existing ?? app.defaultGamePreset;
+    return base.copyWith(
       id: existing?.id ?? 'pr-${DateTime.now().millisecondsSinceEpoch}',
       name: data.name,
       buyIn: data.buyIn,
@@ -79,6 +121,11 @@ class _PresetsScreenState extends State<PresetsScreen> {
       rebuyLimit: data.rebuyLimit,
       rebuyCost: data.rebuyCost,
       addOnCost: data.addOnCost,
+      format: data.reEntry
+          ? TournamentFormat.reEntry
+          : data.rebuys
+          ? TournamentFormat.rebuy
+          : TournamentFormat.freezeOut,
     );
   }
 
@@ -117,7 +164,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
             child: Text(
               'Delete',
               style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructive,
+                color: AppColors.destructiveText,
               ),
             ),
           ),
@@ -132,11 +179,27 @@ class _PresetsScreenState extends State<PresetsScreen> {
     final app = context.watch<AppProvider>();
     final presets = app.presets;
 
+    // D4: 3 saved templates free, unlimited on Premium — the library itself
+    // is never gated. See _editPreset for where the free cap is enforced,
+    // only on creating a new preset past the limit.
     return AppPage(
       maxWidth: 760,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppBackButton(
+              onTap: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(RoutePaths.home);
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -144,16 +207,34 @@ class _PresetsScreenState extends State<PresetsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Tournament Presets',
-                      style: AppTypography.display(
-                        size: AppFontSizes.xxl,
-                        weight: FontWeight.w700,
-                      ),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.xs,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          'Game presets',
+                          style: AppTypography.display(
+                            size: AppFontSizes.xxl,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                        AppTag(
+                          app.premiumTier == PremiumTier.premium
+                              ? 'UNLIMITED'
+                              : '${app.userSavedPresetCount}/3 FREE',
+                          tone: app.premiumTier == PremiumTier.premium
+                              ? AppTagTone.success
+                              : AppTagTone.neutral,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'Save your favourite game settings and start a new game in one tap.',
+                      app.premiumTier == PremiumTier.premium
+                          ? 'One-tap tournament setups · Unlimited on Premium'
+                          : 'Complete game preferences · 3 saved free '
+                                '(${app.userSavedPresetCount}/3 used)',
                       style: AppTypography.bodySm.copyWith(
                         color: AppColors.mutedForeground,
                       ),
@@ -165,67 +246,200 @@ class _PresetsScreenState extends State<PresetsScreen> {
                 padding: const EdgeInsets.only(top: 4.0),
                 child: AppButton(
                   onPressed: () => _editPreset(app, null),
-                  child: const Text('+ New preset'),
+                  child: const Text('+ New'),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.md),
+          AppTabs(
+            tabs: const [
+              AppTabItem(id: 'stacks', label: 'Chip stacks'),
+              AppTabItem(id: 'presets', label: 'Tournament presets'),
+              AppTabItem(id: 'styles', label: 'Tournament styles'),
+            ],
+            active: _activeTab,
+            onChanged: (tab) => setState(() => _activeTab = tab),
+          ),
           const SizedBox(height: AppSpacing.lg),
-          if (presets.isEmpty)
-            const AppEmptyState(
-              icon: Icons.list_alt_outlined,
-              title: 'No presets yet',
-              description: 'Save a tournament configuration to reuse it later.',
-            )
-          else
-            Column(
-              children: [
-                for (final p in presets)
-                  AppCard(
+
+          // 1. CHIP STACKS SECTION (P1/P3)
+          if (_activeTab == 'stacks') ...[
+            Text(
+              'Starting chip stacks',
+              style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Playable starting stack configurations calibrated for tournament depth.',
+              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _buildStackCard(
+              title: 'Standard stack (100 BB)',
+              depth: '100 big blinds',
+              blurb: '1,000 chips at 5/10 blinds. The recommended default for home tournaments.',
+              badge: 'RECOMMENDED',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _buildStackCard(
+              title: 'Deep stack (150 BB)',
+              depth: '150 big blinds',
+              blurb: '1,500 chips at 5/10 blinds. Deeper play with extra room for post-flop strategy.',
+              badge: 'DEEP',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _buildStackCard(
+              title: 'Turbo stack (50 BB)',
+              depth: '50 big blinds',
+              blurb: '500 chips at 5/10 blinds. Fast-paced action for quicker games.',
+              badge: 'TURBO',
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Available chip sets',
+              style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            for (final name in _chipSetNames(app))
+              AppCard(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Row(
+                  children: [
+                    Icon(Icons.casino_outlined, size: 20, color: AppColors.primary),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      '${_chipsFor(app, name).length} denominations',
+                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+
+          // 2. GENERAL TOURNAMENT PRESETS (P1/P3)
+          if (_activeTab == 'presets') ...[
+            if (presets.isEmpty)
+              const AppEmptyState(
+                icon: Icons.list_alt_outlined,
+                title: 'No presets yet',
+                description: 'Save a tournament configuration to reuse it later.',
+              )
+            else
+              Column(
+                children: [
+                  for (final p in presets)
+                  Semantics(
+                    button: true,
+                    label: '${p.name}\nBuy-in ${Formatters.prize(p.buyIn)} ${_hours(p.durationHours)}h ${p.format?.label ?? (p.reEntry ? "Re-entry" : p.rebuys ? "Rebuy" : "Freeze-out")} ${p.pace != null ? "${p.pace!.label} pace" : "Regular pace"} ${p.targetDepthBB ?? 100} BB deep ${p.rebuys ? "Rebuys" : "No rebuys"} ${p.addOn ? "Add-on" : "No add-on"} ${p.anteEnabled ? "Ante L${p.anteAfterLevel}+" : "No ante"} ${p.chipSetName} ${p.chipSet.map((c) => c.color).join(" ")} ${app.defaultGamePreset.id == p.id ? "DEFAULT" : ""}',
+                    child: AppCard(
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     margin: const EdgeInsets.only(bottom: AppSpacing.md),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                p.name,
-                                style: AppTypography.bodyLg.copyWith(
-                                  fontWeight: FontWeight.w600,
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final actions = <Widget>[
+                              if (app.defaultGamePreset.id == p.id)
+                                const AppTag(
+                                  'DEFAULT',
+                                  tone: AppTagTone.success,
+                                )
+                              else
+                                TextButton(
+                                  onPressed: () =>
+                                      app.setDefaultGamePreset(p.id),
+                                  child: const Text('Make default'),
+                                ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'Edit',
+                                onPressed: () => _editPreset(app, p),
+                                icon: Icon(
+                                  Icons.edit_outlined,
+                                  size: 18,
+                                  color: AppColors.mutedForeground,
                                 ),
                               ),
-                            ),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              tooltip: 'Edit',
-                              onPressed: () => _editPreset(app, p),
-                              icon: Icon(
-                                Icons.edit_outlined,
-                                size: 18,
-                                color: AppColors.mutedForeground,
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'Delete',
+                                onPressed: p.id.startsWith('starter-')
+                                    ? null
+                                    : () => _confirmDelete(p, app),
+                                icon: Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                  color: AppColors.mutedForeground,
+                                ),
                               ),
-                            ),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              tooltip: 'Delete',
-                              onPressed: () => _confirmDelete(p, app),
-                              icon: Icon(
-                                Icons.delete_outline,
-                                size: 18,
-                                color: AppColors.mutedForeground,
-                              ),
-                            ),
-                          ],
+                            ];
+                            if (constraints.maxWidth < 420) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p.name,
+                                    style: AppTypography.bodyLg.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Wrap(
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    children: actions,
+                                  ),
+                                ],
+                              );
+                            }
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    p.name,
+                                    style: AppTypography.bodyLg.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                ...actions,
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Wrap(
                           spacing: AppSpacing.sm,
                           runSpacing: AppSpacing.xs,
                           children: [
-                            _Tag(text: 'Buy-in ${p.buyIn}'),
+                            _Tag(text: 'Buy-in ${Formatters.prize(p.buyIn)}'),
                             _Tag(text: '${_hours(p.durationHours)}h'),
+                            _Tag(
+                              text:
+                                  p.format?.label ??
+                                  (p.reEntry
+                                      ? 'Re-entry'
+                                      : p.rebuys
+                                      ? 'Rebuy'
+                                      : 'Freeze-out'),
+                            ),
+                            if (p.pace != null)
+                              _Tag(text: '${p.pace!.label} pace'),
+                            if (p.targetDepthBB != null)
+                              _Tag(text: '${p.targetDepthBB} BB deep'),
+                            if (p.forceStack != null)
+                              _Tag(text: '${p.forceStack} stack'),
                             _Tag(
                               text: p.rebuys
                                   ? 'Rebuys to L${p.rebuysCloseLevel}'
@@ -233,7 +447,9 @@ class _PresetsScreenState extends State<PresetsScreen> {
                             ),
                             _Tag(text: p.addOn ? 'Add-on' : 'No add-on'),
                             _Tag(
-                              text: p.koEnabled ? 'KO ${p.koAmount}' : 'No KO',
+                              text: p.koEnabled
+                                  ? 'KO ${Formatters.prize(p.koAmount)}'
+                                  : 'No KO',
                             ),
                             _Tag(
                               text: p.anteEnabled
@@ -241,6 +457,18 @@ class _PresetsScreenState extends State<PresetsScreen> {
                                   : 'No ante',
                             ),
                             _Tag(text: '${p.organizerPct}% org costs'),
+                            if (p.earlyArrivalBonusEnabled)
+                              _Tag(
+                                text:
+                                    '${((p.earlyArrivalBonusPctOverride ?? kEarlyArrivalBonusPct) * 100).round()}% on-time bonus',
+                              ),
+                            if (p.forcePaidPlaces != null)
+                              _Tag(text: '${p.forcePaidPlaces} paid'),
+                            if (p.tableSettingsOverride != null)
+                              _Tag(
+                                text:
+                                    '${p.tableSettingsOverride!.maxPerTable}/table',
+                              ),
                             _Tag(text: p.chipSetName),
                           ],
                         ),
@@ -266,14 +494,140 @@ class _PresetsScreenState extends State<PresetsScreen> {
                             onPressed: () => context.go(
                               '${RoutePaths.createTournament}?preset=${p.id}',
                             ),
-                            child: const Text('Use for new game'),
+                            child: const Text('Use preset'),
                           ),
                         ),
                       ],
                     ),
                   ),
+                  ),
               ],
             ),
+          ],
+
+          // 3. TOURNAMENT STYLES (P1/P3)
+          if (_activeTab == 'styles') ...[
+            Text(
+              'Tournament styles & formats',
+              style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Structure templates based on standard tournament formats.',
+              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _buildStyleCard(
+              title: 'Freezeout',
+              blurb: 'Single buy-in, single stack, no rebuys. When a player loses their chips they are out.',
+              format: TournamentFormat.freezeOut,
+              app: app,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _buildStyleCard(
+              title: 'Rebuy & Add-on',
+              blurb: 'Unlimited rebuys through rebuy close, followed by an optional add-on during the break.',
+              format: TournamentFormat.rebuy,
+              app: app,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _buildStyleCard(
+              title: 'Knockout / Bounty',
+              blurb: 'A portion of each buy-in forms a direct bounty awarded to the eliminator.',
+              format: TournamentFormat.freezeOut, isBounty: true,
+              app: app,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _buildStyleCard(
+              title: 'Shootout',
+              blurb: 'Multi-table play where each table plays down to 1 winner before the final table.',
+              format: TournamentFormat.shootout,
+              app: app,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStackCard({
+    required String title,
+    required String depth,
+    required String blurb,
+    required String badge,
+  }) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(AppRadius.xs),
+            ),
+            child: Text(
+              badge,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primaryText,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(blurb, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStyleCard({
+    required String title,
+    required String blurb,
+    required TournamentFormat format,
+    bool isBounty = false,
+    required AppProvider app,
+  }) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.military_tech_outlined, size: 22, color: AppColors.primary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(blurb, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              final draft = app.defaultGamePreset.copyWith(
+                name: title,
+                format: format,
+                rebuys: format == TournamentFormat.rebuy,
+                koEnabled: isBounty,
+              );
+              _editPreset(app, draft);
+            },
+            child: const Text('Use style'),
+          ),
         ],
       ),
     );
@@ -301,8 +655,11 @@ class _Tag extends StatelessWidget {
         border: Border.all(color: AppColors.border),
       ),
       child: Text(
-        text,
-        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+        text.toUpperCase(),
+        style: AppTypography.bodyXs.copyWith(
+          color: AppColors.mutedForeground,
+          letterSpacing: 0.6,
+        ),
       ),
     );
   }
@@ -672,13 +1029,14 @@ class _PresetFormState extends State<_PresetForm> {
             Row(
               children: [
                 Expanded(
-                  child: Slider(
+                  child: AppSlider(
                     value: _orgPct,
                     min: 0,
-                    max: 20,
-                    divisions: 20,
-                    activeColor: AppColors.primary,
-                    inactiveColor: AppColors.border,
+                    max: 30,
+                    divisions: 30,
+                    label: '${_orgPct.round()}%',
+                    title: 'Organizational costs',
+                    valueLabel: '${_orgPct.round()}%',
                     onChanged: (v) => setState(() => _orgPct = v),
                   ),
                 ),
@@ -702,7 +1060,9 @@ class _PresetFormState extends State<_PresetForm> {
           const SizedBox(height: AppSpacing.sm),
           Text(
             _error!,
-            style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.destructiveText,
+            ),
           ),
         ],
         const SizedBox(height: AppSpacing.lg),
@@ -745,7 +1105,7 @@ class _FieldToggle extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
                   subtitle,
                   style: AppTypography.bodyXs.copyWith(

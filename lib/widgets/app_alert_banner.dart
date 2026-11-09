@@ -37,9 +37,9 @@ class AppAlertBanner extends StatelessWidget {
         AppColors.warningForeground,
       ),
       AppAlertType.success => (
-        AppColors.muted,
-        AppColors.border,
-        AppColors.foreground,
+        AppColors.successSoft,
+        AppColors.successSoftBorder,
+        AppColors.successText,
       ),
       AppAlertType.error => (
         AppColors.destructiveSoft,

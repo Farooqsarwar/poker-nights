@@ -30,7 +30,7 @@ class PushService {
 
   static const String appId = String.fromEnvironment(
     'ONESIGNAL_APP_ID',
-    defaultValue: 'e9f508d1-19ef-44ed-aafc-c1578b955715',
+    defaultValue: '',
   );
 
   final PlatformPush _platform = createPlatformPush();
@@ -41,8 +41,12 @@ class PushService {
   bool _webPushActive = false;
   String? _pendingRoute;
 
-  /// Whether OneSignal was configured at build time.
-  bool get isConfigured => appId.isNotEmpty;
+  /// Whether OneSignal was configured at build time and is supported on this platform.
+  bool get isConfigured =>
+      appId.isNotEmpty &&
+      (kIsWeb ||
+          defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
   /// Whether the platform SDK has finished loading (web: SDK + init).
   bool get isReady => _platform.isReady;
@@ -64,7 +68,7 @@ class PushService {
     _initialized = true;
 
     if (!isConfigured) {
-      debugPrint('[Push] OneSignal App ID not provided — push disabled.');
+      debugPrint('[Push] OneSignal App ID not provided or platform not supported — push disabled.');
       return;
     }
 

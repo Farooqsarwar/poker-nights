@@ -11,10 +11,10 @@ import '../theme/theme_palette.dart';
 class AppColors {
   AppColors._();
 
-  /// Replaces the active palette.  Called by [PokerNightApp] before building
-  /// the [MaterialApp] so the new values are in place before any descendant
-  /// reads them.
+  /// The active palette. Replaced by [setPalette] before building
+  /// the [MaterialApp] so new values are in place before descendants read them.
   static ThemePalette currentPalette = ThemePalettes.red;
+  static void setPalette(ThemePalette palette) => currentPalette = palette;
 
   // ── Base tokens ────────────────────────────────────────────────────────────
   static Color get background => currentPalette.background;
@@ -39,10 +39,40 @@ class AppColors {
   static Color get warning => currentPalette.warning;
   static Color get warningForeground => currentPalette.warningForeground;
 
+  // ── §B1 tokens, by their spec names ───────────────────────────────────────
+  //
+  // Prefer these in new code. The legacy accessors above resolve to the same
+  // values; these just say which §B1 token they are.
+  static Color get bg => currentPalette.bg;
+  static Color get surface => currentPalette.surface;
+  static Color get surface2 => currentPalette.surface2;
+  static Color get borderStrong => currentPalette.borderStrong;
+  static Color get red => currentPalette.red;
+
+  /// Red text **below 24 px** — eyebrows, LEVEL/ANTE labels, antes in tables,
+  /// link rows, legal headings. §B1: never `red` at that size.
+  static Color get redText => currentPalette.redText;
+  static Color get redDim => currentPalette.redDim;
+
+  /// Destructive **fill** only, with white text. Never as text or an outline.
+  static Color get redDanger => currentPalette.redDanger;
+  static Color get white => currentPalette.white;
+  static Color get muted2 => currentPalette.muted2;
+  static Color get green => currentPalette.green;
+
   // ── Derived decorative colours ─────────────────────────────────────────────
   static Color get black => Colors.black;
   static Color get onSurfaceHint => currentPalette.onSurfaceHint;
   static Color get surfaceHover => currentPalette.surfaceHover;
+  /// Use these — not [primary] / [destructive] / [success] / [warning] —
+  /// whenever a semantic colour is being applied to TEXT or an ICON on a dark
+  /// surface. The base colours are fill colours and measure under the WCAG AA
+  /// floor as text. See ThemePalette for the reasoning and measurements.
+  static Color get primaryText => currentPalette.primaryText;
+  static Color get destructiveText => currentPalette.destructiveText;
+  static Color get successText => currentPalette.successText;
+  static Color get warningText => currentPalette.warningText;
+
   static Color get primarySoft => currentPalette.primarySoft;
   static Color get primarySoftBorder => currentPalette.primarySoftBorder;
   static Color get primarySoftStrong => currentPalette.primarySoftStrong;
@@ -51,11 +81,11 @@ class AppColors {
   static Color get successSoftBorder => currentPalette.successSoftBorder;
   static Color get warningSoft => currentPalette.warningSoft;
   static Color get warningSoftBorder => currentPalette.warningSoftBorder;
-  static Color get gold => currentPalette.gold;
   static Color get feltGlow => currentPalette.feltGlow;
   static Color get glassOverlay => currentPalette.glassOverlay;
   static Color get hairlineWhite => currentPalette.hairlineWhite;
   static Color get hairlineBorder => currentPalette.hairlineBorder;
+  static Color get borderSubtle => currentPalette.borderSubtle;
   static Color get blackGlow => currentPalette.blackGlow;
   static Color get feltGlowStrong => currentPalette.feltGlowStrong;
   static Color get shadowDark => currentPalette.shadowDark;
@@ -69,9 +99,11 @@ class AppColors {
   // ── Avatar ─────────────────────────────────────────────────────────────────
   static List<Color> get avatarPalette => currentPalette.avatarPalette;
   static Color avatarColorFor(String name) => currentPalette.avatarColorFor(name);
+  static Color avatarTintFor(String name) => currentPalette.avatarTintFor(name);
 
   // ── Gradient helpers ───────────────────────────────────────────────────────
   static LinearGradient get crimsonShimmer => currentPalette.shimmerGradient;
   static RadialGradient get luxuryGradient => currentPalette.luxuryGradient;
   static RadialGradient get feltBackground => currentPalette.feltBackground;
+  static RadialGradient get topGlow => currentPalette.topGlow;
 }

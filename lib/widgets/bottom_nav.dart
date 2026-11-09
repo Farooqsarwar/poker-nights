@@ -11,6 +11,14 @@ import 'create_group_dialog.dart';
 import 'glass_styles.dart';
 import 'glass_surface.dart';
 
+/// Height of one bottom-nav row, excluding the device's bottom safe-area
+/// inset.
+///
+/// Exported so `ScreenShell` can reserve exactly this much clearance for the
+/// floating nav instead of repeating the number. Keep it in step with the
+/// `SizedBox` each nav item is built inside.
+const double kBottomNavHeight = 64;
+
 /// Mobile bottom navigation — the single primary navigation model.
 ///
 /// Items: Home · Games · Chat · Members · More. Secondary destinations
@@ -23,8 +31,7 @@ class BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
 
-    final app = context.watch<AppProvider>();
-    final group = app.currentGroup;
+    final hasCurrentGroup = context.select<AppProvider, bool>((a) => a.hasCurrentGroup);
     final items = <_BottomItem>[
       _BottomItem(
         path: RoutePaths.home,
@@ -32,7 +39,7 @@ class BottomNav extends StatelessWidget {
         icon: Icons.home_outlined,
         activeColor: AppColors.primary,
       ),
-      if (app.hasCurrentGroup) ...[
+      if (hasCurrentGroup) ...[
         _BottomItem(
           path: RoutePaths.group,
           label: 'Games',
@@ -44,24 +51,28 @@ class BottomNav extends StatelessWidget {
           label: 'Chat',
           icon: Icons.chat_bubble_outline,
           activeColor: AppColors.primary,
-          badge: app.unreadGroupChatCount(group.id),
+          badge: context.select<AppProvider, int>((a) => a.unreadGroupChatCount(a.currentGroup.id)),
         ),
         _BottomItem(
           path: RoutePaths.members,
           label: 'Members',
-          icon: Icons.groups_outlined,
+          icon: Icons.person_outline,
           activeColor: AppColors.primary,
-          badge: group.members.length,
+          badge: context.select<AppProvider, int>((a) => a.currentGroup.members.length),
         ),
         _BottomItem(
           path: '#more',
           label: 'More',
           icon: Icons.more_horiz,
           activeColor: AppColors.primary,
+          // T135: anything reached from Explore or the drawer lights "More"
+          // as active, not its own tab. Tools and Standings are two of them.
           activePaths: const [
             RoutePaths.polls,
             RoutePaths.history,
             RoutePaths.cashGame,
+            RoutePaths.tools,
+            RoutePaths.standings,
             RoutePaths.settings,
           ],
           onTap: () => _openMore(context),
@@ -82,6 +93,7 @@ class BottomNav extends StatelessWidget {
           activePaths: const [
             RoutePaths.history,
             RoutePaths.cashGame,
+            RoutePaths.tools,
             RoutePaths.settings,
           ],
           onTap: () => _openMore(context),
@@ -99,63 +111,77 @@ class BottomNav extends StatelessWidget {
           children: [
             for (final item in items)
               Expanded(
-                child: InkWell(
-                  onTap: item.onTap ?? () => context.go(item.path),
-                  child: SizedBox(
-                    height: 64,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (_isActive(item, location))
-                              Container(
-                                width: 24,
-                                height: 2,
-                                margin: const EdgeInsets.only(bottom: 4),
-                                decoration: BoxDecoration(
-                                  color: item.activeColor,
-                                  borderRadius: BorderRadius.circular(2),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: item.activeColor.withValues(
-                                        alpha: 0.50,
+                // The badge count is announced as part of the tab rather than
+                // as a loose number, and `selected` is what tells a screen
+                // reader which tab you are on — the active underline and
+                // colour say that visually and say nothing otherwise.
+                child: Semantics(
+                  label: item.badge != null && item.badge! > 0
+                      ? '${item.label}, ${item.badge} new'
+                      : item.label,
+                  selected: _isActive(item, location),
+                  button: true,
+                  // The label above already folds in the badge count, so the
+                  // children's own semantics would only repeat it.
+                  excludeSemantics: true,
+                  child: InkWell(
+                    onTap: item.onTap ?? () => context.go(item.path),
+                    child: SizedBox(
+                      height: kBottomNavHeight,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (_isActive(item, location))
+                                Container(
+                                  width: 24,
+                                  height: 2,
+                                  margin: const EdgeInsets.only(bottom: 4),
+                                  decoration: BoxDecoration(
+                                    color: item.activeColor,
+                                    borderRadius: BorderRadius.circular(2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: item.activeColor.withValues(
+                                          alpha: 0.50,
+                                        ),
+                                        blurRadius: 8,
                                       ),
-                                      blurRadius: 8,
-                                    ),
-                                  ],
-                                ),
-                              )
-                            else
-                              const SizedBox(height: 6),
-                            Icon(
-                              item.icon,
-                              size: 24,
-                              color: _isActive(item, location)
-                                  ? item.activeColor
-                                  : AppColors.mutedForeground,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              item.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.bodyXs.copyWith(
+                                    ],
+                                  ),
+                                )
+                              else
+                                const SizedBox(height: 6),
+                              Icon(
+                                item.icon,
+                                size: 24,
                                 color: _isActive(item, location)
-                                    ? item.activeColor
+                                    ? item.activeTextColor
                                     : AppColors.mutedForeground,
                               ),
-                            ),
-                          ],
-                        ),
-                        if (item.badge != null && item.badge! > 0)
-                          Positioned(
-                            top: 4,
-                            right: 24,
-                            child: _BadgeCount(count: item.badge!),
+                              const SizedBox(height: AppSpacing.xxs),
+                              Text(
+                                item.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: _isActive(item, location)
+                                      ? item.activeTextColor
+                                      : AppColors.mutedForeground,
+                                ),
+                              ),
+                            ],
                           ),
-                      ],
+                          if (item.badge != null && item.badge! > 0)
+                            Positioned(
+                              top: 4,
+                              right: 24,
+                              child: _BadgeCount(count: item.badge!),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -177,7 +203,7 @@ class BottomNav extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Glass.solid(AppColors.card, 0.98),
-      barrierColor: Colors.black.withValues(alpha: 0.5),
+      barrierColor: AppColors.black.withValues(alpha: 0.5),
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         child: SingleChildScrollView(
@@ -244,6 +270,26 @@ class BottomNav extends StatelessWidget {
                   Navigator.of(sheetContext).pop();
                   context.go(RoutePaths.cashGame);
                 },
+              ),
+              _MoreRow(
+                icon: Icons.build_outlined,
+                label: 'Tools',
+                subtitle: 'Blinds, clock, ICM & payouts',
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  context.go(RoutePaths.tools);
+                },
+              ),
+              _MoreRow(
+                icon: Icons.leaderboard_outlined,
+                label: 'Standings',
+                subtitle: 'Lifetime leaderboard',
+                onTap: hasGroup
+                    ? () {
+                        Navigator.of(sheetContext).pop();
+                        context.go(RoutePaths.standings);
+                      }
+                    : null,
               ),
               _MoreRow(
                 icon: Icons.settings_outlined,
@@ -385,9 +431,11 @@ class _BadgeCount extends StatelessWidget {
       ),
       child: Text(
         count > 9 ? '9+' : '$count',
-        style: AppTypography.monoXs.copyWith(
+        // AppTypography.mono(size: 9), not monoXs.copyWith(fontSize: 9) —
+        // copyWith replaces the value AppScale.sp() computed, so the badge
+        // would ignore the text-scale floor and stay 9px on every viewport.
+        style: AppTypography.mono(size: 9).copyWith(
           color: AppColors.primaryForeground,
-          fontSize: 9,
         ),
       ),
     );
@@ -432,7 +480,17 @@ class _BottomItem {
   final String path;
   final String label;
   final IconData icon;
+
+  /// §B3: "a 24 x 2 px crimson bar" — the active underline. A **fill**, so it
+  /// correctly takes the `red` token.
   final Color activeColor;
+
+  /// §B3: "Active item: `redText` icon and label" — and §B1 is explicit that
+  /// this is a different token from the bar, because `red` measures 4.05 : 1
+  /// on the background and `redText` 5.06 : 1. The label and icon were both
+  /// taking [activeColor] and so both were failing AA.
+  Color get activeTextColor => AppColors.primaryText;
+
   final int? badge;
   final VoidCallback? onTap;
 

@@ -1,3 +1,42 @@
+/// A transaction record in a cash game (buy-in, top-up, or cash-out).
+class CashTransaction {
+  const CashTransaction({
+    required this.id,
+    required this.playerId,
+    required this.playerName,
+    required this.type,
+    required this.amount,
+    required this.timestamp,
+  });
+
+  final String id;
+  final String playerId;
+  final String playerName;
+  final String type; // 'buyIn' | 'topUp' | 'cashOut'
+  final double amount;
+  final DateTime timestamp;
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'playerId': playerId,
+    'playerName': playerName,
+    'type': type,
+    'amount': amount,
+    'timestamp': timestamp.toIso8601String(),
+  };
+
+  factory CashTransaction.fromMap(Map<String, dynamic> m) => CashTransaction(
+    id: (m['id'] as String?) ?? '',
+    playerId: (m['playerId'] as String?) ?? '',
+    playerName: (m['playerName'] as String?) ?? '',
+    type: (m['type'] as String?) ?? 'topUp',
+    amount: (m['amount'] as num?)?.toDouble() ?? 0.0,
+    timestamp: m['timestamp'] != null
+        ? DateTime.tryParse(m['timestamp'] as String) ?? DateTime.now()
+        : DateTime.now(),
+  );
+}
+
 /// A participant in a cash game.
 class CashPlayer {
   const CashPlayer({
@@ -20,7 +59,9 @@ class CashPlayer {
 
   bool get isCashedOut => hasCashedOut;
 
-  double get net => cashedOut - totalBuyIns;
+  /// Where this person stands: what they took out, plus what is still in front
+  /// of them, minus what they put in -- across every stint of the session.
+  double get net => hasCashedOut ? cashedOut - totalBuyIns : stack - totalBuyIns;
 
   CashPlayer copyWith({
     String? id,
@@ -60,6 +101,9 @@ class CashSessionSettings {
     this.currency = '',
     required this.maxPlayers,
     this.rakePct = 0,
+    this.chipValue = 1,
+    this.trackSettlement = true,
+    this.chipSetId,
   });
 
   final String name;
@@ -72,6 +116,16 @@ class CashSessionSettings {
   final String currency;
   final int maxPlayers;
   final double rakePct;
+
+  /// What one chip unit is worth in money, per session (D1): a chip marked 25
+  /// is worth 25 x [chipValue]. Every stack x this = money.
+  final double chipValue;
+
+  /// D1 "Track settlement": auto-calculate who owes whom at the end.
+  final bool trackSettlement;
+
+  /// The chip set proposed for buy-in stacks; null = the default set.
+  final String? chipSetId;
 }
 
 /// A running / completed cash game.
@@ -82,6 +136,7 @@ class CashSession {
     this.isCompleted = false,
     required this.startTime,
     required this.players,
+    this.transactions = const [],
     this.unresolvedNote,
   });
 
@@ -90,9 +145,11 @@ class CashSession {
   final bool isCompleted;
   final DateTime startTime;
   final List<CashPlayer> players;
+  final List<CashTransaction> transactions;
   final String? unresolvedNote;
 
-  double get totalInPlay => players.fold(0, (sum, p) => sum + p.stack);
+  double get totalInPlay =>
+      players.where((p) => !p.hasCashedOut).fold(0, (sum, p) => sum + p.stack);
 
   double get totalBuyIns => players.fold(0, (sum, p) => sum + p.totalBuyIns);
 
@@ -107,6 +164,7 @@ class CashSession {
   CashSession copyWith({
     bool? isCompleted,
     List<CashPlayer>? players,
+    List<CashTransaction>? transactions,
     String? unresolvedNote,
   }) {
     return CashSession(
@@ -115,6 +173,7 @@ class CashSession {
       isCompleted: isCompleted ?? this.isCompleted,
       startTime: startTime,
       players: players ?? this.players,
+      transactions: transactions ?? this.transactions,
       unresolvedNote: unresolvedNote ?? this.unresolvedNote,
     );
   }

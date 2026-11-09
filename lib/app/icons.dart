@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 /// Map of group icon names to Material Icons.
 /// Used by sidebar, drawer, and group creation picker.
 const Map<String, IconData> groupIconMap = {
-  'Spade': Icons.casino,
+  'Spade': Icons.spa,
   'Heart': Icons.favorite,
-  'Club': Icons.sports_baseball,
+  'Club': Icons.filter_vintage,
   'Diamond': Icons.diamond,
   'Card': Icons.style,
   'Dice': Icons.casino_outlined,

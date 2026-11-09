@@ -15,7 +15,7 @@ enum Rsvp {
       case Rsvp.maybe:
         return 'Maybe';
       case Rsvp.cant:
-        return "Can't Come";
+        return "Can't come";
       case Rsvp.goingPlus1:
         return 'Going +1';
       case Rsvp.goingPlus2:
@@ -27,7 +27,12 @@ enum Rsvp {
     }
   }
 
-  bool get isGoing => this == Rsvp.going || label.startsWith('Going +');
+  bool get isGoing =>
+      this == Rsvp.going ||
+      this == Rsvp.goingPlus1 ||
+      this == Rsvp.goingPlus2 ||
+      this == Rsvp.goingPlus3 ||
+      this == Rsvp.goingPlus4;
 
   int get guestCount {
     switch (this) {
@@ -45,6 +50,15 @@ enum Rsvp {
   }
 }
 
+/// Player lifecycle status (Spec §E3 / §E4).
+enum PlayerStatus {
+  active,
+  paused,
+  out,
+  removed,
+  noShow,
+}
+
 /// A player (member or guest) registered against a game.
 class Player {
   const Player({
@@ -55,9 +69,15 @@ class Player {
     this.guestSlot,
     this.rsvp,
     required this.checkedIn,
+    this.noShow = false,
     required this.confirmed,
     required this.eliminated,
     this.eliminationPos,
+    this.eliminatedAtLevel,
+    this.lowestStackBB,
+    this.stack,
+    this.earlyArrivalBonusEligible = false,
+    this.earlyArrivalBonusChips,
     required this.rebuys,
     this.reEntries = 0,
     required this.hasAddOn,
@@ -74,9 +94,43 @@ class Player {
   final int? guestSlot;
   final Rsvp? rsvp;
   final bool checkedIn;
+  final bool noShow;
   final bool confirmed;
   final bool eliminated;
   final int? eliminationPos;
+  final int? eliminatedAtLevel;
+
+  /// §3 / §34a. The lowest this player's stack ever fell to, measured in big
+  /// blinds — the input to the "biggest comeback" award.
+  ///
+  /// Updated in [AppProviderPlayers.eliminatePlayer] whenever a survivor's
+  /// [stack] is known and has posted a new personal low, in whatever unit
+  /// [stack] itself is chip counts, converted to BB at the current level. Null
+  /// until the host has entered a stack for this player at least once — a
+  /// missing sample must not read as "never went low," so the recap only
+  /// ranks players who actually have one.
+  final int? lowestStackBB;
+
+  /// The host's last manually entered chip count for this player, or null if
+  /// never entered. The app has no automated chip counting, so this is
+  /// necessarily a spot-check, not a continuous series — updated whenever the
+  /// host bothers to look, most usefully right before an elimination so
+  /// [lowestStackBB] has something fresh to sample.
+  final int? stack;
+
+  /// §25.1a. Set at check-in when [GameSettings.earlyArrivalBonusEnabled] is
+  /// on and this player checked in at least
+  /// [GameSettings.effectiveEarlyArrivalCutoffMins] before the scheduled
+  /// start. Eligibility, not the grant itself — the bonus chip count cannot
+  /// be computed until the starting stack is final, which happens at Start,
+  /// not at check-in (see [earlyArrivalBonusChips]).
+  final bool earlyArrivalBonusEligible;
+
+  /// §25.1a. The actual chip bonus granted at Start, or null before then / if
+  /// never eligible. Computed once, from the FINAL starting stack — the
+  /// number the host hands this player over the printed stack.
+  final int? earlyArrivalBonusChips;
+
   final int rebuys;
 
   /// Number of re-entries taken (checklist 12-046) — recorded separately from
@@ -89,15 +143,32 @@ class Player {
   final int seat;
   final bool active;
 
+  /// Player lifecycle status (Spec §E3 / §E4).
+  PlayerStatus get status {
+    if (noShow) return PlayerStatus.noShow;
+    if (eliminated) return PlayerStatus.out;
+    if (!active) return PlayerStatus.paused;
+    return PlayerStatus.active;
+  }
+
   Player copyWith({
     String? name,
     String? inviterId,
     Rsvp? rsvp,
     bool? checkedIn,
+    bool? noShow,
+    PlayerStatus? status,
     bool? confirmed,
     bool? eliminated,
     int? eliminationPos,
     bool clearEliminationPos = false,
+    int? eliminatedAtLevel,
+    bool clearEliminatedAtLevel = false,
+    int? lowestStackBB,
+    int? stack,
+    bool clearStack = false,
+    bool? earlyArrivalBonusEligible,
+    int? earlyArrivalBonusChips,
     int? rebuys,
     int? reEntries,
     bool? hasAddOn,
@@ -106,6 +177,16 @@ class Player {
     int? seat,
     bool? active,
   }) {
+    final effectiveNoShow =
+        status == PlayerStatus.noShow ? true : (noShow ?? this.noShow);
+    final effectiveEliminated =
+        status == PlayerStatus.out ? true : (eliminated ?? this.eliminated);
+    final effectiveActive = status == PlayerStatus.noShow ||
+            status == PlayerStatus.paused ||
+            status == PlayerStatus.out ||
+            effectiveEliminated
+        ? false
+        : (status == PlayerStatus.active ? true : (active ?? this.active));
     return Player(
       id: id,
       name: name ?? this.name,
@@ -114,17 +195,26 @@ class Player {
       guestSlot: guestSlot,
       rsvp: rsvp ?? this.rsvp,
       checkedIn: checkedIn ?? this.checkedIn,
+      noShow: effectiveNoShow,
       confirmed: confirmed ?? this.confirmed,
-      eliminated: eliminated ?? this.eliminated,
+      eliminated: effectiveEliminated,
       eliminationPos:
           clearEliminationPos ? null : eliminationPos ?? this.eliminationPos,
+      eliminatedAtLevel:
+          clearEliminatedAtLevel ? null : eliminatedAtLevel ?? this.eliminatedAtLevel,
+      lowestStackBB: lowestStackBB ?? this.lowestStackBB,
+      stack: clearStack ? null : stack ?? this.stack,
+      earlyArrivalBonusEligible:
+          earlyArrivalBonusEligible ?? this.earlyArrivalBonusEligible,
+      earlyArrivalBonusChips:
+          earlyArrivalBonusChips ?? this.earlyArrivalBonusChips,
       rebuys: rebuys ?? this.rebuys,
       reEntries: reEntries ?? this.reEntries,
       hasAddOn: hasAddOn ?? this.hasAddOn,
       knockouts: knockouts ?? this.knockouts,
       table: table ?? this.table,
       seat: seat ?? this.seat,
-      active: active ?? this.active,
+      active: effectiveActive,
     );
   }
 
@@ -137,9 +227,15 @@ class Player {
       guestSlot: guestSlot,
       rsvp: null,
       checkedIn: checkedIn,
+      noShow: noShow,
       confirmed: confirmed,
       eliminated: eliminated,
       eliminationPos: eliminationPos,
+      eliminatedAtLevel: eliminatedAtLevel,
+      lowestStackBB: lowestStackBB,
+      stack: stack,
+      earlyArrivalBonusEligible: earlyArrivalBonusEligible,
+      earlyArrivalBonusChips: earlyArrivalBonusChips,
       rebuys: rebuys,
       reEntries: reEntries,
       hasAddOn: hasAddOn,
@@ -192,6 +288,34 @@ class ChatMessage {
       pinned: pinned,
       gameId: gameId,
     );
+  }
+
+  /// §E10 (3) "Moderation", item 3: "**Block {name}** hides their messages
+  /// and polls for the blocker **everywhere**". The hiding is a read-side
+  /// filter on the blocker's own list — nothing is deleted, the rule set is
+  /// untouched and every other member still reads the message, so this is the
+  /// only place the block list touches messages.
+  /// A blank author id is never hidden even if the set somehow contains one:
+  /// an authorless message is a system card (published game, edit notice) and
+  /// `AppUser.isBlocked` already refuses to put `''` on a block list. Both
+  /// sides agree, so a hand-edited document cannot silently hide every system
+  /// card in the chat.
+  static bool isVisibleTo(ChatMessage m, Set<String> blockedUserIds) =>
+      m.authorId.isEmpty || !blockedUserIds.contains(m.authorId);
+
+  /// [messages] with every blocked author's messages removed, order untouched.
+  ///
+  /// Deliberately NOT a mutation: the underlying list still holds the muted
+  /// messages, so unblocking puts the whole conversation back in place without
+  /// a refetch and without a gap in the ordering.
+  static List<ChatMessage> visibleTo(
+    Iterable<ChatMessage> messages,
+    Set<String> blockedUserIds,
+  ) {
+    if (blockedUserIds.isEmpty) return messages.toList();
+    return messages
+        .where((m) => isVisibleTo(m, blockedUserIds))
+        .toList(growable: false);
   }
 }
 
@@ -268,7 +392,9 @@ class Poll {
     final counts = <String, int>{for (final o in options) o: 0};
     for (final chosen in votes.values) {
       for (final c in chosen) {
-        counts[c] = (counts[c] ?? 0) + 1;
+        if (counts.containsKey(c)) {
+          counts[c] = counts[c]! + 1;
+        }
       }
     }
     return counts;

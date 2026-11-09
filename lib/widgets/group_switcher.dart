@@ -10,6 +10,74 @@ import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
 import 'create_group_dialog.dart';
 
+/// The selected group in shared app chrome.
+///
+/// The entire row is one accessible switch action. Its name yields before the
+/// icon and dropdown affordance, keeping the target at least 44 px tall even
+/// for long group names on a 320 px viewport.
+class CurrentGroupChip extends StatelessWidget {
+  const CurrentGroupChip({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final group = context.select<AppProvider, ({String name, String icon})>(
+      (app) => (name: app.currentGroup.name, icon: app.currentGroup.icon),
+    );
+
+    return Semantics(
+      label: 'Switch group, ${group.name}',
+      button: true,
+      container: true,
+      child: ExcludeSemantics(
+        child: Material(
+          color: AppColors.muted.withValues(alpha: 0.72),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            side: BorderSide(color: AppColors.border),
+          ),
+          child: InkWell(
+            onTap: () => showGroupSwitcher(context),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                child: Row(
+                  children: [
+                    Icon(
+                      groupIconMap[group.icon] ?? Icons.shield_outlined,
+                      color: AppColors.icon,
+                      size: 18,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        group.name,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.mutedForeground,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Opens a bottom sheet that lists every group the user belongs to and
 /// switches the active group (or creates a new one) on selection.
 ///
@@ -39,9 +107,7 @@ void showGroupSwitcher(BuildContext context) {
             ),
             child: Text(
               'Switch group',
-              style: AppTypography.bodyLg.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTypography.bodyLg.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
           Flexible(
@@ -61,10 +127,9 @@ void showGroupSwitcher(BuildContext context) {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.bodySm.copyWith(
-                        fontWeight:
-                            group.id == currentId
-                                ? FontWeight.w600
-                                : FontWeight.w400,
+                        fontWeight: group.id == currentId
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                       ),
                     ),
                     subtitle: Text(
@@ -73,18 +138,17 @@ void showGroupSwitcher(BuildContext context) {
                         color: AppColors.mutedForeground,
                       ),
                     ),
-                    trailing:
-                        group.id == currentId
-                            ? Icon(
-                                Icons.check_circle,
-                                color: AppColors.primary,
-                                size: 20,
-                              )
-                            : Icon(
-                                Icons.chevron_right,
-                                color: AppColors.mutedForeground,
-                                size: 18,
-                              ),
+                    trailing: group.id == currentId
+                        ? Icon(
+                            Icons.check_circle,
+                            color: AppColors.primary,
+                            size: 20,
+                          )
+                        : Icon(
+                            Icons.chevron_right,
+                            color: AppColors.mutedForeground,
+                            size: 18,
+                          ),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       if (group.id != currentId) {
@@ -107,7 +171,7 @@ void showGroupSwitcher(BuildContext context) {
             title: Text(
               'New group',
               style: AppTypography.bodySm.copyWith(
-                color: AppColors.primary,
+                color: AppColors.primaryText,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -121,101 +185,4 @@ void showGroupSwitcher(BuildContext context) {
       ),
     ),
   );
-}
-
-/// Persistent group context bar shown at the top of every group-level screen.
-///
-/// Makes the "which group am I in" question answerable at a glance and lets
-/// the user switch groups without leaving the current screen (IA §1 / §12).
-class GroupContextHeader extends StatelessWidget {
-  const GroupContextHeader({super.key, this.trailing, this.title});
-
-  /// Optional widget placed to the right of the pill (e.g. an action).
-  final Widget? trailing;
-
-  /// Optional heading displayed above the pill (e.g. "History"). When null
-  /// only the pill row is rendered.
-  final String? title;
-
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    final group = app.currentGroup;
-
-    final pill = InkWell(
-      onTap: () => showGroupSwitcher(context),
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: 6,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.secondary,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              groupIconMap[group.icon] ?? Icons.shield_outlined,
-              size: 16,
-              color: AppColors.primary,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Text(
-              app.hasCurrentGroup ? group.name : 'No group selected',
-              style: AppTypography.bodySm.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            Icon(
-              Icons.arrow_drop_down,
-              color: AppColors.mutedForeground,
-              size: 18,
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (title != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          pill,
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            title!,
-            style: AppTypography.display(
-              size: AppFontSizes.xxxl,
-              weight: FontWeight.w700,
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Row(
-      children: [
-        pill,
-        if (trailing != null) ...[
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(child: trailing!),
-        ] else if (app.hasCurrentGroup) ...[
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              '${group.members.length} member${group.members.length == 1 ? '' : 's'}',
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
 }

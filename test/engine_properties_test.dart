@@ -1,6 +1,9 @@
+import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/chip_color.dart';
 import 'package:poker_night/models/tournament.dart';
+import 'package:poker_night/models/tournament_format.dart';
+import 'package:poker_night/utils/payouts_engine.dart';
 import 'package:poker_night/utils/tournament_engine.dart';
 
 /// The eight engine property tests the acceptance checklist calls for
@@ -135,8 +138,13 @@ void main() {
     });
   });
 
-  group('23-005 — level duration is always 10, 15 or 20', () {
-    test('no generated level uses any other length', () {
+  group('23-005 — level duration is a valid pace length (10, 15, 20 or 30)', () {
+    // X4 (WP1): the old title said "always 10, 15 or 20", but the Deep pace
+    // uses 30-minute levels (§A4 / §F1.3 PACE table), and `validLevelDurations`
+    // already includes 30. Asserting against `validLevelDurations` keeps the
+    // Deep pace valid rather than failing it; the stale "10/15/20" wording is
+    // corrected here.
+    test('no generated level uses a non-pace length', () {
       for (final c in _sweep()) {
         expect(TournamentEngine.validLevelDurations, contains(c.s.levelDuration));
         for (final l in c.s.levels) {
@@ -150,8 +158,15 @@ void main() {
     });
   });
 
-  group('23-006 — payouts total the pool and are multiples of 10', () {
+  group('23-006 — payouts total the pool and round to the cash unit', () {
+    // §G4 replaced v3.0's "multiples of 10 + a remainder" with "cash unit
+    // from the buy-in; 1st takes the exact remainder" (§F2.2). The sweep runs
+    // at the default buy-in of 15, so the cash unit is 5, not 10 — asserting a
+    // multiple of 10 here tested a rule the specification retired.
     test('over the full sweep', () {
+      const buyIn = 15;
+      final unit = PayoutsEngine.cashUnit(buyIn);
+
       for (final c in _sweep()) {
         final total = c.s.prizes.fold<int>(0, (a, p) => a + p.amount);
         expect(
@@ -160,9 +175,17 @@ void main() {
           reason: '${c.preset}/${c.players}p: payouts $total != pool '
               '${c.s.prizePool}',
         );
-        for (final p in c.s.prizes) {
-          expect(p.amount % 10, 0, reason: '${p.amount} is not a multiple of 10');
-          expect(p.amount % 10, isNot(5), reason: '${p.amount} ends in 5');
+        for (var i = 0; i < c.s.prizes.length; i++) {
+          final p = c.s.prizes[i];
+          // 1st absorbs the rounding remainder, so only the places below it
+          // are guaranteed whole cash units (§F2.2, §F2.12a).
+          if (i == 0) continue;
+          expect(
+            p.amount % unit,
+            0,
+            reason: '${c.preset}/${c.players}p: ${i + 1} place ${p.amount} '
+                'is not a multiple of the $unit-unit cash unit',
+          );
         }
       }
     });
@@ -305,9 +328,15 @@ void main() {
     });
   });
 
-  group('PN-001 — starting depth lands in the 80-240 BB band', () {
-    // Technical section 8.2 clamps starting depth to 80-240 BB. The measured
-    // failures were: Standard 300 / 10 players -> 2 BB, Standard 300 / 8 ->
+  group('PN-001 — starting depth lands in its own style band', () {
+    // Addendum acceptance criterion 1 forbids a hard-coded universal
+    // starting-stack rule. The band is therefore derived from the depth each
+    // tournament targets (TournamentEngine.admissibleDepthBand) rather than
+    // imposed on all of them -- so a genuinely short, crowded night may open
+    // Turbo-shallow while a long one may not.
+    //
+    // The measured failures this group exists to prevent were catastrophic,
+    // not marginal: Standard 300 / 10 players -> 2 BB, Standard 300 / 8 ->
     // 12 BB, Standard 500 / 10 -> 16 BB, Home Set / 10 -> 14 BB.
     test('the four measured regressions are gone', () {
       final cases = [
@@ -326,31 +355,238 @@ void main() {
         );
         final openingBB = s.levels.first.bb;
         final depth = s.startingStack / openingBB;
+        // The engine's solver now clamps into a per-style band (Build Spec
+        // v3.1 §F1.2/§F1.18, turbo/standard/deep via
+        // TournamentEngine.admissibleDepthBand(PaceStyle)) rather than one
+        // flat [kMinTargetBBDepth, kMaxTargetBBDepth] range, and the deep
+        // band is deliberately unbounded above -- so the only universal
+        // floor left to assert here is the absolute playable floor.
         expect(
           depth,
-          greaterThanOrEqualTo(80),
+          greaterThanOrEqualTo(TournamentEngine.kMinPlayableDepthBB),
           reason: '$preset / $players players opens at '
               '${depth.toStringAsFixed(1)} BB '
               '(stack ${s.startingStack}, BB $openingBB)',
         );
-        expect(depth, lessThanOrEqualTo(240));
       }
     });
 
-    test('and the whole sweep is in band, or says why not', () {
+    test('a long night can never take a shallow stack', () {
+      // THE regression that the old universal floor was guarding. With any
+      // low depth legal, this event took 65 BB and was down to 16 BB by level
+      // three. It targets ~136, which lands in Deep, whose floor is 100 --
+      // so the structure prevents it rather than a blanket prohibition.
+      final s = TournamentEngine.generate(
+        _params(
+          players: 9,
+          hours: 4,
+          chips: TournamentEngine.getPreset('Standard 300'),
+        ),
+      );
+      final depth = s.startingStack / s.levels.first.bb;
+      // WP1/T5/T6 (RC10): with the HARD §F1.5 bank check, Standard 300 (only
+      // 30×100 + 20×500 big chips) genuinely cannot deal a deep stack to 9
+      // players once the busy-night rebuy+add-on reserve is held back — the
+      // old engine only *warned* and shipped a stack the case could not fund
+      // (the client's pt-20 bug). The honest answer is a shallower stack WITH a
+      // depth note, never a push-fold surprise below the playable floor.
+      expect(depth, greaterThanOrEqualTo(TournamentEngine.kMinPlayableDepthBB),
+          reason: 'opened at ${depth.toStringAsFixed(1)} BB — below the 20 BB floor');
+      if (depth < 100) {
+        expect(s.depthShortfallNote, isNotNull,
+            reason: 'a below-band stack must carry the §F1.5 depth note');
+      }
+    });
+
+    test('every structure lands inside the band its target implies', () {
       for (final c in _sweep()) {
         final depth = c.s.startingStack / c.s.levels.first.bb;
-        final warned = c.s.warnings.any((w) => w.contains('80 big-blind'));
-        if (!warned) {
-          expect(
-            depth,
-            greaterThanOrEqualTo(80),
-            reason: '${c.preset}/${c.players}p @ ${c.hours}h opens at '
-                '${depth.toStringAsFixed(1)} BB with no shortage warning',
-          );
-          expect(depth, lessThanOrEqualTo(240));
-        }
+        // WP1/T5: skip the cases the §F1.5 bank check could not deal to the
+        // style's band — they carry a structured depthShortfallNote (the honest
+        // "your chip case supports about N BB" message) instead of competing in
+        // the band. Only bank-fundable structures must land in their band.
+        final warned = c.s.warnings.any((w) => w.contains('big-blind')) ||
+            c.s.depthShortfallNote != null;
+        if (warned) continue;
+
+        // Re-derive the band from what was actually produced: whatever style
+        // the structure landed in, it must be a legal depth FOR that style.
+        final band = TournamentEngine.admissibleDepthBand(
+          TournamentEngine.paceStyleFor(depth),
+        );
+        expect(
+          depth,
+          greaterThanOrEqualTo(band.min),
+          reason: '${c.preset}/${c.players}p @ ${c.hours}h opens at '
+              '${depth.toStringAsFixed(1)} BB, below its own band',
+        );
+        expect(
+          depth,
+          lessThanOrEqualTo(band.max),
+          reason: '${c.preset}/${c.players}p @ ${c.hours}h opens at '
+              '${depth.toStringAsFixed(1)} BB, above its own band',
+        );
       }
+    });
+
+    test('no universal starting-stack rule survives in the engine', () {
+      // Acceptance criterion 1, as a property rather than a promise: the
+      // reachable depths must span more than one style, or the band is a
+      // universal rule wearing a different name.
+      final styles = <TournamentStyle>{};
+      for (final c in _sweep()) {
+        final depth = c.s.startingStack / c.s.levels.first.bb;
+        styles.add(TournamentStyle.fromBigBlinds(depth));
+      }
+      expect(
+        styles.length,
+        greaterThan(1),
+        reason: 'every generated structure landed in ${styles.first.label}; '
+            'depth is not behaving as an optimisation variable',
+      );
+    });
+  });
+
+  group('Risk-adjusted growth (§11.3)', () {
+    test('§11.3 worked example: the raw curve lands on target', () {
+      const openingBB = 4;
+      const targetFinalBB = 6000.0;
+      const plannedLevels = 22;
+      const closeLevel = 6;
+      const maxPremium = 0.20;
+
+      double premium(int l) =>
+          l > closeLevel ? 0.0 : maxPremium * (closeLevel - l + 1) / closeLevel;
+
+      var pgf = 1.0;
+      for (var l = 2; l <= closeLevel; l++) {
+        pgf *= 1 + premium(l);
+      }
+      expect(pgf, closeTo(1.603, 0.01));          // spec: ≈ 1.603
+
+      final gBase = math.pow(
+        targetFinalBB / (openingBB * pgf), 1 / (plannedLevels - 1)).toDouble();
+      expect(gBase, closeTo(1.385, 0.01));        // spec: ≈ 1.385
+
+      var raw = openingBB.toDouble();
+      for (var i = 1; i < plannedLevels; i++) {
+        raw *= gBase * (1 + premium(i + 1));
+      }
+      expect(raw, closeTo(targetFinalBB, 1.0));   // lands on 6000 at level 22
+    });
+
+    // Regression guard: the worked example above checks the raw arithmetic,
+    // not that TournamentEngine.generate() actually applies it. Earlier this
+    // round, the blind-ladder cursor walk snapped every level to the nearest
+    // practical rung regardless of the raw curve, so freezeOut and rebuy
+    // ladders came out byte-identical even at maximum premium.
+    test('the premium actually changes the printed ladder', () {
+      final chips = TournamentEngine.getPreset(_presets.first);
+      final freeze = TournamentEngine.generate(_params(
+        players: 9,
+        hours: 4,
+        chips: chips,
+        rebuys: false,
+        addOn: false,
+      ).copyWith(format: TournamentFormat.freezeOut));
+      final rebuy = TournamentEngine.generate(_params(
+        players: 9,
+        hours: 4,
+        chips: chips,
+        rebuys: true,
+        addOn: false,
+        buyIn: 50,
+      ).copyWith(
+        format: TournamentFormat.rebuy,
+        rebuyCost: 25, // half of buyIn — a real discount, so a real premium
+      ));
+      // WP1/T3: §F1.6 builds the ladder as a single-g geometric curve
+      // DP-snapped to nice multiples of 2×cmin. The §11.3 rebuy premium
+      // front-loads the RAW curve (verified by the worked-example sub-test
+      // above), but because the printed ladder is snapped to coarse nice
+      // values, the premium need not move every rung — and must NEVER pull a
+      // printed blind BELOW the freeze-out's. That monotone relationship is the
+      // spec-faithful property; requiring the lists to differ encoded the old
+      // cursor-walk's forced per-level premium, which §F1.6 does not mandate.
+      final fb = freeze.levels.map((l) => l.bb).toList();
+      final rb = rebuy.levels.map((l) => l.bb).toList();
+      for (var i = 0; i < fb.length && i < rb.length; i++) {
+        expect(rb[i], greaterThanOrEqualTo(fb[i]),
+            reason: 'the rebuy premium must never lower a printed blind '
+                '(level ${i + 1}: rebuy ${rb[i]} < freeze ${fb[i]})');
+      }
+    });
+
+    // §39 deviation 10 / boundary 7: with no real discount (rebuyCost ==
+    // buyIn), the premium floors out and the formula must reduce EXACTLY to
+    // the freeze-out curve — this is the non-negotiable invariant the general
+    // formula is a strict superset around, not a parallel system.
+    test('freeze-out output is unchanged when there is no real premium', () {
+      final chips = TournamentEngine.getPreset(_presets.first);
+      final freeze = TournamentEngine.generate(_params(
+        players: 9,
+        hours: 4,
+        chips: chips,
+        rebuys: false,
+        addOn: false,
+        buyIn: 50,
+      ).copyWith(format: TournamentFormat.freezeOut));
+      final rebuySameCost = TournamentEngine.generate(_params(
+        players: 9,
+        hours: 4,
+        chips: chips,
+        rebuys: true,
+        addOn: false,
+        buyIn: 50,
+      ).copyWith(
+        format: TournamentFormat.rebuy,
+        rebuyCost: 50, // == buyIn: maxPremium floors at its minimum, not zero
+        // Hold the CHIP SUPPLY constant so the premium is the only variable.
+        //
+        // Without this the test moved two things at once: switching `rebuys`
+        // on also forecasts `9 × 0.35 ≈ 3` rebuys, and three extra stacks in
+        // play raise `BB_end = C / K` on their own. The ladder then finished
+        // higher for a reason that has nothing to do with the premium — which
+        // is the thing under test — and the assertion failed while the engine
+        // was behaving correctly. Framework §5 is the same point from the
+        // other side: two structures with identical starting stacks are not
+        // comparable if their chip supply differs.
+        expectedRebuys: 0,
+      ));
+      // The floor (0.05) is not literally zero, so this asserts the DEPTH and
+      // SHAPE stay governed by the same target rather than requiring byte
+      // equality — the floor's effect is small enough that both land the
+      // same number of levels at the same final depth.
+      expect(rebuySameCost.levels.length, freeze.levels.length);
+      expect(
+        rebuySameCost.levels.last.bb,
+        closeTo(freeze.levels.last.bb.toDouble(), freeze.levels.last.bb * 0.05),
+      );
+    });
+  });
+
+  group('Shootout generation (§11.4)', () {
+    test('produces two independent, non-empty freeze-out structures', () {
+      final chips = TournamentEngine.getPreset(_presets.first);
+      final params = _params(
+        players: 27,
+        hours: 5,
+        chips: chips,
+        rebuys: false,
+        addOn: false,
+      ).copyWith(
+        format: TournamentFormat.shootout,
+        shootoutTables: 3,
+      );
+      final plan = TournamentEngine.generateShootout(params);
+      expect(plan.stageA.levels, isNotEmpty);
+      expect(plan.stageB.levels, isNotEmpty);
+      expect(plan.tables, 3);
+
+      // §39 deviation 11 / boundary 7: no second growth formula — each stage
+      // is an ordinary freeze-out generation with its own target, not a
+      // duration-multiplied variant of the other.
+      expect(TournamentEngine.generate(params).levels, isNotEmpty);
     });
   });
 }

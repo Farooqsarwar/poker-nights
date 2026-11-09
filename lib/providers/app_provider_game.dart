@@ -38,13 +38,28 @@ extension AppProviderGame on AppProvider {
     final game = _currentGame;
     if (game == null) return;
     final stack = _undoStack.whereType<LiveGame>().toList();
-    _repo.saveUndoStack(game.groupId, game.id, stack).catchError((Object e) {
-      debugPrint('saveUndoStack failed: $e');
-    });
+    // The undo stack is a convenience layered on top of an action, so losing
+    // it is worth a log line and never a failed tap. `.catchError` alone only
+    // sees failures that arrive as a Future error, though - reaching
+    // `FirebaseFirestore.instance` throws SYNCHRONOUSLY when Firebase has not
+    // been initialised, before any Future exists, so that throw used to escape
+    // this method and abort the action that had already been applied
+    // in memory. Guard the call, not just its result.
+    try {
+      _repo.saveUndoStack(game.groupId, game.id, stack).catchError((Object e) {
+        debugPrint('saveUndoStack failed: $e');
+      });
+    } catch (e) {
+      debugPrint('saveUndoStack unavailable: $e');
+    }
   }
 
   void setCurrentGame(LiveGame game) {
     _clearUndoStack();
+    // §10.1's accept/decline is a decision about THIS tournament. Carrying it
+    // into the next game would either suppress the prompt or claim an
+    // adjustment had been applied that never touched this structure.
+    _resetPaceProposalState();
     // Re-apply the member's not-yet-acked RSVP / check-in so navigating into a
     // game never shows a stale bundle copy that drops a pending selection.
     _currentGame = _withPendingCheckInOverlay(_withOwnRsvpOverlay(game));
@@ -81,6 +96,15 @@ extension AppProviderGame on AppProvider {
                 addOnRequests: privateData['addOnRequests'] is List
                     ? List<String>.from(privateData['addOnRequests'] as List)
                     : _currentGame!.addOnRequests,
+                addOnDeclined: privateData['addOnDeclined'] is List
+                    ? List<String>.from(privateData['addOnDeclined'] as List)
+                    : _currentGame!.addOnDeclined,
+                payments: privateData['payments'] is List
+                    ? [
+                        for (final e in privateData['payments'] as List)
+                          paymentRecordFromMap(Map<String, dynamic>.from(e as Map)),
+                      ]
+                    : _currentGame!.payments,
                 structure: _currentGame!.structure.copyWith(
                   prizes: privateData['prizes'] != null
                       ? (privateData['prizes'] as List)
@@ -158,6 +182,36 @@ extension AppProviderGame on AppProvider {
     return _currentGame?.id == id ? _currentGame : null;
   }
 
+  /// The uids that get to OPERATE this tournament, derived from the group.
+  ///
+  /// This is the client-side mirror of the specification's `coHostUids` on the
+  /// game document — "copied from the group's co-hosts at posting" (E4) — under
+  /// the name this codebase and `firestore.rules` use for it, `organizerIds`.
+  ///
+  /// The group roster stays the ONLY source of truth: this is a derived copy,
+  /// recomputed at the points below, never stored or edited anywhere else. The
+  /// alternative (letting a screen append to the game's own list) is a second
+  /// list to keep in step with the roster, and it is the one the rules already
+  /// forbid: `organizerWriteSafe` pins `organizerIds` unchanged on a
+  /// non-admin write, so a game document's list can only ever be written whole
+  /// by the host.
+  ///
+  /// Co-hosts only, never the host. The owner already resolves to `Actor.host`
+  /// first in `Permissions.actorFor`, so listing them buys nothing and would
+  /// make the rules treat the host as one of their own co-hosts.
+  ///
+  /// Why this matters: `canRunCurrentGame` is the gate on `_isGameAuthority`,
+  /// i.e. on who may write the whole game document, and `canRunCurrentGame` is
+  /// `Permissions.can(runThisTournament, currentActor)`. A co-host is
+  /// `isAdmin: false`, so before this list existed `actorFor` fell through to
+  /// `Actor.member`, `runThisTournament` was false, and a co-host was never the
+  /// single writer for a game whose clock they had taken over — which is exactly
+  /// what §E9 grants them.
+  List<String> _groupCoOrganizerIds() => [
+        for (final member in _currentGroup.members)
+          if (member.isCoAdmin) member.id,
+      ];
+
   LiveGame createGame(GameSettings settings) {
     // Client flow: creating an event does NOT generate the structure. The AI
     // finalises stacks/blinds/levels when the Admin taps "Generate Final
@@ -208,6 +262,9 @@ extension AppProviderGame on AppProvider {
       status: LiveGameStatus.draft,
       publicCode: Formatters.generateCode(),
       tvCode: Formatters.generateCode(),
+      // Seeded here rather than at publish so a night that is started without
+      // ever being published still knows who may run it.
+      organizerIds: _groupCoOrganizerIds(),
       currentLevel: 1,
       timerRunning: false,
       secondsRemaining: structure.levelDuration * 60,
@@ -243,13 +300,15 @@ extension AppProviderGame on AppProvider {
   }
 
   void updateGameStatus(LiveGameStatus status) {
+    if (_currentGame == null || (!isAdmin && !isCoAdmin && !canOperateTheClock)) return;
     _forceClaimEditor();
     final wasPublished = _currentGame?.status == LiveGameStatus.published;
     _currentGame = _currentGame!.copyWith(status: status);
     // Client feedback (07-018): inside the 30-minute window before start the
     // AI refreshes the stacks/blinds/levels estimate from the expected count.
-    if (status == LiveGameStatus.checkin)
+    if (status == LiveGameStatus.checkin) {
       generateFinalStructure(currentGame!.confirmedCount);
+    }
     if (status == LiveGameStatus.checkin && wasPublished) {
       pushNotification(
         AppNotification(
@@ -287,6 +346,7 @@ extension AppProviderGame on AppProvider {
       status: LiveGameStatus.cancelled,
       timerRunning: false,
     );
+    RecoveryService.clearGame();
     final pinnedCard = _currentGroup.chat
         .where((c) => c.pinned && c.gameId == game.id && !c.deleted)
         .firstOrNull;
@@ -319,10 +379,34 @@ extension AppProviderGame on AppProvider {
   /// Publishes the tournament (checklist §4.3): the game opens for RSVP, a
   /// pinned event card is posted to the group chat, every member is notified,
   /// and the published structure is snapshotted for the §12.4 live diff.
-  void publishGame() {
+  ///
+  /// [announce] false is the quick start (C0): the friends are already at the
+  /// table, so nobody is asked to RSVP and nothing is posted to the group chat
+  /// or pushed to members. The game still opens and its join code goes live.
+  void publishGame({bool announce = true}) {
     final game = _currentGame;
     if (game == null || _user == null) return;
     _pushUndo();
+
+    if (!announce) {
+      _currentGame = game.copyWith(
+        status: LiveGameStatus.published,
+        originalLevels: List.of(game.structure.levels),
+        // Re-derived at posting, per E4: a co-host promoted between creating
+        // the event and posting it runs this night.
+        organizerIds: _groupCoOrganizerIds(),
+      );
+      _syncGroupGame();
+      if (_backendUp) {
+        unawaited(_repo.upsertGameCodes(_currentGame!));
+      }
+      addAuditRecord(
+        'publish',
+        'Quick start: ${game.settings.name} created at the table.',
+      );
+      if (!_disposed) notifyListeners();
+      return;
+    }
 
     final anteText = game.settings.anteEnabled
         ? 'Ante: L${game.settings.anteAfterLevel}+'
@@ -353,6 +437,9 @@ extension AppProviderGame on AppProvider {
       status: LiveGameStatus.published,
       chat: [...game.chat, card],
       originalLevels: List.of(game.structure.levels),
+      // Re-derived at posting, per E4: a co-host promoted between creating the
+      // event and posting it runs this night.
+      organizerIds: _groupCoOrganizerIds(),
     );
     _setGroup(
       _currentGroup.copyWith(
@@ -397,21 +484,47 @@ extension AppProviderGame on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  /// Whether two chip inventories are the same tray of physical chips.
+  ///
+  /// [ChipColor] has a value equality, but the lists arrive in whatever order
+  /// the editor left them in, so a plain `==` on the lists would report a
+  /// reordering as a change and regenerate the structure for nothing.
+  bool _sameChipSet(List<ChipColor> a, List<ChipColor> b) {
+    if (a.length != b.length) return false;
+    final sortedA = [...a]..sort((x, y) => x.value - y.value);
+    final sortedB = [...b]..sort((x, y) => x.value - y.value);
+    for (var i = 0; i < sortedA.length; i++) {
+      if (sortedA[i] != sortedB[i]) return false;
+    }
+    return true;
+  }
+
   /// Admin edits an already-created event's details. Records an audit entry,
   /// notifies members, and re-generates the structure when the field change
   /// would affect it (checklist §10.4). RSVP validity is surfaced in the audit.
   void updateEventSettings(GameSettings next, {bool clearRsvps = false}) {
     final game = _currentGame;
-    if (game == null || _user == null) return;
+    if (game == null || _user == null || !isAdmin) return;
     final prev = game.settings;
     if (prev == next) return;
     _pushUndo();
 
     var s = next;
-    // The structure only depends on players, buy-in, duration and ante rules;
-    // cosmetic fields (name/date/time/location/privacy) keep the structure.
+    // The structure only depends on players, buy-in, duration, the chip
+    // inventory and the ante/rebuy rules; cosmetic fields
+    // (name/date/time/location/privacy) keep the structure.
+    //
+    // `chipSet` was missing from this list, so once chips became editable
+    // after publish (User Flow 4.5) a host could change their tray and the
+    // app would keep planning stacks out of chips they no longer had.
     final affectsStructure =
         prev.players != s.players ||
+        !_sameChipSet(prev.chipSet, s.chipSet) ||
+        // Section 8: break minutes are inside the target duration, so adding
+        // or moving one changes how many levels fit.
+        prev.breaks.length != s.breaks.length ||
+        prev.breaks.join() != s.breaks.join() ||
+        prev.expectedPlayersOverride != s.expectedPlayersOverride ||
         prev.buyIn != s.buyIn ||
         prev.durationHours != s.durationHours ||
         prev.anteEnabled != s.anteEnabled ||
@@ -423,6 +536,8 @@ extension AppProviderGame on AppProvider {
         prev.rebuysCloseLevel != s.rebuysCloseLevel ||
         prev.reEntry != s.reEntry ||
         prev.addOn != s.addOn ||
+        prev.rebuyLimit != s.rebuyLimit ||
+        prev.expectedRebuyRate != s.expectedRebuyRate ||
         prev.addOnCloseLevel != s.addOnCloseLevel;
 
     final edits = <String>[];
@@ -433,6 +548,16 @@ extension AppProviderGame on AppProvider {
       edits.add('location ${s.locationPrivate ? '(private) ' : ''}updated');
     }
     if (prev.buyIn != s.buyIn) edits.add('buy-in → ${s.buyIn}');
+    if (!_sameChipSet(prev.chipSet, s.chipSet)) {
+      edits.add('chip set → ${s.chipSetName} (${s.chipSet.length} colours)');
+    }
+    if (prev.expectedPlayersOverride != s.expectedPlayersOverride) {
+      edits.add(
+        s.expectedPlayersOverride == null
+            ? 'expected players → follow RSVPs'
+            : 'expected players → ${s.expectedPlayersOverride}',
+      );
+    }
     if (prev.locationPrivate != s.locationPrivate) {
       edits.add(s.locationPrivate ? 'address hidden' : 'address visible');
     }
@@ -450,7 +575,15 @@ extension AppProviderGame on AppProvider {
       } else {
         var structure = TournamentEngine.generate(
           TournamentParams(
-            players: s.players,
+            // `s.players` is the ROSTER at this point in the lifecycle, not
+            // a confirmed head-count, so an override must replace it outright
+            // rather than being floored by it — otherwise a host planning a
+            // small game inside a large group would silently get the group's
+            // size. `generateFinalStructure` floors by actual check-ins,
+            // which is the only figure an override may not undercut.
+            players: s.expectedPlayersOverride != null
+                ? max(2, s.expectedPlayersOverride!)
+                : s.players,
             durationHours: s.durationHours,
             buyIn: s.buyIn,
             chipSet: s.chipSet,
@@ -463,9 +596,27 @@ extension AppProviderGame on AppProvider {
             anteStyle: s.anteStyle,
             koEnabled: s.koEnabled,
             koAmount: s.koAmount,
-            organizerPct: s.organizerPct,
+            organizerPct: s.effectiveOrganizerPct,
             rebuyCost: s.rebuyCost,
             addOnCost: s.addOnCost,
+            breaks: s.breaks,
+            expectedRebuys: s.expectedRebuys,
+            rebuyLimit: s.rebuyLimit,
+            expectedRebuyRate: s.expectedRebuyRate,
+            expectedReEntries: s.expectedReEntries,
+            expectedAddOns: s.expectedAddOns,
+            rebuyChips: s.rebuyChips,
+            reEntryChips: s.reEntryChips,
+            addOnChips: s.addOnChips,
+            levelDurationMins: s.levelDurationMins,
+            pace: s.pace,
+            format: s.format,
+            maxReEntries: s.maxReEntries,
+            shootoutTables: s.shootoutTables,
+            shootoutTableTargetMins: s.shootoutTableTargetMins,
+            earlyArrivalBonusEnabled: s.earlyArrivalBonusEnabled,
+            earlyArrivalCutoffMins: s.earlyArrivalCutoffMins,
+            earlyArrivalBonusPctOverride: s.earlyArrivalBonusPctOverride,
           ),
         );
         // After play starts the starting stacks are frozen (client rule).
@@ -527,6 +678,57 @@ extension AppProviderGame on AppProvider {
     }
     addAnnouncement('Event details updated.', false);
     if (!_disposed) notifyListeners();
+  }
+
+  /// Why the tournament cannot start yet, or null when it can.
+  String? get startBlockedReason {
+    final g = currentGame;
+    if (g == null) return 'No game loaded.';
+    final pending = g.players.where((p) => p.isGuest && !p.confirmed
+        && p.name.trim().isNotEmpty).length;
+    if (pending > 0) return 'Review $pending guest request${pending == 1 ? '' : 's'} first';
+    final checkedIn = g.players.where((p) => p.checkedIn && p.confirmed).length;
+    if (checkedIn < 2) return 'Need at least 2 checked in';
+    if (!g.seatingConfirmed) return 'Confirm seating first';
+    // The structure on the game, if one has been generated, must be one the
+    // chip case can deal. (The authoritative check is repeated in
+    // [startTimer] on the structure regenerated for the final headcount; this
+    // one just keeps the button honest before that.)
+    if (g.structure.isBlocked) return kChipCaseBlockedReason;
+    return null;
+  }
+
+  /// Short label for a start button / hint when the chip case cannot deal the
+  /// night. The full explanation and the fixes live on the feasibility card
+  /// (structure review), so this stays short enough for a button.
+  static const String kChipCaseBlockedReason =
+      'Chip case can’t fund this night — see Structure';
+
+  /// Single start fold: freezes the final checked-in headcount into the
+  /// settings, then begins the level timer. Thin by design — callers decide
+  /// whether the game may start (see [startBlockedReason]).
+  ///
+  /// Returns whether the clock actually started. It can decline even when
+  /// [startBlockedReason] was null, because the structure is regenerated for
+  /// the final headcount inside [startTimer] and may turn out not to be
+  /// dealable; callers must only navigate to the live dashboard on `true`.
+  Future<bool> startTournament() async {
+    final game = currentGame;
+    if (game == null) return false;
+    final checkedInCount =
+        game.players.where((p) => p.checkedIn && p.confirmed).length;
+    updateEventSettings(game.settings.copyWith(players: checkedInCount));
+    // Organizers/co-hosts cannot run updateEventSettings (host-only per E6),
+    // so freeze the headcount locally for them — startTimer regenerates anyway.
+    if (_currentGame != null &&
+        _currentGame!.settings.players != checkedInCount) {
+      _currentGame = _currentGame!
+          .copyWith(settings: _currentGame!.settings.copyWith(players: checkedInCount));
+    }
+    startTimer();
+    final status = _currentGame?.status;
+    return _currentGame?.timerRunning == true &&
+        (status == LiveGameStatus.running || status == LiveGameStatus.onBreak);
   }
 
   /// Reposts the pinned event card after a published-event edit (User Flow
@@ -606,25 +808,153 @@ extension AppProviderGame on AppProvider {
       totalAddOns: addOns,
       effectiveAddOnCost: s.effectiveAddOnCost,
     );
-    final int roundingUnit = TournamentEngine.roundingUnitFor(s.buyIn);
-
-    return TournamentEngine.recalculatePrizes(
-      gross,
-      confirmedCount,
-      s.organizerPct.toDouble(),
+    return PayoutBridge.recalculate(
+      grossEligible: gross,
+      players: confirmedCount,
+      organizerPct: s.effectiveOrganizerPct,
+      buyIn: s.buyIn,
       forcePaidPlaces: s.forcePaidPlaces,
-      roundingUnit: roundingUnit,
+      extraEntries: rebuys + reEntries,
     );
+  }
+
+  /// Closes the add-on window (Addendum 2). Called when the host presses Next
+  /// on the add-on step: everyone who was not given an add-on has declined by
+  /// that point, and the "overtime" badge, if it was showing, goes away.
+  void closeAddOnWindow() {
+    final game = _currentGame;
+    if (game == null || game.addOnWindowClosed) return;
+    _currentGame = game.copyWith(
+      addOnWindowClosed: true,
+      settings: game.settings.copyWith(addOnOvertime: false),
+    );
+    addAuditRecord(
+      'addon_window_closed',
+      game.settings.addOnOvertime
+          ? 'Add-on window (overtime) closed by the host.'
+          : 'Add-on window closed by the host.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Records that a player declined the add-on at the break (A2-1).
+  ///
+  /// A decline is not the same as a take, and before [addOnDeclined] existed
+  /// the two were indistinguishable: a player who said no simply never entered
+  /// the selection set. The overtime close needs to know the difference, so
+  /// this writes the id out and then re-checks whether the window can close
+  /// itself.
+  void declineAddOn(String playerId) {
+    final game = _currentGame;
+    if (game == null || game.addOnDeclined.contains(playerId)) return;
+    _currentGame = game.copyWith(
+      addOnDeclined: [...game.addOnDeclined, playerId],
+    );
+    _maybeCloseAddOnWindowOvertime();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Takes back a decline, returning the player to the un-answered state.
+  ///
+  /// Re-opens a window that had closed itself, because a withdrawn decline
+  /// puts an unanswered player back in the room. This cannot fight the host's
+  /// own Next press: settlement step 2 is only reachable while it is
+  /// unconfirmed, and the screen collapses that step on Next, so no further
+  /// toggle can arrive after a manual close.
+  void undeclineAddOn(String playerId) {
+    final game = _currentGame;
+    if (game == null || !game.addOnDeclined.contains(playerId)) return;
+    _currentGame = game.copyWith(
+      addOnDeclined: game.addOnDeclined.where((id) => id != playerId).toList(),
+      addOnWindowClosed: false,
+      settings: game.settings.copyWith(addOnOvertime: true),
+    );
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Whether the player answered the add-on offer either way.
+  bool hasAnsweredAddOn(String playerId) =>
+      (_currentGame?.players.any((p) => p.id == playerId && p.hasAddOn) ??
+          false) ||
+      (_currentGame?.addOnDeclined.contains(playerId) ?? false);
+
+  /// A2-1's second edge: the window closes itself once every player from
+  /// settlement step 1 has either taken an add-on or declined one.
+  ///
+  /// C6 step 1 is "Who's still in" -- one row per player, In or Busted, and
+  /// "Paused players are already Out". So the set that has to answer is the
+  /// players still in, which is exactly what `activePlayers` means and exactly
+  /// what the step 1 screen itself lists.
+  ///
+  /// This used to walk `game.players`, which is every player who ever entered.
+  /// A busted player can never take or decline an add-on, so that set can never
+  /// be fully answered and the overtime window hung open forever, holding the
+  /// prize pool unlocked -- the precise failure C6 line 2204 is written to
+  /// prevent. Only acts while the window is in overtime: pressing Next stays
+  /// the normal exit, and a window that is merely open with players still to
+  /// ask must not close on them.
+  void _maybeCloseAddOnWindowOvertime() {
+    final game = _currentGame;
+    if (game == null || game.addOnWindowClosed) return;
+    if (!game.settings.addOnOvertime) return;
+    final stillIn = game.activePlayers;
+    if (stillIn.isEmpty) return;
+    if (stillIn.every((p) => hasAnsweredAddOn(p.id))) {
+      _currentGame = game.copyWith(
+        addOnWindowClosed: true,
+        settings: game.settings.copyWith(addOnOvertime: false),
+      );
+      addAuditRecord(
+        'addon_window_closed',
+        'Add-on window (overtime) closed — everyone has answered.',
+      );
+      _syncGroupGame();
+    }
   }
 
   void confirmSettlement() {
     final game = _currentGame;
     if (game == null) return;
     final finalPrizes = previewSettlementPrizes(0);
+
+    // M7: Re-plan remaining levels from real chips if >15% difference from plan
+    final totalRebuys = game.players.fold<int>(0, (s, p) => s + p.rebuys + p.reEntries);
+    final addOnsGranted = game.players.where((p) => p.hasAddOn).length;
+    final actualChips = game.settings.players * game.structure.startingStack +
+        totalRebuys * game.structure.rebuyStack +
+        addOnsGranted * game.structure.addOnStack;
+
+    final updatedStructure = TournamentEngine.replanRemainingLevels(
+      structure: game.structure,
+      actualChips: actualChips,
+      rebuysCloseLevel: game.settings.rebuysCloseLevel,
+      anteEnabled: game.settings.anteEnabled,
+      anteStyle: game.settings.anteStyle,
+      chipSet: savedChipSets.firstOrNull?.chips ?? MockData.defaultChipSet,
+    );
+
+    // DECISION: M7 - Warn when average stack at close is < 30 BB
+    final activeCount = game.activePlayers.length;
+    final avgStack = activeCount > 0 ? actualChips / activeCount : 0.0;
+    final nextLevelIdx = game.settings.rebuysCloseLevel;
+    final bb = (nextLevelIdx < updatedStructure.levels.length)
+        ? updatedStructure.levels[nextLevelIdx].bb
+        : updatedStructure.levels.last.bb;
+    final avgStackBB = bb > 0 ? avgStack / bb : 0.0;
+    if (avgStackBB > 0 && avgStackBB < 30.0) {
+      addAuditRecord(
+        'warning',
+        'Average stack at rebuy close is under 30 BB (\${avgStackBB.toStringAsFixed(1)} BB).',
+      );
+    }
+
     _currentGame = game.copyWith(
       settlementConfirmed: true,
+      addOnWindowClosed: true,
+      settings: game.settings.copyWith(addOnOvertime: false),
       pendingGuests: const [],
-      structure: game.structure.copyWith(
+      structure: updatedStructure.copyWith(
         organizerAmount: finalPrizes.organizerAmount,
         prizePool: finalPrizes.prizePool,
         prizes: finalPrizes.prizes,

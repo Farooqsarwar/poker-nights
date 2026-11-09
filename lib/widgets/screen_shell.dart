@@ -11,10 +11,13 @@ import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
 import '../responsive/responsive.dart';
 import 'glass_styles.dart';
+import 'group_switcher.dart';
 import 'app_avatar.dart';
 import 'app_button.dart';
 import 'bottom_nav.dart';
 import 'brand_lockup.dart';
+import 'connection_banner.dart';
+import 'min_tap_target.dart';
 import 'nav_drawer.dart';
 import 'shell_insets.dart';
 import 'sidebar.dart';
@@ -41,48 +44,168 @@ class ScreenShell extends StatelessWidget {
   final String requiredPath;
 
   /// Routes a guest (no account) may access inside the shell.
-  static const _guestAllowed = {RoutePaths.playerLive, RoutePaths.resultPodium};
+  ///
+  /// C4p (`/t/:id/me`) rides along: a link guest opens their own check-in
+  /// (GuestFlowScreen) in this minimal shell, never the member invitation.
+  static const guestAllowed = {
+    RoutePaths.playerLive,
+    RoutePaths.resultPodium,
+    RoutePaths.invitation,
+    RoutePaths.hostDashboard,
+    RoutePaths.structureReview,
+    RoutePaths.deal,
+    RoutePaths.completeTournament,
+  };
+
+  /// Routes that open for a signed-out visitor (Build Spec C3): the quick
+  /// start creates its own anonymous session, and the invite link previews the
+  /// group before anyone signs in. They draw their own header, so a signed-out
+  /// visitor gets the page with no navigation chrome.
+  static const _openToSignedOut = {RoutePaths.quick, RoutePaths.joinGroup};
+
+  static const _groupContextPaths = {
+    RoutePaths.home,
+    RoutePaths.group,
+    RoutePaths.chat,
+    RoutePaths.members,
+    RoutePaths.polls,
+    RoutePaths.reports,
+    RoutePaths.notifications,
+    RoutePaths.history,
+    RoutePaths.standings,
+    RoutePaths.createTournament,
+    RoutePaths.structureReview,
+    RoutePaths.invitation,
+    RoutePaths.checkIn,
+    RoutePaths.hostDashboard,
+    RoutePaths.playerLive,
+    RoutePaths.rebuySettlement,
+    RoutePaths.finalTable,
+    RoutePaths.completeTournament,
+    RoutePaths.deal,
+    RoutePaths.importResults,
+    RoutePaths.groupSettings,
+    RoutePaths.groupChips,
+    RoutePaths.resultPodium,
+    RoutePaths.cashGame,
+    RoutePaths.cashGameLive,
+  };
+
+  static void _showExitDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        title: Text(
+          'Leave live game?',
+          style: AppTypography.display(
+            size: AppFontSizes.lg,
+            weight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          'Your game will continue running on this device. You can create an account to save your results permanently, or exit.',
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Keep playing'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              GoRouter.of(context).go(RoutePaths.register);
+            },
+            child: const Text('Create account'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              GoRouter.of(context).go(RoutePaths.landing);
+            },
+            child: Text(
+              'Exit to start',
+              style: TextStyle(color: AppColors.destructive),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    final signedIn = app.isAuthenticated;
-    final guestOk = app.hasGuestSession && _guestAllowed.contains(requiredPath);
+    final isRegisteredUser = context.select<AppProvider, bool>(
+      (a) => a.isAuthenticated && !a.isGuest,
+    );
+    final isGuest = context.select<AppProvider, bool>(
+      (a) => a.isGuest || a.hasGuestSession,
+    );
+
+    if (!isRegisteredUser && _openToSignedOut.contains(requiredPath)) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ThemedAppBackground(child: SafeArea(child: child)),
+      );
+    }
+    final guestOk = isGuest && guestAllowed.contains(requiredPath);
+    final showGroupContext = context.select<AppProvider, bool>(
+      (app) => app.hasCurrentGroup && _groupContextPaths.contains(requiredPath),
+    );
 
     // Route guard: block access when the user cannot enter this path.
-    if (!signedIn && !guestOk) {
+    if (!isRegisteredUser && !guestOk) {
       return _Gate(path: requiredPath);
     }
 
-    // Guests get a minimal scaffold: no full nav chrome (every nav button
-    // would be a dead end) but we DO show a top-bar with an exit/back button
-    // so guests are never stranded with no way to leave (audit finding P1).
-    if (!signedIn && guestOk) {
+    // Guests get a minimal scaffold: no member bottom nav, no group drawer,
+    // and no member desktop sidebar (Spec §A2b, §C4).
+    if (!isRegisteredUser && guestOk) {
+      final isDashboard = requiredPath == RoutePaths.hostDashboard;
       return Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          leading: IconButton(
-            icon: const Icon(Icons.close),
-            tooltip: 'Exit',
-            onPressed: () {
-              GoRouter.of(context).go(RoutePaths.join);
-            },
-          ),
-        ),
+        appBar: isDashboard
+            ? null
+            : AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                automaticallyImplyLeading: false,
+                leading: IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Exit',
+                  onPressed: () {
+                    final app = context.read<AppProvider>();
+                    if (app.isGuest &&
+                        app.currentGame?.status.isActiveLive == true) {
+                      _showExitDialog(context);
+                    } else {
+                      GoRouter.of(context).go(RoutePaths.landing);
+                    }
+                  },
+                ),
+              ),
         body: ThemedAppBackground(child: child),
       );
     }
 
     return ResponsiveBuilder(
       builder: (context, device) {
-        if (device.isMobile || device.isTablet) {
-          return _MobileShell(child: child);
+        if (device.isCompact) {
+          return _MobileShell(
+            requiredPath: requiredPath,
+            showGroupContext: showGroupContext,
+            child: child,
+          );
         }
         return Scaffold(
-          backgroundColor: Colors.transparent, // Background provided by ThemedAppBackground
+          backgroundColor:
+              Colors.transparent, // Background provided by ThemedAppBackground
           body: ThemedAppBackground(
             child: Row(
               children: [
@@ -94,7 +217,21 @@ class ScreenShell extends StatelessWidget {
                 Expanded(
                   child: ShellInsets(
                     left: kSidebarWidth + 1,
-                    child: child,
+                    child: Column(
+                      children: [
+                        if (showGroupContext)
+                          const _GroupContextBar(desktop: true),
+                        const ConnectionBanner(
+                          padding: EdgeInsets.fromLTRB(
+                            AppSpacing.lg,
+                            AppSpacing.lg,
+                            AppSpacing.lg,
+                            0,
+                          ),
+                        ),
+                        Expanded(child: child),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -115,12 +252,15 @@ class _Gate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
+    final hasActiveGame = app.currentGame?.status.isActiveLive == true;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ThemedAppBackground(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
+            constraints: const BoxConstraints(maxWidth: 380),
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.xl),
               child: Column(
@@ -134,13 +274,15 @@ class _Gate extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    'Signed out',
+                    app.isGuest ? 'Account needed' : 'Signed out',
                     textAlign: TextAlign.center,
                     style: AppTypography.display(size: AppFontSizes.xl),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'This page needs a signed-in account. Guests can only watch the live game.',
+                    app.isGuest
+                        ? 'To create groups, join group chat, and view club standings, create a free account.'
+                        : 'This page needs a signed-in account. Guests can only watch or run the live game.',
                     textAlign: TextAlign.center,
                     style: AppTypography.bodySm.copyWith(
                       color: AppColors.mutedForeground,
@@ -149,9 +291,23 @@ class _Gate extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xl),
                   AppButton(
                     fullWidth: true,
-                    onPressed: () => context.go('${RoutePaths.login}?next=$path'),
-                    child: const Text('Sign in'),
+                    onPressed: () => context.go(RoutePaths.register),
+                    child: const Text('Create account'),
                   ),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (hasActiveGame) ...[
+                    AppButton(
+                      fullWidth: true,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: () => context.go(
+                        app.isAdmin
+                            ? RoutePaths.hostDashboard
+                            : RoutePaths.playerLive,
+                      ),
+                      child: const Text('Return to live game'),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
                   AppButton(
                     fullWidth: true,
                     variant: AppButtonVariant.ghost,
@@ -169,14 +325,34 @@ class _Gate extends StatelessWidget {
 }
 
 class _MobileShell extends StatelessWidget {
-  const _MobileShell({required this.child});
+  const _MobileShell({
+    required this.child,
+    required this.requiredPath,
+    required this.showGroupContext,
+  });
 
   final Widget child;
+  final String requiredPath;
+  final bool showGroupContext;
+
+  static const _hasCustomTopBarPaths = {
+    RoutePaths.home,
+    RoutePaths.group,
+    RoutePaths.chat,
+    RoutePaths.members,
+    RoutePaths.polls,
+    RoutePaths.reports,
+    RoutePaths.notifications,
+    RoutePaths.history,
+    RoutePaths.joinGroup,
+  };
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final hasCustomBar = _hasCustomTopBarPaths.contains(requiredPath);
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ThemedAppBackground(
@@ -184,14 +360,35 @@ class _MobileShell extends StatelessWidget {
           children: [
             Column(
               children: [
-                _MobileTopBar(onMenu: app.toggleDrawer),
+                if (!hasCustomBar) _MobileTopBar(onMenu: app.toggleDrawer),
+                if (showGroupContext)
+                  _GroupContextBar(addTopSafeArea: hasCustomBar),
+                const ConnectionBanner(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.lg,
+                    0,
+                  ),
+                ),
                 Expanded(
                   // The bottom nav floats over the content, so give every
-                  // screen clearance equal to the nav's height (64 + inset)
-                  // and nothing — like a chat composer — hides behind it.
+                  // screen clearance equal to the nav's own height plus the
+                  // device inset, and nothing — like a chat composer — hides
+                  // behind it. This is the ONLY place that clearance is
+                  // added; `AppSpacing.mobileContentPadding` deliberately
+                  // stays a plain page padding.
                   child: Padding(
-                    padding: EdgeInsets.only(bottom: 64 + bottomInset),
-                    child: child,
+                    padding: EdgeInsets.only(
+                      bottom: kBottomNavHeight + bottomInset,
+                    ),
+                    child: hasCustomBar
+                        ? SafeArea(
+                            top: !showGroupContext,
+                            bottom: false,
+                            child: child,
+                          )
+                        : child,
                   ),
                 ),
               ],
@@ -199,6 +396,38 @@ class _MobileShell extends StatelessWidget {
             const Positioned(left: 0, right: 0, bottom: 0, child: BottomNav()),
             const NavDrawer(),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupContextBar extends StatelessWidget {
+  const _GroupContextBar({this.addTopSafeArea = false, this.desktop = false});
+
+  final bool addTopSafeArea;
+  final bool desktop;
+
+  @override
+  Widget build(BuildContext context) {
+    final top = addTopSafeArea ? MediaQuery.paddingOf(context).top : 0.0;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        desktop ? AppSpacing.xl : AppSpacing.lg,
+        top + AppSpacing.xs,
+        desktop ? AppSpacing.xl : AppSpacing.lg,
+        AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.background.withValues(alpha: 0.88),
+        border: Border(bottom: BorderSide(color: AppColors.borderSubtle)),
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: desktop ? 360 : 420),
+          child: const CurrentGroupChip(),
         ),
       ),
     );
@@ -230,37 +459,39 @@ class _MobileTopBar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: Row(
                 children: [
-                  InkWell(
-                    onTap: onMenu,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.xs,
-                        vertical: AppSpacing.xs,
+                  Semantics(
+                    label: 'Open navigation menu',
+                    button: true,
+                    child: InkWell(
+                      onTap: onMenu,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      child: MinTapTarget(
+                        child: Icon(
+                          Icons.menu,
+                          color: AppColors.foreground,
+                          size: 22,
+                        ),
                       ),
-                      child: Icon(Icons.menu, color: AppColors.foreground, size: 22),
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.md),
-                  const PokerNightLogo(size: AppFontSizes.xxl),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    'Poker Night',
-                    style: AppTypography.crimsonShimmer(
-                      size: AppFontSizes.md,
-                      weight: FontWeight.w700,
-                    ),
-                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  const PokerNightBrand(logoSize: 22, fontSize: 16),
                   const Spacer(),
                   const SizedBox(width: AppSpacing.sm),
                   if (user != null)
-                    InkWell(
-                      onTap: () => context.go(RoutePaths.profile),
-                      borderRadius: BorderRadius.circular(28),
-                      child: SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: AppAvatar(name: user.name),
+                    Semantics(
+                      label: 'Your profile, ${user.name}',
+                      button: true,
+                      child: InkWell(
+                        onTap: () => context.go(RoutePaths.profile),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        child: MinTapTarget(
+                          child: SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: AppAvatar(name: user.name),
+                          ),
+                        ),
                       ),
                     ),
                 ],
@@ -270,6 +501,5 @@ class _MobileTopBar extends StatelessWidget {
         ),
       ),
     );
-
   }
 }

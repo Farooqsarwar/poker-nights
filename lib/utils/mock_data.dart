@@ -6,6 +6,15 @@ import '../models/chip_color.dart';
 class MockData {
   MockData._();
 
+  /// Home Set (4 colour) starter chip set matching TournamentEngine preset.
+  // DECISION: Home Set (4 colour) must strictly contain 4 colours (fixes C1 contradictory count).
+  static const homeSet4Colour = <ChipColor>[
+    ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 5, quantity: 100),
+    ChipColor(color: 'Red', hex: 0xFFC0392B, value: 25, quantity: 80),
+    ChipColor(color: 'Blue', hex: 0xFF2980B9, value: 100, quantity: 60),
+    ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 500, quantity: 30),
+  ];
+
   /// Neutral starter chip set used as a template for new games and chip sets.
   static const defaultChipSet = <ChipColor>[
     ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 1, quantity: 150),

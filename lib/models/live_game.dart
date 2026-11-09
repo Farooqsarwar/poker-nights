@@ -1,7 +1,40 @@
+import 'dart:math' as math;
+
 import 'chip_color.dart';
+import 'payment_record.dart';
+import 'shot_clock.dart';
 import 'game.dart';
 import 'table_settings.dart';
 import 'tournament.dart';
+import 'tournament_format.dart';
+import '../utils/live_play_rules.dart';
+
+/// The document version this build writes (`_v`, §E2 rule 1). Bump it whenever
+/// the stored shape changes in a way an older build could not round-trip.
+const int kGameCodecVersion = 1;
+
+/// §C1 step 1 `bounty.kind` (technical 48: `bounty {on, amount, kind}`). How
+/// the KO bounty pot changes as the field thins out.
+///
+/// [fixed] is the free option, and it is also the only kind that existed before
+/// this field did — which is what makes it the correct reading of a stored
+/// game that carries no kind. The other two are Premium (D4) and their payout
+/// mechanics are explicitly open (O8), so v1 records and prices the choice
+/// without inventing a growth rule.
+enum BountyKind {
+  fixed,
+  progressive,
+  mystery;
+
+  String get label => switch (this) {
+        BountyKind.fixed => 'Fixed',
+        BountyKind.progressive => 'Progressive',
+        BountyKind.mystery => 'Mystery',
+      };
+
+  /// §C1 step 1: both non-fixed kinds carry the PREMIUM pill.
+  bool get isPremium => this != BountyKind.fixed;
+}
 
 /// Settings captured when creating a tournament game.
 class GameSettings {
@@ -15,11 +48,14 @@ class GameSettings {
     required this.buyIn,
     required this.koEnabled,
     required this.koAmount,
+    this.koKind = BountyKind.fixed,
     required this.rebuys,
     required this.rebuysCloseLevel,
+    this.rebuyCloseChosenByOrganizer = false,
     this.rebuyLimit,
     this.reEntry = false,
     required this.addOn,
+    this.addOnOvertime = false,
     this.addOnCloseLevel = 6,
     required this.anteEnabled,
     required this.anteAfterLevel,
@@ -34,6 +70,35 @@ class GameSettings {
     this.addOnCost,
     this.locationPrivate = false,
     this.tableSettingsOverride,
+    this.expectedPlayersOverride,
+    this.lockedExpectedPlayers,
+    this.breaks = const [],
+    this.expectedRebuys,
+    this.expectedRebuyRate,
+    this.forceStack,
+    this.targetDepthBB,
+    this.levelPins = const [],
+    this.expectedReEntries,
+    this.expectedAddOns,
+    this.rebuyChips,
+    this.reEntryChips,
+    this.addOnChips,
+    this.levelDurationMins,
+    this.pace,
+    this.forecastRebuyRate,
+    this.forecastAddOnTakeUp,
+    this.format,
+    this.maxReEntries,
+    this.shootoutTables,
+    this.shootoutTableTargetMins,
+    this.earlyArrivalBonusEnabled = false,
+    this.earlyArrivalCutoffMins,
+    this.earlyArrivalBonusPctOverride,
+    this.rsvpDeadlineHours,
+    this.hardFinishEnabled = false,
+    this.hardFinishMinsAfterFinish = 60,
+    this.hardFinishSplit = 'icm',
+    this.dealThreshold = 5,
   });
 
   final String name;
@@ -45,8 +110,14 @@ class GameSettings {
   final int buyIn;
   final bool koEnabled;
   final int koAmount;
+
+  /// How the bounty pot behaves between knockouts. Absent on every game saved
+  /// before kinds existed, and those games all ran a fixed bounty, so
+  /// [BountyKind.fixed] is the honest default rather than merely the safe one.
+  final BountyKind koKind;
   final bool rebuys;
   final int rebuysCloseLevel;
+  final bool rebuyCloseChosenByOrganizer;
 
   /// Number of rebuys allowed per player when rebuys are limited.
   final int? rebuyLimit;
@@ -56,6 +127,7 @@ class GameSettings {
   /// separately from rebuys (12-046/12-047).
   final bool reEntry;
   final bool addOn;
+  final bool addOnOvertime;
 
   /// Level after which add-ons are no longer available. Defaults to end of
   /// Level 6 (client feedback: "add-on moment, default end L6").
@@ -97,8 +169,204 @@ class GameSettings {
   /// ([AppProvider.effectiveTableSettings] resolves this).
   final TableSettings? tableSettingsOverride;
 
+  /// Breaks the organizer configured (specification section 8).
+  ///
+  /// Empty means OFF, which is exactly how every tournament created before
+  /// breaks existed behaved. The engine places the default when the organizer
+  /// turns breaks on without choosing a position.
+  final List<ScheduledBreak> breaks;
+
+  /// The expected count FROZEN for physical preparation (specification
+  /// section 6).
+  ///
+  /// Section 6 distinguishes four things, and this is the one that was
+  /// missing: Confirmed (raw RSVPs), Expected (the organizer's estimate),
+  /// **Locked** (that estimate frozen), and Actual checked-in.
+  ///
+  /// The point is stated in the specification directly: "late RSVP changes do
+  /// not silently reshuffle the locked preparation". Once the host has counted
+  /// physical chips into stacks for 15 people, a 16th RSVP arriving must not
+  /// quietly rebuild the structure underneath them — it surfaces as a notice
+  /// instead.
+  ///
+  /// Null means not locked. The start CTA still uses actual checked-in.
+  final int? lockedExpectedPlayers;
+
+  /// Head-count the host is preparing for, when they have overridden the
+  /// figure the app derives from RSVPs (Technical section 6.1: "Expected
+  /// players: from RSVP **or admin override**").
+  ///
+  /// RSVPs undercount routinely — people turn up who never answered, and the
+  /// host knows it. Without this the chip and blind plan is built for the
+  /// people who replied, which is exactly the "15 said yes, prepare for 20"
+  /// case the client raised. Null means "trust the RSVPs".
+  final int? expectedPlayersOverride;
+
+  /// Host overrides for expected take-up and the chips each entry type hands
+  /// over, plus the chosen level length.
+  ///
+  /// These live on the settings rather than only on the generation call because
+  /// [StructureVerification] regenerates from exactly these fields on every
+  /// device. An input the host can change but the settings do not record would
+  /// make every other phone in the room recompute a different structure and
+  /// report the honest one as tampering.
+  ///
+  /// Null throughout means "engine default", which is what every tournament
+  /// created before these fields existed reads as.
+  final int? expectedRebuys;
+
+  /// The host's forecast of rebuys PER PLAYER (the engine's `r`, default
+  /// 0.35). It sizes the busy-night chip reserve (§F1.5), so lowering it is one
+  /// of the ways to open a shallow start deeper. Null = use the default.
+  final double? expectedRebuyRate;
+
+  /// Structure-builder choices that must survive Recalculate, leaving the
+  /// screen and reopening (WP2): the host-forced starting stack (§F1.11), the
+  /// host-chosen depth in big blinds, and the levels the host pinned by hand.
+  final int? forceStack;
+  final int? targetDepthBB;
+  final List<LevelPin> levelPins;
+  final int? expectedReEntries;
+  final int? expectedAddOns;
+  final int? rebuyChips;
+  final int? reEntryChips;
+  final int? addOnChips;
+  final int? levelDurationMins;
+
+  /// §F1.1 `pace` — the host's chosen pace (C1 step 4).
+  ///
+  /// Null keeps the legacy phased mode (§F1.13), which is what every
+  /// tournament created before pace existed uses. It is stored separately
+  /// from [levelDurationMins] because they are different decisions: the pace
+  /// sets the level length AND the growth ceiling the ladder is solved
+  /// against, while `levelDurationMins` is a bare override of the length.
+  final PaceMode? pace;
+
+  /// The rebuy rate and add-on take-up the structure was generated with (§F1.3
+  /// `Rforecast`, `takeUp`). They come from the host's own past nights
+  /// (Framework §14), which no other device can see, so they are recorded here
+  /// when the structure is built. Without them a player's phone re-running the
+  /// engine to check the host's work would use the stated defaults and report
+  /// an honest structure as a mismatch. Null means "the stated defaults".
+  final double? forecastRebuyRate;
+  final double? forecastAddOnTakeUp;
+  final TournamentFormat? format;
+  final int? maxReEntries;
+
+  /// §11.4. How many independent tables Stage A runs. Null lets the engine
+  /// derive it from the expected field.
+  final int? shootoutTables;
+
+  /// §11.4. Stage A's per-table target. Null falls back to the 45-minute
+  /// single-table pace in §38.
+  final int? shootoutTableTargetMins;
+
+  /// §25.1a. Whether players who are checked in before the cutoff start with a
+  /// bonus over the printed stack.
+  final bool earlyArrivalBonusEnabled;
+
+  /// Spec C-cfg §1 / O3. Whole hours before the start that RSVPs close, 1–72.
+  /// Null means the default, 24 — see [effectiveRsvpDeadlineHours].
+  final int? rsvpDeadlineHours;
+
+  /// §25.1a. Minutes before [scheduledStart] a check-in must land to earn the
+  /// bonus. Null uses the engine default.
+  final int? earlyArrivalCutoffMins;
+
+  /// §25.1a. Fraction of the starting stack granted as the bonus. Null means
+  /// the 12.5% default — see [effectiveEarlyArrivalPct].
+  final double? earlyArrivalBonusPctOverride;
+
+  /// §F4 / C-cfg §7. Optional hard finish ceiling.
+  final bool hardFinishEnabled;
+  final int hardFinishMinsAfterFinish;
+  final String hardFinishSplit;
+
+  /// Minimum players remaining to show the Deal screen (spec §F2.2).
+  /// Configurable 2-5, default 5.
+  final int dealThreshold;
+
+  /// §11.4 Stage A. Mirrors [TournamentParams.effectiveShootoutTables] so live
+  /// seating (§26.1) can split a shootout field into the SAME table count the
+  /// structure was generated for, instead of re-deriving it from
+  /// `maxPerTable` and risking the two disagreeing.
+  int get effectiveShootoutTables {
+    final stated = shootoutTables;
+    if (stated != null && stated >= 2) return stated;
+    if (players <= kDefaultTableSize) return 1;
+    return (players / kDefaultTableSize).ceil();
+  }
+
+  /// How steeply the prize pool falls away from first place. Not part of the
+  /// generation-override group above — a Reset there must not quietly undo a
+  /// payout decision that has nothing to do with the blind curve.
+
+  /// Ceiling on the organizer allocation (specification §7, §18, Spec G1:
+  /// "0-30%").
+  static const int maxOrganizerPct = 30;
+
+  /// The percentage calculations should actually use.
+  ///
+  /// The stored [organizerPct] is left exactly as written -- clamping it in
+  /// the constructor would retroactively rewrite games created under the old
+  /// 0-100 rule, and a stored value must never change meaning underneath a
+  /// host who already ran the night. This clamps at the point of USE instead,
+  /// so no prize split can be computed against a figure the specification
+  /// forbids, however the settings were constructed.
+  ///
+  /// The forms cap entry at 20 as well; this is the backstop for every other
+  /// path -- a preset, a restored document, a direct provider call.
+  int get effectiveOrganizerPct => organizerPct.clamp(0, maxOrganizerPct);
+
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
   int get effectiveAddOnCost => addOnCost ?? buyIn;
+
+  /// §C1 step 1. The KO bounty's domain: 5–50 in steps of 5, default 5. The
+  /// stepper in the creation wizard is held to it; a stored figure is not
+  /// rewritten, for the same reason [effectiveOrganizerPct] does not rewrite
+  /// the org percentage.
+  static const int minBounty = 5;
+  static const int maxBounty = 50;
+  static const int bountyStep = 5;
+
+  /// The bounty collected per entry and per rebuy — zero while it is off.
+  ///
+  /// The bounty pot is on top of the buy-in and funds nothing but knockouts
+  /// (§F2.4), so an off bounty contributes nothing to anything and the amount
+  /// left behind by a toggle must not keep charging. The figure is NOT clamped
+  /// to [minBounty]/[maxBounty] here: that would make the screen quote a
+  /// smaller bounty than the elimination path actually pays.
+  int get effectiveKoAmount => koEnabled ? koAmount : 0;
+
+  /// The format, resolved. Null means this game predates the field, so it is
+  /// derived from the booleans that have always driven the same behaviour.
+  /// Re-entry wins over rebuy when both are set, matching
+  /// [TournamentParams.effectiveExpectedReEntries]'s precedence.
+  TournamentFormat get effectiveFormat =>
+      format ??
+      (reEntry
+          ? TournamentFormat.reEntry
+          : rebuys
+              ? TournamentFormat.rebuy
+              : TournamentFormat.freezeOut);
+
+  /// Expected take-up per entry type, override first and the shared rate as the
+  /// fallback — the same resolution [TournamentParams] performs, so the screens
+  /// that display these totals and the engine that generates against them can
+  /// never disagree. A format that is off contributes nothing regardless of a
+  /// number left behind by toggling it.
+  int get effectiveExpectedRebuys => rebuys
+      ? math.max(0, expectedRebuys ?? (players * kExpectedRebuyRate).round())
+      : 0;
+
+  int get effectiveExpectedReEntries => reEntry
+      ? math.max(
+          0, expectedReEntries ?? (players * kExpectedReEntryRate).round())
+      : 0;
+
+  int get effectiveExpectedAddOns => addOn
+      ? math.max(0, expectedAddOns ?? (players * kAddOnTakeUpRate).round())
+      : 0;
 
   GameSettings copyWith({
     String? name,
@@ -110,11 +378,14 @@ class GameSettings {
     int? buyIn,
     bool? koEnabled,
     int? koAmount,
+    BountyKind? koKind,
     bool? rebuys,
     int? rebuysCloseLevel,
+    bool? rebuyCloseChosenByOrganizer,
     int? rebuyLimit,
     bool? reEntry,
     bool? addOn,
+    bool? addOnOvertime,
     int? addOnCloseLevel,
     bool? anteEnabled,
     int? anteAfterLevel,
@@ -125,11 +396,67 @@ class GameSettings {
     String? chipSetName,
     bool? announceEliminations,
     int? forcePaidPlaces,
+    bool clearForcePaidPlaces = false,
     int? rebuyCost,
     int? addOnCost,
     bool? locationPrivate,
     TableSettings? tableSettingsOverride,
     bool clearTableSettingsOverride = false,
+    int? expectedPlayersOverride,
+    bool clearExpectedPlayersOverride = false,
+    int? lockedExpectedPlayers,
+    bool clearLockedExpectedPlayers = false,
+    List<ScheduledBreak>? breaks,
+    int? expectedRebuys,
+    double? expectedRebuyRate,
+    int? forceStack,
+    int? targetDepthBB,
+    List<LevelPin>? levelPins,
+    bool clearForceStack = false,
+    bool clearTargetDepthBB = false,
+    int? expectedReEntries,
+    int? expectedAddOns,
+    int? rebuyChips,
+    int? reEntryChips,
+    int? addOnChips,
+    int? levelDurationMins,
+    PaceMode? pace,
+    double? forecastRebuyRate,
+    double? forecastAddOnTakeUp,
+    TournamentFormat? format,
+    int? maxReEntries,
+    int? shootoutTables,
+    int? shootoutTableTargetMins,
+    bool? earlyArrivalBonusEnabled,
+    int? earlyArrivalCutoffMins,
+    double? earlyArrivalBonusPctOverride,
+    int? rsvpDeadlineHours,
+    bool? hardFinishEnabled,
+    int? hardFinishMinsAfterFinish,
+    String? hardFinishSplit,
+    int? dealThreshold,
+
+    /// Per-field clears. A null above means "unchanged", which is right for a
+    /// partial update but leaves no way to hand one decision back to the
+    /// engine: a host who blanks the Stage A table count wants "you work it
+    /// out", not the number they typed last week. [clearGenerationOverrides]
+    /// resets the whole group at once, which is too blunt for a single field.
+    bool clearMaxReEntries = false,
+    bool clearShootoutTables = false,
+    bool clearShootoutTableTargetMins = false,
+    bool clearEarlyArrivalCutoffMins = false,
+    bool clearEarlyArrivalBonusPctOverride = false,
+    bool clearRebuyLimit = false,
+
+    /// Sends every generation override back to the engine default in one call,
+    /// which is what the Parameters tab's "Reset" does. Individual nulls above
+    /// mean "unchanged", so without this there is no way to clear one.
+    bool clearGenerationOverrides = false,
+
+    /// Clears exactly the options the structure builder owns (expected
+    /// rebuys, re-entries, add-ons, their chip amounts and the two prices) so
+    /// a blank field really hands the decision back to the default.
+    bool clearBuilderOverrides = false,
   }) {
     return GameSettings(
       name: name ?? this.name,
@@ -141,11 +468,14 @@ class GameSettings {
       buyIn: buyIn ?? this.buyIn,
       koEnabled: koEnabled ?? this.koEnabled,
       koAmount: koAmount ?? this.koAmount,
+      koKind: koKind ?? this.koKind,
       rebuys: rebuys ?? this.rebuys,
       rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
-      rebuyLimit: rebuyLimit ?? this.rebuyLimit,
+      rebuyCloseChosenByOrganizer: rebuyCloseChosenByOrganizer ?? this.rebuyCloseChosenByOrganizer,
+      rebuyLimit: clearRebuyLimit ? null : (rebuyLimit ?? this.rebuyLimit),
       reEntry: reEntry ?? this.reEntry,
       addOn: addOn ?? this.addOn,
+      addOnOvertime: addOnOvertime ?? this.addOnOvertime,
       addOnCloseLevel: addOnCloseLevel ?? this.addOnCloseLevel,
       anteEnabled: anteEnabled ?? this.anteEnabled,
       anteAfterLevel: anteAfterLevel ?? this.anteAfterLevel,
@@ -155,26 +485,178 @@ class GameSettings {
       chipSet: chipSet ?? this.chipSet,
       chipSetName: chipSetName ?? this.chipSetName,
       announceEliminations: announceEliminations ?? this.announceEliminations,
-      forcePaidPlaces: forcePaidPlaces ?? this.forcePaidPlaces,
-      rebuyCost: rebuyCost ?? this.rebuyCost,
-      addOnCost: addOnCost ?? this.addOnCost,
+      forcePaidPlaces:
+          clearForcePaidPlaces ? null : (forcePaidPlaces ?? this.forcePaidPlaces),
+      rebuyCost: clearBuilderOverrides ? null : (rebuyCost ?? this.rebuyCost),
+      addOnCost: clearBuilderOverrides ? null : (addOnCost ?? this.addOnCost),
       locationPrivate: locationPrivate ?? this.locationPrivate,
       tableSettingsOverride: clearTableSettingsOverride
           ? null
           : (tableSettingsOverride ?? this.tableSettingsOverride),
+      expectedPlayersOverride: clearExpectedPlayersOverride
+          ? null
+          : (expectedPlayersOverride ?? this.expectedPlayersOverride),
+      lockedExpectedPlayers: clearLockedExpectedPlayers
+          ? null
+          : (lockedExpectedPlayers ?? this.lockedExpectedPlayers),
+      breaks: breaks ?? this.breaks,
+      expectedRebuys: clearGenerationOverrides || clearBuilderOverrides
+          ? null
+          : expectedRebuys ?? this.expectedRebuys,
+      forceStack: clearForceStack ? null : (forceStack ?? this.forceStack),
+      targetDepthBB:
+          clearTargetDepthBB ? null : (targetDepthBB ?? this.targetDepthBB),
+      levelPins: levelPins ?? this.levelPins,
+      expectedRebuyRate: clearGenerationOverrides
+          ? null
+          : expectedRebuyRate ?? this.expectedRebuyRate,
+      expectedReEntries: clearGenerationOverrides || clearBuilderOverrides
+          ? null
+          : expectedReEntries ?? this.expectedReEntries,
+      expectedAddOns: clearGenerationOverrides || clearBuilderOverrides
+          ? null
+          : expectedAddOns ?? this.expectedAddOns,
+      rebuyChips:
+          clearGenerationOverrides || clearBuilderOverrides ? null : rebuyChips ?? this.rebuyChips,
+      reEntryChips:
+          clearGenerationOverrides || clearBuilderOverrides ? null : reEntryChips ?? this.reEntryChips,
+      addOnChips:
+          clearGenerationOverrides || clearBuilderOverrides ? null : addOnChips ?? this.addOnChips,
+      levelDurationMins: clearGenerationOverrides
+          ? null
+          : levelDurationMins ?? this.levelDurationMins,
+      // The pace is a host CHOICE, not a generation override: "regenerate from
+      // scratch" should re-solve the ladder at the pace they picked, not throw
+      // the pace away and fall back to the legacy mode.
+      pace: pace ?? this.pace,
+      forecastRebuyRate: forecastRebuyRate ?? this.forecastRebuyRate,
+      forecastAddOnTakeUp: forecastAddOnTakeUp ?? this.forecastAddOnTakeUp,
+      format: format ?? this.format,
+      maxReEntries:
+          clearMaxReEntries ? null : maxReEntries ?? this.maxReEntries,
+      shootoutTables: clearGenerationOverrides || clearShootoutTables
+          ? null
+          : shootoutTables ?? this.shootoutTables,
+      shootoutTableTargetMins:
+          clearGenerationOverrides || clearShootoutTableTargetMins
+              ? null
+              : shootoutTableTargetMins ?? this.shootoutTableTargetMins,
+      rsvpDeadlineHours: rsvpDeadlineHours ?? this.rsvpDeadlineHours,
+      earlyArrivalBonusEnabled:
+          earlyArrivalBonusEnabled ?? this.earlyArrivalBonusEnabled,
+      earlyArrivalCutoffMins:
+          clearGenerationOverrides || clearEarlyArrivalCutoffMins
+              ? null
+              : earlyArrivalCutoffMins ?? this.earlyArrivalCutoffMins,
+      earlyArrivalBonusPctOverride:
+          clearGenerationOverrides || clearEarlyArrivalBonusPctOverride
+              ? null
+              : earlyArrivalBonusPctOverride ??
+                  this.earlyArrivalBonusPctOverride,
+      hardFinishEnabled: hardFinishEnabled ?? this.hardFinishEnabled,
+      hardFinishMinsAfterFinish:
+          hardFinishMinsAfterFinish ?? this.hardFinishMinsAfterFinish,
+      hardFinishSplit: hardFinishSplit ?? this.hardFinishSplit,
+      dealThreshold: dealThreshold ?? this.dealThreshold,
     );
   }
+
+  /// §3. The early-arrival grant as a fraction of the starting stack. The
+  /// override wins; 12.5% is the documented default.
+  double get effectiveEarlyArrivalPct =>
+      earlyArrivalBonusEnabled ? (earlyArrivalBonusPctOverride ?? 0.125) : 0;
+
+  /// §25.1a. How early a check-in must land to earn the bonus. 30 minutes is
+  /// the engine default — long enough to mean "arrived on time", short enough
+  /// that it is not just everyone.
+  int get effectiveEarlyArrivalCutoffMins => earlyArrivalCutoffMins ?? 30;
 
   /// The scheduled start parsed from the configured date/time fields.
   DateTime? get scheduledStart => DateTime.tryParse('${date}T$time');
 
-  /// RSVPs can be changed until one hour before the scheduled start
-  /// (checklist 07-011/07-012, UAT-025). After this cutoff changes are closed.
-  DateTime? get rsvpDeadline =>
-      scheduledStart?.subtract(const Duration(hours: 1));
+  /// Spec C4/C4p. How long before the scheduled start the check-in window
+  /// opens.
+  ///
+  /// A wall-clock constant rather than a host decision, which is the entire
+  /// point of the clause: the door opens by itself, so nobody has to remember
+  /// to press anything and no member can arrive to a closed lobby.
+  static const int checkInLeadMins = 10;
+
+  /// Spec C4/C4p. The moment the check-in window opens, derived from the
+  /// scheduled start. Null when the configured date/time cannot be parsed, in
+  /// which case the window falls back to being open at
+  /// [LiveGameStatus.checkin] (see [LiveGame.isCheckInOpenAt]).
+  DateTime? get checkInOpensAt =>
+      scheduledStart?.subtract(const Duration(minutes: checkInLeadMins));
+
+  /// Spec O3: the host's RSVP deadline in whole hours, default 24, kept in the
+  /// 1–72 range the stepper allows.
+  int get effectiveRsvpDeadlineHours =>
+      (rsvpDeadlineHours ?? 24).clamp(1, 72);
+
+  /// RSVPs can be changed until [effectiveRsvpDeadlineHours] before the
+  /// scheduled start. After this cutoff nobody new can answer Going.
+  DateTime? get rsvpDeadline => scheduledStart?.subtract(
+        Duration(hours: effectiveRsvpDeadlineHours),
+      );
 
   bool get rsvpCutoffPassed =>
       rsvpDeadline != null && rsvpDeadline!.isBefore(DateTime.now());
+}
+
+/// Spec D6 / T32. Whether a check-in approved at [now] earns the
+/// early-arrival bonus: the bonus must be switched on, a scheduled start must
+/// exist, and the approval must land strictly before that start.
+///
+/// This deliberately replaces the legacy
+/// [GameSettings.effectiveEarlyArrivalCutoffMins] cutoff. The old rule asked
+/// for arrival at least 30 minutes early and so silently disqualified the
+/// exact person the bonus was written for — somebody who walked in 20 minutes
+/// before the first shuffle and was approved 30 seconds before it. D6 draws
+/// the line at the start, not at a lead time before it, and the 10-minute
+/// check-in window (C4) sits inside that line, so arriving inside the window
+/// is sufficient.
+///
+/// Recomputed on every approval rather than latched, so a player who
+/// cancels and re-checks-in after the start correctly loses eligibility.
+bool isEarlyArrivalApproved({
+  required bool bonusEnabled,
+  required DateTime? scheduledStart,
+  required DateTime now,
+}) =>
+    isEarlyArrivalEligible(
+      bonusEnabled: bonusEnabled,
+      scheduledStart: scheduledStart,
+      now: now,
+    );
+
+/// Where the check-in window stands at a given instant.
+///
+/// Every surface reads this one object — the guest flow's locked card, the
+/// host's check-in screen, the bonus rule — so they cannot disagree about
+/// whether the door is open. The instant is a parameter rather than a
+/// `DateTime.now()` read inside the getter, which is what makes the exact
+/// boundary testable.
+class CheckInWindow {
+  const CheckInWindow({
+    required this.opensAt,
+    required this.isOpen,
+    required this.secondsUntilOpen,
+  });
+
+  /// When the window opens, or null when the game has no parseable scheduled
+  /// start and the window tracks [LiveGameStatus.checkin] instead.
+  final DateTime? opensAt;
+
+  /// Whether a guest may check in right now. Both gates must pass: the
+  /// lifecycle has to have reached `checkin`, and the wall clock has to be
+  /// inside the window. A document is created at `checkin` hours ahead of a
+  /// 7pm start, so the status alone was never enough.
+  final bool isOpen;
+
+  /// Whole seconds until the window opens. Zero once it is open (or when there
+  /// is no scheduled start to count down to), never negative.
+  final int secondsUntilOpen;
 }
 
 /// Lifecycle status of a tournament.
@@ -188,7 +670,16 @@ enum LiveGameStatus {
   rebuypause,
   finaltable,
   completed,
-  cancelled;
+  cancelled,
+
+  /// A scheduled break is running (section 8; addendum section 5).
+  ///
+  /// Distinct from `paused` and from `rebuypause`: those are things a host
+  /// does, this one is part of the generated structure and ends by itself.
+  /// Added at the END of the enum so stored index positions do not shift, and
+  /// `_enumByName` degrades an unknown value to a safe fallback for clients
+  /// that predate it.
+  onBreak;
 
   String get label {
     switch (this) {
@@ -212,6 +703,8 @@ enum LiveGameStatus {
         return 'Completed';
       case LiveGameStatus.cancelled:
         return 'Cancelled';
+      case LiveGameStatus.onBreak:
+        return 'Break';
     }
   }
 
@@ -219,6 +712,7 @@ enum LiveGameStatus {
       this == LiveGameStatus.running ||
       this == LiveGameStatus.paused ||
       this == LiveGameStatus.rebuypause ||
+      this == LiveGameStatus.onBreak ||
       this == LiveGameStatus.finaltable;
 
   bool get isUpcoming =>
@@ -226,6 +720,16 @@ enum LiveGameStatus {
 }
 
 enum SpeedRecommendation { speedUp, slowDown }
+
+/// §11.4. Which of the two structures a shootout is currently playing.
+///
+/// Null on [LiveGame.shootoutStage] for every non-shootout format, and for a
+/// shootout game before its first structure generation. Set to [stageA] at
+/// that generation and moved to [stageB] only by
+/// `AppProviderTournament.startShootoutFinalTable`, never automatically —
+/// the spec's Stage B trigger is "once every table reports in", a human
+/// judgement call, not a player-count threshold the app can safely guess.
+enum ShootoutStage { stageA, stageB }
 
 /// A full tournament game (live or past).
 class LiveGame {
@@ -246,13 +750,21 @@ class LiveGame {
     this.auditHistory = const [],
     required this.totalChipsInPlay,
     required this.pendingGuests,
+    this.waitlist = const [],
     required this.finishOrder,
     this.speedRecommendation,
+    this.dealAmounts,
     this.settlementConfirmed = false,
+    this.addOnWindowClosed = false,
+    this.addOnDeclined = const [],
     this.seatingConfirmed = false,
     this.checkInClosed = false,
     this.structureConfirmed = false,
     this.finalTableRedrawCompleted = false,
+    this.handForHandActive = false,
+    this.handForHandHand = 1,
+    this.handForHandDoneTables = const [],
+    this.bubbleSaveRecorded = false,
     this.dealerPlayerId,
     this.guestSlots = const [],
     this.originalLevels,
@@ -260,13 +772,30 @@ class LiveGame {
     this.addOnRequests = const [],
     this.levelEndTime,
     this.startedAt,
+    this.actualDurationMins,
     this.changeLog = const [],
+    this.payments = const [],
+    this.organizerIds = const [],
+    this.shotClock,
     this.revision = 0,
     this.lastIdempotencyKey,
     this.editorDeviceId = '',
     this.editorClaimedAt,
     this.audioMasterDeviceId = '',
+    this.shootoutStage,
+    this.codecVersion = kGameCodecVersion,
   });
+
+  /// The `_v` the document was written with (§E2 rule 1). Documents that
+  /// predate versioning have none and read as version 1.
+  ///
+  /// Carried on the model, and preserved by [copyWith], so that a game a newer
+  /// build wrote can never be re-saved by this one as if it were current.
+  final int codecVersion;
+
+  /// True when a newer build wrote this game. Reading it is fine; writing it
+  /// back from here could drop fields this build does not know about.
+  bool get writtenByNewerBuild => codecVersion > kGameCodecVersion;
 
   final String id;
   final String groupId;
@@ -284,13 +813,49 @@ class LiveGame {
   final List<AuditRecord> auditHistory;
   final int totalChipsInPlay;
   final List<Player> pendingGuests;
+  final List<String> waitlist;
   final List<String> finishOrder; // playerIds, first-out first
   final SpeedRecommendation? speedRecommendation;
 
-  /// True once the end-of-rebuy settlement has been confirmed. The public
-  /// label then changes from "Estimated Prize Pool" to "Prize Pool"
-  /// (checklist 12-068, 14-038/14-039, 15-009, 15-030).
+  /// What each player was actually paid, when the game ended on an agreed
+  /// deal rather than by busts (C-deal item 5, A§F2.6/F2.7).
+  ///
+  /// Null on a night that finished naturally, which is the common case: the
+  /// payout ladder and the finish order already determine the amounts then, so
+  /// this only records the one thing they cannot - what the table agreed to.
+  /// Indexed to match `finishOrder`, so entry `i` is what the player in
+  /// `finishOrder[i]` received.
+  ///
+  /// Deliberately NOT included: KO bounties. They were paid at each knockout
+  /// and are never part of a deal (C-deal rules), so they must not be folded
+  /// into these figures and re-presented as a share of the pot.
+  final List<double>? dealAmounts;
+
+  /// §11.4. See [ShootoutStage].
+  final ShootoutStage? shootoutStage;
+
+  /// True once the end-of-rebuy settlement has been confirmed.
   final bool settlementConfirmed;
+
+  /// The host pressed Next on the add-on step of settlement (Addendum 2).
+  /// Ends the add-on window even if the break has already run out.
+  final bool addOnWindowClosed;
+
+  /// Players who were offered an add-on at the break and said no.
+  ///
+  /// Addendum 2 A2-1 gives the add-on window two edges. The first is the host
+  /// pressing Next, which is [addOnWindowClosed]. The second is the window
+  /// running out of time: when the break ends before settlement step 2 is
+  /// done, the window becomes "overtime" and closes by itself once **every**
+  /// player from step 1 has answered.
+  ///
+  /// "Answered" has to mean taken OR declined, and only the taken half was
+  /// representable before: a player who declined was simply absent from the
+  /// selection set, which is indistinguishable from a player who has not been
+  /// asked yet. Without this field the overtime close can never know who is
+  /// still outstanding, so the window stays open indefinitely — the one part
+  /// of A2-1 that could not close itself.
+  final List<String> addOnDeclined;
 
   /// True once the admin has confirmed the generated physical seating before
   /// play starts (checklist 13-013). Seating changes clear it again.
@@ -326,6 +891,19 @@ class LiveGame {
 
   /// True once the final table redraw has been triggered and completed (BR-020).
   final bool finalTableRedrawCompleted;
+
+  /// Hand-for-hand on the bubble with 2+ tables (C-bubble, §F3).
+  /// While active the host marks each table done per hand; all devices and
+  /// the TV see the banner from these synced fields. [handForHandHand] is
+  /// the current hand number (starts at 1); [handForHandDoneTables] holds
+  /// the table numbers done with the current hand.
+  final bool handForHandActive;
+  final int handForHandHand;
+  final List<int> handForHandDoneTables;
+
+  /// True once a bubble save was recorded (C-bubble D10). The payout ladder
+  /// already carries the bubble place then, so the offer hides itself.
+  final bool bubbleSaveRecorded;
 
   /// True once the firm, one-time structure recalculation at T-minus-10-
   /// minutes (using the final "Going" headcount) has run. Set once by
@@ -365,6 +943,16 @@ class LiveGame {
   /// level durations.
   final DateTime? startedAt;
 
+  /// Wall-clock minutes from first level to the final hand, recorded once at
+  /// completion. The input to §10.1's pace learning: a group whose nights
+  /// consistently overrun does not want the same estimate next time.
+  final int? actualDurationMins;
+
+  /// Wall-clock instant the tournament actually finished.
+  DateTime? get endedAt => startedAt != null && actualDurationMins != null
+      ? startedAt!.add(Duration(minutes: actualDurationMins!))
+      : null;
+
   /// Human-readable audit of post-publication event edits (user-flow spec
   /// §10.4): "2026-08-24 14:05 · buy-in 15 → 20". Oldest first; the provider
   /// caps the list when appending. Rendered prominently on the event page.
@@ -375,6 +963,77 @@ class LiveGame {
   /// Combined with [lastIdempotencyKey] this guards against double-applying a
   /// duplicate action after a browser retry or an offline-restore replay
   /// (technical §18.1).
+  /// A soft shot clock, when one is running (§12).
+  ///
+  /// Null almost always — it exists for the handful of moments a night when
+  /// somebody needs putting on the clock. Deliberately separate from
+  /// [levelEndTime]: §12 requires it to be "independent of level timer", and a
+  /// level must never end early because a player tanked.
+  final ShotClock? shotClock;
+
+  /// Users given operational control of THIS tournament (§3, §28).
+  ///
+  /// Tournament-scoped by design — §32 lists it as a decision that must not
+  /// drift. An organizer runs the night: rebuys, add-ons, eliminations,
+  /// seating, and the private financials OF THIS GAME. They get no group-level
+  /// rights at all: no approving members, no editing group settings, no
+  /// managing admins, and nothing whatsoever in any other tournament.
+  ///
+  /// It solves a real problem rather than a theoretical one. A host who is
+  /// also playing is the bottleneck on every rebuy at their own table; this
+  /// lets them hand the controls to somebody for one evening without handing
+  /// over the group.
+  ///
+  /// Populated by `AppProvider._groupCoOrganizerIds` from the group's co-host
+  /// roster, which is the specification's `coHostUids` on the game document —
+  /// "copied from the group's co-hosts at posting" (E4). It is a derived copy,
+  /// not a second roster: nothing else writes it, and `firestore.rules` pins it
+  /// unchanged on a non-admin write so it can only be replaced whole by the host.
+  ///
+  /// Empty on every tournament created before the role existed, which reads
+  /// correctly as "admin only".
+  final List<String> organizerIds;
+
+  /// Whether [userId] may OPERATE this tournament — running the clock, busts,
+  /// rebuys, seating — as a co-host rather than as the group's host.
+  ///
+  /// This is not a synonym for "is the host": the host is resolved from
+  /// `group.ownerId` first and never needs an entry here. Nor is it a
+  /// group-level right: [organizerIds] is per game, which is why a co-host runs
+  /// this night and the next one is somebody else's.
+  bool isOrganizer(String? userId) =>
+      userId != null && organizerIds.contains(userId);
+
+  /// Simulated payments recorded against this tournament (QA section 12).
+  ///
+  /// No money moves and no provider is contacted. The ledger exists so the
+  /// prize pool, the host's view of who has settled up and the audit trail all
+  /// agree — the part that has to be right whether the money went through the
+  /// app or across the table in cash.
+  final List<PaymentRecord> payments;
+
+  /// Whether [playerId] has a successful payment of [purpose] on file.
+  ///
+  /// Rebuys are deliberately excluded from this shortcut: a player may rebuy
+  /// several times, so "have they paid for a rebuy" is not a yes/no question.
+  bool hasPaid(String playerId, PaymentPurpose purpose) => payments.any(
+        (p) =>
+            p.playerId == playerId &&
+            p.purpose == purpose &&
+            p.status == PaymentStatus.paid,
+      );
+
+  /// Total collected through the app, by purpose. Only successful payments
+  /// count — a failed or cancelled attempt contributes nothing.
+  int collected(PaymentPurpose purpose) => payments
+      .where((p) => p.purpose == purpose && p.status.countsTowardPool)
+      .fold<int>(0, (a, p) => a + p.amount);
+
+  /// Everything collected through the app.
+  int get totalCollected => payments
+      .where((p) => p.status.countsTowardPool)
+      .fold<int>(0, (a, p) => a + p.amount);
+
   final int revision;
 
   /// The idempotency key of the most recently accepted administrator action.
@@ -412,9 +1071,9 @@ class LiveGame {
     return changed;
   }
 
-  /// Public prize-pool label: estimated until settlement is confirmed.
+  /// Public prize-pool label while the payout table is gated or revealed.
   String get prizePoolLabel =>
-      settlementConfirmed ? 'Prize Pool' : 'Estimated Prize Pool';
+      payoutTableRevealed ? 'Prize Pool' : 'Prize Pool So Far';
 
   Player? get dealerPlayer => dealerPlayerId == null
       ? null
@@ -454,6 +1113,149 @@ class LiveGame {
     return structure.levels[currentLevel];
   }
 
+  /// Spec C4/C4p. Whether the check-in window is open at [now].
+  ///
+  /// Two gates, not either. The lifecycle must have reached
+  /// [LiveGameStatus.checkin] — a game that is still `draft`/`published` has
+  /// no check-in at all, whatever the clock says — and the wall clock must be
+  /// at or after [GameSettings.checkInOpensAt]. The second gate is the clause:
+  /// a tournament document is created and published hours or days ahead, so
+  /// the status reaches `checkin` long before anybody should be let in.
+  ///
+  /// A game whose configured date/time cannot be parsed (a host who never set
+  /// one, or a restored document from before the field existed) falls back to
+  /// the status alone rather than locking the lobby shut forever.
+  bool isCheckInOpenAt(DateTime now) {
+    if (status.index < LiveGameStatus.checkin.index) return false;
+    if (status.index > LiveGameStatus.finaltable.index) return false;
+    final opensAt = settings.checkInOpensAt;
+    if (opensAt == null) return true;
+    return !now.isBefore(opensAt);
+  }
+
+  /// §E17 row 13 — No-show gate: evaluated once at the start if ≥1 "Going"
+  /// player hasn't checked in. Two host choices: "Wait n more min" or
+  /// "Start without her" (marks player noShow, no buy-in taken, seat held).
+  /// Pure method: returns whether the gate is triggered without mutating in-place.
+  bool evaluateNoShowGate(DateTime now) {
+    if (status.index < LiveGameStatus.checkin.index) return false;
+    if (status.index > LiveGameStatus.running.index) return false;
+
+    final goingPlayers = players.where((p) => p.rsvp?.isGoing ?? false).toList();
+    final unconfirmedGoing = goingPlayers.where((p) => !p.confirmed).toList();
+    return unconfirmedGoing.isNotEmpty;
+  }
+
+  /// Pure helper to apply no-show gate transitions on players.
+  LiveGame applyNoShowGate({required DateTime now}) {
+    if (status.index < LiveGameStatus.checkin.index || status.index > LiveGameStatus.running.index) {
+      return this;
+    }
+    final goingPlayers = players.where((p) => p.rsvp?.isGoing ?? false).toList();
+    final unconfirmedGoing = goingPlayers.where((p) => !p.confirmed).toSet();
+    if (unconfirmedGoing.isEmpty) return this;
+    return copyWith(
+      players: players.map((p) {
+        if (unconfirmedGoing.contains(p)) {
+          return p.copyWith(
+            status: PlayerStatus.noShow,
+            noShow: true,
+            active: false,
+          );
+        }
+        return p;
+      }).toList(),
+    );
+  }
+
+  /// §E17 row 17 — Late-arrival registration: allowed while rebuys are open
+  /// (rebuy formats) or until the first break (freeze-out). After the cutoff
+  /// → blocked with message. Same seat+handout+ledger path as check-in.
+  bool isLateArrivalAllowed(
+    DateTime now,
+  ) {
+    if (status.index < LiveGameStatus.checkin.index) return false;
+
+    // In freeze-out: blocked after first break (allows Level 1 if no breaks)
+    if (!settings.rebuys) {
+      if (settings.breaks.isNotEmpty) {
+        final firstBreakLevel = settings.breaks.first.afterLevel;
+        if (currentLevel > firstBreakLevel) return false;
+      } else {
+        if (currentLevel > 1) return false;
+      }
+    } else {
+      // In rebuy format: allowed while rebuys are open
+      if (currentLevel >= settings.rebuysCloseLevel) return false;
+    }
+
+    return true;
+  }
+
+  /// Spec C4/C4p. The window resolved against [now] — what the guest's locked
+  /// card and the host's banner both render.
+  CheckInWindow checkInWindowAt(DateTime now) {
+    final opensAt = settings.checkInOpensAt;
+    final isOpen = isCheckInOpenAt(now);
+    final remaining = (!isOpen && opensAt != null)
+        ? opensAt.difference(now).inSeconds
+        : 0;
+    return CheckInWindow(
+      opensAt: opensAt,
+      isOpen: isOpen,
+      secondsUntilOpen: remaining > 0 ? remaining : 0,
+    );
+  }
+
+  /// §E17 row 29 — Add-on-break placement / re-solve:
+  /// First break moves to right after the suggested rebuy close, same
+  /// count/minutes; ladder re-solved once; kept only if the re-solve keeps
+  /// the same close level. Break note "Add-on window" (+ colour-up note if
+  /// coincident).
+  ///
+  /// Engine integration: the suggested rebuy close level comes from
+  /// [TournamentEngine.rebuyCloseLevel] (§F1.10). The add-on break is placed
+  /// immediately after that level. If the structure is edited (pins/insert),
+  /// the ladder is re-solved but only kept if the close level stays the same.
+  /// Colour-up note is added if the break coincides with a colour-up trigger.
+
+  /// Spec C6, entry point 2. The level whose end an early rebuy close would
+  /// land on, or null when "End rebuys now" must stay hidden.
+  ///
+  /// Null (button hidden) when: the game has no rebuys; they are already
+  /// closed; the tournament is not actually being played (the settlement
+  /// break, a finished game, or a lobby); there is no later level to hand
+  /// play to; or the current level IS already the closing level, in which
+  /// case the same close happens on the next press of Next and offering a
+  /// button that changes nothing would be a lie.
+  int? get endRebuysNowLevel {
+    if (!settings.rebuys) return null;
+    if (rebuysClosed) return null;
+    if (status != LiveGameStatus.running &&
+        status != LiveGameStatus.paused) {
+      return null;
+    }
+    if (currentLevel < 1) return null;
+    if (currentLevel >= settings.rebuysCloseLevel) return null;
+    if (currentLevel >= structure.levels.length) return null;
+    return currentLevel;
+  }
+
+  /// Spec C6. True from the moment the current level becomes the closing level
+  /// — whether that was configured up front (entry point 1) or armed by the
+  /// host mid-level (entry point 2) — until the break actually starts.
+  ///
+  /// Drives the header pill: REBUYS CLOSING while the room still has a few
+  /// hands to play with the window open, BREAK once it has been shut.
+  bool get rebuysClosingArmed {
+    if (!settings.rebuys) return false;
+    if (rebuysClosed) return false;
+    if (currentLevel != settings.rebuysCloseLevel) return false;
+    return status == LiveGameStatus.running ||
+        status == LiveGameStatus.paused ||
+        status == LiveGameStatus.onBreak;
+  }
+
   /// True once no further rebuy may be recorded.
   ///
   /// The settlement break itself is NOT closed: User Flow section 4.13 and
@@ -467,8 +1269,32 @@ class LiveGame {
     if (!settings.rebuys) return true;
     if (settlementConfirmed) return true;
     if (status == LiveGameStatus.rebuypause) return false;
-    if (status.index > LiveGameStatus.rebuypause.index) return true;
+    if (status == LiveGameStatus.finaltable ||
+        status == LiveGameStatus.completed ||
+        status == LiveGameStatus.cancelled) {
+      return true;
+    }
+    // Scheduled breaks do not close the window by themselves.
     return currentLevel > settings.rebuysCloseLevel;
+  }
+
+  /// Whether [player] may still re-enter. §9's cap, rebuyLimit interplay, plus the existing window.
+  bool canReEnter(Player player) {
+    if (!settings.reEntry) return false;
+    if (rebuysClosed) return false;
+    final cap = settings.maxReEntries ?? settings.rebuyLimit;
+    if (cap != null && player.reEntries >= cap) return false;
+    if (settings.rebuyLimit != null && (player.rebuys + player.reEntries) >= settings.rebuyLimit!) {
+      return false;
+    }
+    return true;
+  }
+
+  /// One elimination from the money (§22.5, §27.5). The table plays very
+  /// differently here and the room should be told.
+  bool get isOnBubble {
+    final paid = structure.paidPlacesForDisplay;
+    return paid > 0 && activePlayers.length == paid + 1;
   }
 
   /// True once NO NEW PLAYER may enter (User Flow section 4.13, Technical
@@ -481,7 +1307,10 @@ class LiveGame {
   /// join. Sharing one flag meant reopening the rebuy window would also have
   /// reopened the door.
   bool get registrationClosed =>
-      status.index >= LiveGameStatus.rebuypause.index ||
+      status == LiveGameStatus.rebuypause ||
+      status == LiveGameStatus.finaltable ||
+      status == LiveGameStatus.completed ||
+      status == LiveGameStatus.cancelled ||
       // The closing LEVEL applies whether or not rebuys are enabled.
       //
       // Gating this on `settings.rebuys` left a no-rebuy tournament with no
@@ -490,9 +1319,22 @@ class LiveGame {
       // rebuys, so the status never reaches it and walk-ins, guest claims and
       // check-ins stayed open at level 12 of a live game. Technical section
       // 10.3 closes late registration when the rebuy level ends regardless.
+      // Scheduled breaks (`onBreak`) never close it by themselves.
       (settings.rebuysCloseLevel > 0 &&
           currentLevel > settings.rebuysCloseLevel);
 
+  /// The final payout ladder stays private until no more entries can change
+  /// it. Rebuy and re-entry games use the settlement confirmation as that
+  /// boundary; freeze-outs have no settlement, so their existing late-
+  /// registration boundary is the reveal point.
+  bool get payoutTableRevealed {
+    final format = settings.effectiveFormat;
+    if (format == TournamentFormat.rebuy ||
+        format == TournamentFormat.reEntry) {
+      return settlementConfirmed;
+    }
+    return registrationClosed;
+  }
 
   /// Starting stacks are frozen the moment the tournament goes live. Blinds,
   /// levels and the player count stay editable during play (client feedback).
@@ -500,6 +1342,7 @@ class LiveGame {
       status == LiveGameStatus.running ||
       status == LiveGameStatus.paused ||
       status == LiveGameStatus.rebuypause ||
+      status == LiveGameStatus.onBreak ||
       status == LiveGameStatus.finaltable;
 
   LiveGame copyWith({
@@ -518,14 +1361,27 @@ class LiveGame {
     List<AuditRecord>? auditHistory,
     int? totalChipsInPlay,
     List<Player>? pendingGuests,
+    List<String>? waitlist,
     List<String>? finishOrder,
+    List<double>? dealAmounts,
+    bool clearDealAmounts = false,
+    List<PaymentRecord>? payments,
+    List<String>? organizerIds,
+    ShotClock? shotClock,
+    bool clearShotClock = false,
     SpeedRecommendation? speedRecommendation,
     TournamentStructure? structure,
     bool? settlementConfirmed,
+      bool? addOnWindowClosed,
+      List<String>? addOnDeclined,
     bool? seatingConfirmed,
     bool? checkInClosed,
     bool? structureConfirmed,
     bool? finalTableRedrawCompleted,
+    bool? handForHandActive,
+    int? handForHandHand,
+    List<int>? handForHandDoneTables,
+    bool? bubbleSaveRecorded,
     String? dealerPlayerId,
     List<GuestSlot>? guestSlots,
     List<BlindLevel>? originalLevels,
@@ -533,6 +1389,7 @@ class LiveGame {
     List<String>? addOnRequests,
     DateTime? levelEndTime,
     DateTime? startedAt,
+    int? actualDurationMins,
     bool clearSpeedRecommendation = false,
     bool clearLevelEndTime = false,
     List<String>? changeLog,
@@ -541,8 +1398,11 @@ class LiveGame {
     String? editorDeviceId,
     DateTime? editorClaimedAt,
     String? audioMasterDeviceId,
+    ShootoutStage? shootoutStage,
+    int? codecVersion,
   }) {
     return LiveGame(
+      codecVersion: codecVersion ?? this.codecVersion,
       id: id ?? this.id,
       groupId: groupId ?? this.groupId,
       settings: settings ?? this.settings,
@@ -559,15 +1419,32 @@ class LiveGame {
       auditHistory: auditHistory ?? this.auditHistory,
       totalChipsInPlay: totalChipsInPlay ?? this.totalChipsInPlay,
       pendingGuests: pendingGuests ?? this.pendingGuests,
+      waitlist: waitlist ?? this.waitlist,
       finishOrder: finishOrder ?? this.finishOrder,
+      // `clearDealAmounts` exists because `dealAmounts: null` cannot express
+      // "remove the deal": a null parameter means "keep what is there" in
+      // every other copyWith here, so passing null through would leave the
+      // agreed amounts attached to a projection that must not carry them.
+      dealAmounts: clearDealAmounts
+          ? null
+          : dealAmounts ?? this.dealAmounts,
+      payments: payments ?? this.payments,
+      organizerIds: organizerIds ?? this.organizerIds,
+      shotClock: clearShotClock ? null : (shotClock ?? this.shotClock),
       speedRecommendation: clearSpeedRecommendation
           ? null
           : speedRecommendation ?? this.speedRecommendation,
       settlementConfirmed: settlementConfirmed ?? this.settlementConfirmed,
+      addOnWindowClosed: addOnWindowClosed ?? this.addOnWindowClosed,
+      addOnDeclined: addOnDeclined ?? this.addOnDeclined,
       seatingConfirmed: seatingConfirmed ?? this.seatingConfirmed,
       checkInClosed: checkInClosed ?? this.checkInClosed,
       structureConfirmed: structureConfirmed ?? this.structureConfirmed,
       finalTableRedrawCompleted: finalTableRedrawCompleted ?? this.finalTableRedrawCompleted,
+      handForHandActive: handForHandActive ?? this.handForHandActive,
+      handForHandHand: handForHandHand ?? this.handForHandHand,
+      handForHandDoneTables: handForHandDoneTables ?? this.handForHandDoneTables,
+      bubbleSaveRecorded: bubbleSaveRecorded ?? this.bubbleSaveRecorded,
       dealerPlayerId: dealerPlayerId ?? this.dealerPlayerId,
       guestSlots: guestSlots ?? this.guestSlots,
       originalLevels: originalLevels ?? this.originalLevels,
@@ -577,12 +1454,23 @@ class LiveGame {
           ? null
           : levelEndTime ?? this.levelEndTime,
       startedAt: startedAt ?? this.startedAt,
+      actualDurationMins: actualDurationMins ?? this.actualDurationMins,
       changeLog: changeLog ?? this.changeLog,
       revision: revision ?? this.revision,
       lastIdempotencyKey: lastIdempotencyKey ?? this.lastIdempotencyKey,
       editorDeviceId: editorDeviceId ?? this.editorDeviceId,
       editorClaimedAt: editorClaimedAt ?? this.editorClaimedAt,
       audioMasterDeviceId: audioMasterDeviceId ?? this.audioMasterDeviceId,
+      shootoutStage: shootoutStage ?? this.shootoutStage,
     );
   }
+}
+/// A one-tap shallow-start fix expressed on the host's settings. Lives here
+/// (not on [ShallowFix]) because `tournament.dart` cannot import this file.
+extension ShallowFixSettings on ShallowFix {
+  GameSettings applyToSettings(GameSettings s) => s.copyWith(
+        rebuyLimit: rebuyLimit,
+        expectedRebuyRate: expectedRebuyRate,
+        addOn: addOn,
+      );
 }

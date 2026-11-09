@@ -3,7 +3,371 @@
 /// Extracted verbatim from app_provider.dart (`// ── Late registration ──` + structure/completion). Do not change business logic.
 part of 'app_provider.dart';
 
+/// §10.1. What the group's last five nights say about their own pace, offered
+/// to the host BEFORE generation runs.
+///
+/// Carries the measured average as well as the percentage because the spec
+/// requires the host to SEE the evidence — "the host sees the measured average
+/// and the proposed percentage before generation runs, and explicitly accepts
+/// or declines it". A bare percentage is not something anyone can judge.
+class PaceProposal {
+  const PaceProposal({
+    required this.adjustmentPct,
+    required this.meanOverageMins,
+    required this.meanActualMins,
+    required this.targetDurationMins,
+    required this.sampleSize,
+  });
+
+  /// Clamped to ±0.20 by the engine. Positive means the group consistently
+  /// OVERRUNS, so levels must get SHORTER: accepting scales
+  /// `levelDurationMins` by (1 − [adjustmentPct]).
+  final double adjustmentPct;
+
+  /// Mean of (actual − target) across the sample, in minutes. Positive means
+  /// they run long. This is the number the host is shown.
+  final double meanOverageMins;
+
+  /// Mean measured wall-clock length of the sampled nights, in minutes.
+  final double meanActualMins;
+
+  /// The CURRENT tournament's target length in minutes — what the proposal is
+  /// being applied to.
+  final int targetDurationMins;
+
+  /// How many completed nights fed the average. Always 5 today, because §10.1
+  /// returns nothing below five, but exposed so the UI never has to assume it.
+  final int sampleSize;
+
+  /// The level length the host would end up with, given [baseLevelMins].
+  int scaledLevelMins(int baseLevelMins) =>
+      (baseLevelMins * (1 - adjustmentPct)).round();
+}
+
+/// One §34a award: who won it and the number that won it.
+class RecapAward {
+  const RecapAward({
+    required this.playerId,
+    required this.playerName,
+    required this.value,
+  });
+
+  final String playerId;
+  final String playerName;
+
+  /// The measurement behind the award — lowest stack in big blinds, the level
+  /// of the first bust, or a knockout count, depending on which award this is.
+  final int value;
+}
+
+/// §34a post-game recap, computed once the game reaches `completed`.
+///
+/// Every award excludes players whose finishing position is <= 0 (§34): a row
+/// with no position never played, and a no-show cannot win "fastest bust".
+class GameRecap {
+  const GameRecap({this.biggestComeback, this.fastestBust, this.mostKnockouts});
+
+  /// Lowest [Player.lowestStackBB] among the top-3 finishers.
+  ///
+  /// Only ever populated for players the host bothered to spot-check via
+  /// [Player.stack] before an elimination — [AppProviderPlayers.eliminatePlayer]
+  /// samples it there. A typical night where nobody's stack was ever entered
+  /// still reports no comeback rather than inventing one from a proxy.
+  final RecapAward? biggestComeback;
+
+  /// Lowest [Player.eliminatedAtLevel] among non-winners — the shortest night.
+  final RecapAward? fastestBust;
+
+  /// Highest knockout count.
+  final RecapAward? mostKnockouts;
+
+  bool get isEmpty =>
+      biggestComeback == null && fastestBust == null && mostKnockouts == null;
+}
+
 extension AppProviderTournament on AppProvider {
+  // ── §34a post-game recap ───────────────────────────────────────────────────
+
+  /// Final finishing position for every player who has one (1 = winner).
+  ///
+  /// Eliminated players carry theirs on [Player.eliminationPos]. Survivors do
+  /// not: [recordFinishOrder] stores only the id list, so their places are
+  /// derived here exactly as [_validateCompletionState] derives them, from
+  /// `finishOrder` read first-out-first. Two readings of the same list must
+  /// never disagree, so this deliberately mirrors the validator rather than
+  /// inventing a second convention.
+  Map<String, int> _finalPositions(LiveGame game) {
+    final positions = <String, int>{};
+    for (final p in game.players) {
+      if (p.eliminated && p.eliminationPos != null) {
+        positions[p.id] = p.eliminationPos!;
+      }
+    }
+    final activeCount = game.activePlayers.length;
+    var survivorRank = 0;
+    final seen = <String>{};
+    for (final id in game.finishOrder) {
+      if (!seen.add(id)) continue;
+      final p = game.players.where((x) => x.id == id).firstOrNull;
+      if (p == null || p.eliminated) continue;
+      survivorRank++;
+      positions[id] = activeCount - survivorRank + 1;
+    }
+    return positions;
+  }
+
+  /// §34a. The three post-game awards for the open game, or null before it is
+  /// `completed` (the spec computes them once, at completion).
+  ///
+  /// Pure: reading this mutates nothing, so a screen may call it in `build`.
+  GameRecap? get gameRecap {
+    final game = _currentGame;
+    if (game == null || game.status != LiveGameStatus.completed) return null;
+    return recapFor(game);
+  }
+
+  /// §34a for any completed game — the history screen shows recaps for nights
+  /// that are not the open one.
+  GameRecap recapFor(LiveGame game) {
+    final positions = _finalPositions(game);
+    // §34: "exclude position <= 0 from all three". A player with no position
+    // at all never finished the event and is excluded on the same grounds.
+    final eligible = [
+      for (final p in game.players)
+        if ((positions[p.id] ?? 0) > 0) p,
+    ];
+    if (eligible.isEmpty) return const GameRecap();
+
+    // Biggest comeback: lowest stack ever held, among the top three.
+    // `lowestStackBB` is null on every player until §25.5's stack sampling
+    // exists, so `candidates` is empty and this stays null — by design. The
+    // ranking is written out so the award works the moment data appears.
+    RecapAward? comeback;
+    final topThree = [
+      for (final p in eligible)
+        if ((positions[p.id] ?? 0) <= 3 && p.lowestStackBB != null) p,
+    ];
+    if (topThree.isNotEmpty) {
+      var best = topThree.first;
+      for (final p in topThree) {
+        if (p.lowestStackBB! < best.lowestStackBB!) best = p;
+      }
+      comeback = RecapAward(
+        playerId: best.id,
+        playerName: best.name,
+        value: best.lowestStackBB!,
+      );
+    }
+
+    // Fastest bust: the earliest level anybody went out on. The winner is
+    // excluded by construction — they were never eliminated, so they carry no
+    // `eliminatedAtLevel` — and position 1 is skipped explicitly so a chopped
+    // or hand-recorded finish cannot slip them in.
+    RecapAward? fastest;
+    final busted = [
+      for (final p in eligible)
+        if (p.eliminatedAtLevel != null && (positions[p.id] ?? 0) > 1) p,
+    ];
+    if (busted.isNotEmpty) {
+      var first = busted.first;
+      for (final p in busted) {
+        if (p.eliminatedAtLevel! < first.eliminatedAtLevel!) first = p;
+      }
+      fastest = RecapAward(
+        playerId: first.id,
+        playerName: first.name,
+        value: first.eliminatedAtLevel!,
+      );
+    }
+
+    // Most knockouts. A night where nobody was credited with one has no
+    // winner here rather than an arbitrary player on zero.
+    RecapAward? knockouts;
+    var top = eligible.first;
+    for (final p in eligible) {
+      if (p.knockouts > top.knockouts) top = p;
+    }
+    if (top.knockouts > 0) {
+      knockouts = RecapAward(
+        playerId: top.id,
+        playerName: top.name,
+        value: top.knockouts,
+      );
+    }
+
+    return GameRecap(
+      biggestComeback: comeback,
+      fastestBust: fastest,
+      mostKnockouts: knockouts,
+    );
+  }
+
+  // ── §10.1 pace learning ────────────────────────────────────────────────────
+
+  /// The group's completed nights that carry a usable §3 `actualDurationMins`,
+  /// most recent first.
+  ///
+  /// Ordered by [LiveGame.startedAt] where it exists and by the (sortable)
+  /// `settings.date` otherwise — the same ordering the repository's own
+  /// `orderBy('settings.date', descending: true)` uses. The open game is
+  /// excluded: a night cannot learn from itself.
+  List<LiveGame> _paceHistory() {
+    final currentId = _currentGame?.id;
+    final rows = _currentGroup.pastGames
+        .where(
+          (g) =>
+              g.id != currentId &&
+              g.actualDurationMins != null &&
+              g.actualDurationMins! > 0 &&
+              g.settings.durationHours > 0,
+        )
+        .toList();
+    rows.sort((a, b) {
+      final at = a.startedAt, bt = b.startedAt;
+      if (at != null && bt != null) return bt.compareTo(at);
+      return b.settings.date.compareTo(a.settings.date);
+    });
+    return rows;
+  }
+
+  /// §10.1's proposal for the open tournament, or null when there is nothing
+  /// worth asking about — fewer than five completed nights, or a mean overage
+  /// under 15 minutes, both of which [TournamentEngine.paceAdjustmentFor]
+  /// decides. Null MUST mean the host is not asked.
+  ///
+  /// Pure: reading this changes nothing. §10.1 forbids silent application, so
+  /// the proposal only becomes real through [acceptPaceAdjustment].
+  PaceProposal? get paceProposal {
+    if (_currentGroup.learningOptOut) return null;
+    final game = _currentGame;
+    if (game == null) return null;
+    final history = _paceHistory();
+    if (history.length < 5) return null;
+    final sample = history.take(5).toList();
+
+    final actuals = [for (final g in sample) g.actualDurationMins!];
+    final estimates = [
+      for (final g in sample) (g.settings.durationHours * 60).round(),
+    ];
+    final pct = TournamentEngine.paceAdjustmentFor(
+      actualDurationMins: actuals,
+      estimatedDurationMins: estimates,
+    );
+    if (pct == null) return null;
+
+    var sumOverage = 0.0;
+    var sumActual = 0.0;
+    for (var i = 0; i < sample.length; i++) {
+      sumOverage += actuals[i] - estimates[i];
+      sumActual += actuals[i];
+    }
+    return PaceProposal(
+      adjustmentPct: pct,
+      meanOverageMins: sumOverage / sample.length,
+      meanActualMins: sumActual / sample.length,
+      targetDurationMins: (game.settings.durationHours * 60).round(),
+      sampleSize: sample.length,
+    );
+  }
+
+  /// True while a §10.1 proposal is outstanding: one exists and the host has
+  /// neither accepted nor declined it for this game. The UI shows the prompt
+  /// on this, not on [paceProposal] alone, so a decline stays declined.
+  bool get paceProposalPending =>
+      !_paceProposalAnswered && paceProposal != null;
+
+  /// The adjustment the host accepted for the open game, or null. Exposed so
+  /// the structure screen can show "levels shortened 8.6% on your own pace"
+  /// rather than leaving an unexplained number in the schedule.
+  double? get acceptedPaceAdjustmentPct => _acceptedPaceAdjustmentPct;
+
+  /// The level length §10.1's scaling starts from: the host's explicit choice
+  /// when they made one, otherwise whatever the last generation settled on.
+  int _paceBaseLevelMins(LiveGame game) {
+    final stated = game.settings.levelDurationMins;
+    if (stated != null && stated > 0) return stated;
+    return game.structure.levelDuration;
+  }
+
+  /// §10.1. The host has SEEN the measured average and said yes.
+  ///
+  /// Scales `levelDurationMins` by (1 − adjustmentPct) and writes it into the
+  /// settings, which is where every generation path reads it from
+  /// ([generateFinalStructure] and [_recalculateWithPlayers] both pass
+  /// `settings.levelDurationMins` into [TournamentEngine.generate]). Storing
+  /// the decision rather than passing it through a parameter is what makes it
+  /// survive the T-minus-10 recalculation and the final regeneration at Start.
+  ///
+  /// Returns a human summary of what changed, or null if there was nothing to
+  /// accept.
+  String? acceptPaceAdjustment() {
+    final game = _currentGame;
+    if (game == null) return null;
+    if (_acceptedPaceAdjustmentPct != null) return null; // already applied once
+    final proposal = paceProposal;
+    if (proposal == null) return null;
+
+    final base = _paceBaseLevelMins(game);
+    if (base <= 0) return null;
+    final scaled = proposal
+        .scaledLevelMins(base)
+        .clamp(
+          TournamentEngine.kMinLevelDurationMins,
+          TournamentEngine.kMaxLevelDurationMins,
+        );
+
+    _pushUndo();
+    _acceptedPaceAdjustmentPct = proposal.adjustmentPct;
+    _paceProposalAnswered = true;
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(levelDurationMins: scaled),
+    );
+    final pctLabel = (proposal.adjustmentPct * 100).abs().toStringAsFixed(1);
+    final summary =
+        'Levels ${proposal.adjustmentPct > 0 ? 'shortened' : 'lengthened'} '
+        '$pctLabel% to $scaled min (was $base): this group averaged '
+        '${proposal.meanActualMins.round()} min over their last '
+        '${proposal.sampleSize} nights, '
+        '${proposal.meanOverageMins.round().abs()} min '
+        '${proposal.meanOverageMins >= 0 ? 'over' : 'under'} target.';
+    addAuditRecord('pace_adjustment', summary);
+    // Regenerate only if there is already a structure to correct. Before the
+    // first generation the stored setting is enough — the very next generate
+    // call reads it.
+    if (game.structure.levels.isNotEmpty) {
+      recalculateStructure();
+    }
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return summary;
+  }
+
+  /// §10.1. The host has seen the same evidence and said no. Records the
+  /// answer so the prompt does not reappear, and changes nothing else.
+  void declinePaceAdjustment() {
+    if (_paceProposalAnswered) return;
+    _paceProposalAnswered = true;
+    final proposal = paceProposal;
+    if (proposal != null) {
+      addAuditRecord(
+        'pace_adjustment',
+        'Host declined the suggested '
+            '${(proposal.adjustmentPct * 100).abs().toStringAsFixed(1)}% level '
+            'adjustment (group averaged ${proposal.meanActualMins.round()} min '
+            'over ${proposal.sampleSize} nights).',
+      );
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Forgets the host's answer. Called when a different game is opened — the
+  /// decision is per tournament, and a stale "already accepted" would suppress
+  /// the prompt for the next night entirely.
+  void _resetPaceProposalState() {
+    _acceptedPaceAdjustmentPct = null;
+    _paceProposalAnswered = false;
+  }
+
   /// Late registration stays open until the rebuy period ends — the configured
   /// closing level, normally the end of Level 6 (07-039, 12-028, 20-023).
   bool get lateRegistrationOpen {
@@ -12,10 +376,86 @@ extension AppProviderTournament on AppProvider {
     final live =
         game.status == LiveGameStatus.running ||
         game.status == LiveGameStatus.paused;
-    return live &&
-        !game.settlementConfirmed &&
-        game.currentLevel <= game.settings.rebuysCloseLevel;
+    return live && !game.registrationClosed;
   }
+
+  /// Spec C6, entry point 2. "End rebuys now - after Level {n}": pulls the
+  /// rebuy close forward to the end of the level being played right now.
+  ///
+  /// It does this by moving `rebuysCloseLevel` to the current level rather than
+  /// by reaching for a second copy of the rebuy-close state machine. The close
+  /// itself is then performed by the very same code that has always performed
+  /// it — `nextLevel`'s crossing test sees `currentLevel <= rebuysCloseLevel`
+  /// and `next > rebuysCloseLevel` and enters the identical `rebuypause` hold
+  /// when this level ends, whether the host presses Next or the clock runs
+  /// out. Two entry points, one transition, so the two can never drift.
+  ///
+  /// The clock is deliberately NOT stopped here. "After Level {n}" means the
+  /// current level is still played out in full; the host who wanted the game
+  /// halted has the pause button, and a host who wants out right now has the
+  /// settlement screen. Between this call and the break, the header reads
+  /// REBUYS CLOSING rather than RUNNING ([LiveGame.rebuysClosingArmed]), so the
+  /// room knows the window is about to shut.
+  ///
+  /// Returns true when it applied. Silent no-op otherwise: the model decides
+  /// visibility ([LiveGame.endRebuysNowLevel]) and this is the same gate
+  /// re-checked at the only place that can be sure.
+  bool endRebuysNow() {
+    final game = _currentGame;
+    if (game == null) return false;
+    // `canRunCurrentGame`, not `isAdmin`: an assigned tournament organizer runs
+    // this tournament without administering the group (§28).
+    if (!canRunCurrentGame) return false;
+    final level = game.endRebuysNowLevel;
+    if (level == null) return false;
+    // The game must not be rewritten underneath an in-flight action.
+    _forceClaimEditor();
+    if (_currentGame!.currentLevel != level) return false;
+
+    _pushUndo();
+    _currentGame = _currentGame!.copyWith(
+      settings: _currentGame!.settings.copyWith(
+        rebuysCloseLevel: level,
+        rebuyCloseChosenByOrganizer: true,
+      ),
+    );
+    addAnnouncement('Rebuys now close at the end of Level $level.', true);
+    final rebKey = '${_currentGame!.id}-rebuysClosing-$level';
+    if (!_hasFiredReminder(rebKey)) {
+      _sentReminderKeys.add(rebKey);
+      pushNotification(
+        AppNotification(
+          id: 'remind-rebuys-${_currentGame!.id}-$level-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Rebuys closing',
+          body: 'Rebuys close after Level $level.',
+          type: NotificationType.game,
+          link: '/player-live',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+    }
+    addAuditRecord(
+      'rebuys_close_early',
+      'Rebuy close pulled forward to the end of level $level by the host '
+          '(was level ${game.settings.rebuysCloseLevel}).',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return true;
+  }
+
+  /// Spec C6. Whether "End rebuys now" may be offered right now — true only
+  /// to somebody who can run this tournament, and only while the level that
+  /// would be closed early is actually being played.
+  ///
+  /// Both halves are load-bearing, and kept here rather than in each caller:
+  /// [canRunCurrentGame] is the authorization half (a plain member has no
+  /// business closing the rebuy window for the table), the level is the
+  /// meaningfulness half. A screen that reads only the level and gates on its
+  /// own flag is how the two drift apart, so this is the accessor to use.
+  bool get canEndRebuysNow =>
+      canRunCurrentGame && _currentGame?.endRebuysNowLevel != null;
 
   /// Adds a registered player during late registration (12-022/12-023).
   /// The late player receives a full fresh starting stack (12-024) and is
@@ -23,6 +463,16 @@ extension AppProviderTournament on AppProvider {
   /// (12-025). Totals are recalculated (12-026).
   void addLatePlayer(String name) {
     if (!lateRegistrationOpen) return;
+    // Same free-hosting limit as check-in (addendum §3). A late arrival is
+    // still an active player.
+    final active = _currentGame!.players
+        .where((p) => p.active && !p.eliminated)
+        .length;
+    if (!canHostPlayers(active + 1)) {
+      lastRsvpError = hostingBlockedReason(active + 1);
+      if (!_disposed) notifyListeners();
+      return;
+    }
     _pushUndo();
     final game = _currentGame!;
     final id = 'p-${DateTime.now().millisecondsSinceEpoch}';
@@ -50,6 +500,13 @@ extension AppProviderTournament on AppProvider {
     _updatePrizePool();
     _syncGroupGame();
     addAnnouncement('${player.name} has joined the tournament.', true);
+    // Spec 14: a late player is a live operational action — seat and time
+    // both recorded.
+    addAuditRecord(
+      'late_player',
+      '${player.name} joined during late registration — '
+          'table $table seat $seat, ${game.structure.startingStack} chips.',
+    );
     if (!_disposed) notifyListeners();
   }
 
@@ -110,8 +567,10 @@ extension AppProviderTournament on AppProvider {
       counts[p.table] = (counts[p.table] ?? 0) + 1;
     }
     final maxPerTable = effectiveTableSettings.maxPerTable.clamp(2, 999);
-    final tableCount =
-        (game.activePlayers.length / maxPerTable).ceil().clamp(1, maxPerTable);
+    final tableCount = (game.activePlayers.length / maxPerTable).ceil().clamp(
+      1,
+      maxPerTable,
+    );
     var bestTable = 1;
     var bestCount = 1 << 30;
     for (var t = 1; t <= tableCount; t++) {
@@ -172,14 +631,13 @@ extension AppProviderTournament on AppProvider {
 
     // Delegate the organizer-cut and prize-split maths to the shared helper in
     // TournamentEngine so the rules stay consistent everywhere.
-    final int roundingUnit = TournamentEngine.roundingUnitFor(s.buyIn);
-
-    final recalculated = TournamentEngine.recalculatePrizes(
-      grossEligible,
-      confirmedCount,
-      s.organizerPct.toDouble(),
+    final recalculated = PayoutBridge.recalculate(
+      grossEligible: grossEligible,
+      players: confirmedCount,
+      organizerPct: _effectiveLegalFeePct(s.effectiveOrganizerPct),
+      buyIn: s.buyIn,
       forcePaidPlaces: s.forcePaidPlaces,
-      roundingUnit: roundingUnit,
+      extraEntries: totalRebuys + totalReEntries,
     );
 
     // Patch only the financial fields; levels and all other structure data
@@ -192,6 +650,14 @@ extension AppProviderTournament on AppProvider {
         prizes: recalculated.prizes,
       ),
     );
+  }
+
+  int _effectiveLegalFeePct(num requestedPct) {
+    if (requestedPct <= 0) return 0;
+    // Spec H4 / D13: Organiser fee requires 18+ and legal gate acceptance
+    if (user != null && !user!.organizerContributionAccepted) return 0;
+    if (user != null && !user!.is18Plus) return 0;
+    return requestedPct.round();
   }
 
   /// Manually overrides the number of paid places and recalculates prizes.
@@ -207,6 +673,27 @@ extension AppProviderTournament on AppProvider {
     addAuditRecord(
       'structure_edit',
       'Paid places overridden to ${count ?? 'auto'}',
+    );
+    if (!_disposed) notifyListeners();
+  }
+
+  /// "Fix the count" (Addendum 2, A2-4): the host found the box holds a
+  /// different number of some colour than the set says. Changes TONIGHT'S
+  /// game only — never the saved F5 chip set — and never regenerates the
+  /// structure: a running night gets no silent re-plan (§F4). The host can
+  /// still Recalculate deliberately afterwards.
+  void fixChipCount(List<ChipColor> counts) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return;
+    final game = _currentGame;
+    if (game == null || _sameChipSet(game.settings.chipSet, counts)) return;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(chipSet: counts),
+    );
+    addAuditRecord(
+      'structure_edit',
+      'Chip count fixed for tonight (${counts.map((c) => '${c.color} ×${c.quantity}').join(', ')})',
     );
     if (!_disposed) notifyListeners();
   }
@@ -281,8 +768,12 @@ extension AppProviderTournament on AppProvider {
         ? 10
         : (newDuration > 20 ? 20 : newDuration);
 
-    final pastLevels = structure.levels.where((l) => l.level <= game.currentLevel).toList();
-    var futureLevels = structure.levels.where((l) => l.level > game.currentLevel).toList();
+    final pastLevels = structure.levels
+        .where((l) => l.level <= game.currentLevel)
+        .toList();
+    var futureLevels = structure.levels
+        .where((l) => l.level > game.currentLevel)
+        .toList();
 
     if (futureLevels.isNotEmpty) {
       final chips = game.settings.chipSet;
@@ -310,7 +801,10 @@ extension AppProviderTournament on AppProvider {
 
         // 2. Increase future blinds (steepen curve)
         futureLevels = futureLevels.map((l) {
-          final newBB = TournamentEngine.snapToPracticalBlind(l.bb * 1.25, chips);
+          final newBB = TournamentEngine.snapToPracticalBlind(
+            l.bb * 1.25,
+            chips,
+          );
           final newSB = TournamentEngine.snapToPracticalBlind(newBB / 2, chips);
           return BlindLevel(
             level: l.level,
@@ -345,25 +839,35 @@ extension AppProviderTournament on AppProvider {
         final newFuture = <BlindLevel>[];
         for (var i = 0; i < futureLevels.length; i++) {
           final current = futureLevels[i];
-          newFuture.add(BlindLevel(
-            level: current.level,
-            sb: current.sb,
-            bb: current.bb,
-            ante: current.ante,
-            durationMins: clamped,
-          ));
+          newFuture.add(
+            BlindLevel(
+              level: current.level,
+              sb: current.sb,
+              bb: current.bb,
+              ante: current.ante,
+              durationMins: clamped,
+            ),
+          );
           if (!inserted && i < futureLevels.length - 1) {
             final next = futureLevels[i + 1];
             if (next.bb >= current.bb * 2) {
-              final midBB = TournamentEngine.snapToPracticalBlind(current.bb * 1.5, chips);
-              final midSB = TournamentEngine.snapToPracticalBlind(midBB / 2, chips);
-              newFuture.add(BlindLevel(
-                level: 0, // will re-index later
-                sb: midSB,
-                bb: midBB,
-                ante: current.ante,
-                durationMins: clamped,
-              ));
+              final midBB = TournamentEngine.snapToPracticalBlind(
+                current.bb * 1.5,
+                chips,
+              );
+              final midSB = TournamentEngine.snapToPracticalBlind(
+                midBB / 2,
+                chips,
+              );
+              newFuture.add(
+                BlindLevel(
+                  level: 0, // will re-index later
+                  sb: midSB,
+                  bb: midBB,
+                  ante: current.ante,
+                  durationMins: clamped,
+                ),
+              );
               inserted = true;
             }
           }
@@ -382,6 +886,12 @@ extension AppProviderTournament on AppProvider {
         bb: l.bb,
         ante: l.ante,
         durationMins: l.level > game.currentLevel ? clamped : l.durationMins,
+        // Rebuilding the level used to drop this flag, which sections 11 and
+        // 29 forbid outright -- "manual future edits need visible markers and
+        // cannot be silently overwritten". A speed change is itself a
+        // deliberate human change to future levels, so those carry the marker
+        // from here on; earlier levels keep whatever they already had.
+        manuallyEdited: l.manuallyEdited || l.level > game.currentLevel,
       );
     }
 
@@ -389,10 +899,12 @@ extension AppProviderTournament on AppProvider {
     final oldFuture = structure.levels
         .where((l) => l.level > game.currentLevel)
         .toList();
-    final newFuture =
-        allLevels.where((l) => l.level > game.currentLevel).toList();
+    final newFuture = allLevels
+        .where((l) => l.level > game.currentLevel)
+        .toList();
     final durationChanged = clamped != structure.levelDuration;
-    final blindsChanged = oldFuture.length != newFuture.length ||
+    final blindsChanged =
+        oldFuture.length != newFuture.length ||
         [
           for (var i = 0; i < oldFuture.length && i < newFuture.length; i++)
             if (oldFuture[i].bb != newFuture[i].bb ||
@@ -433,10 +945,7 @@ extension AppProviderTournament on AppProvider {
     _currentGame = game.copyWith(
       speedRecommendation: null,
       clearSpeedRecommendation: true,
-      structure: structure.copyWith(
-        levelDuration: clamped,
-        levels: allLevels,
-      ),
+      structure: structure.copyWith(levelDuration: clamped, levels: allLevels),
     );
 
     final parts = <String>[
@@ -495,11 +1004,13 @@ extension AppProviderTournament on AppProvider {
   int expectedPlayersFromRsvps(LiveGame game) {
     var total = 0;
     for (final p in game.players) {
-      if (!p.isGuest && p.rsvp != null && p.rsvp!.isGoing) {
+      if (!p.isGuest && !p.noShow && p.rsvp != null && p.rsvp!.isGoing) {
         total += 1 + p.rsvp!.guestCount;
       }
     }
-    return total >= 2 ? total : game.players.where((p) => !p.isGuest).length;
+    return total >= 2
+        ? total
+        : game.players.where((p) => !p.isGuest && !p.noShow).length;
   }
 
   /// Admin has reviewed the generated structure (30-minute estimate).
@@ -508,6 +1019,16 @@ extension AppProviderTournament on AppProvider {
     if (!_isGameAuthority) return;
     final game = _currentGame;
     if (game == null) return;
+    // A structure the chip case cannot deal is a placeholder, not a plan — it
+    // cannot be confirmed (the review screen shows the bank/depth card instead).
+    if (game.structure.isBlocked) {
+      addAuditRecord(
+        'structure_confirm_refused',
+        'Structure not confirmed: the chip case cannot deal this night.',
+      );
+      if (!_disposed) notifyListeners();
+      return;
+    }
     _currentGame = game.copyWith(structureConfirmed: true);
     addAuditRecord(
       'structure_confirm',
@@ -518,7 +1039,8 @@ extension AppProviderTournament on AppProvider {
       AppNotification(
         id: 'n-${DateTime.now().millisecondsSinceEpoch}',
         title: 'Structure ready',
-        body: '${_currentGame!.settings.name} - final structure has been generated and locked.',
+        body:
+            '${_currentGame!.settings.name} - final structure has been generated and locked.',
         type: NotificationType.game,
         link: '/structure-review',
         read: false,
@@ -548,11 +1070,30 @@ extension AppProviderTournament on AppProvider {
     final expected = confirmedCount > 0
         ? confirmedCount
         : (game.goingWithGuestsCount > 0
-            ? game.goingWithGuestsCount
-            : game.settings.players);
-    final count = expected < 2 ? 2 : expected;
-    final s = game.settings.copyWith(players: count);
-    final structure = TournamentEngine.generate(
+              ? game.goingWithGuestsCount
+              : game.settings.players);
+    // Section 6's precedence: Locked beats the admin override, which beats
+    // the RSVP-derived figure. When the host has said "prepare for 20", plan
+    // for 20 — but never for fewer people than have already checked in, since
+    // those are standing in the room holding a buy-in.
+    final locked = game.settings.lockedExpectedPlayers;
+    final override = game.settings.expectedPlayersOverride;
+    final stated = locked ?? override;
+    final planned = stated != null ? max(stated, confirmedCount) : expected;
+    final count = planned < 2 ? 2 : planned;
+    // §10.1: an ACCEPTED pace adjustment has already been folded into
+    // `settings.levelDurationMins` by [acceptPaceAdjustment], so it reaches
+    // the engine below through `s.levelDurationMins` like any other host
+    // choice. Nothing is applied here implicitly — a proposal the host never
+    // answered leaves this value untouched.
+    // The forecast is recorded with the settings so other devices can re-run
+    // the engine and reach the same structure (see structure_verification).
+    final s = game.settings.copyWith(
+      players: count,
+      forecastRebuyRate: forecastRebuyRate,
+      forecastAddOnTakeUp: forecastAddOnTakeUp,
+    );
+    final structure = solveWithPins(
       TournamentParams(
         players: count,
         durationHours: s.durationHours,
@@ -560,6 +1101,9 @@ extension AppProviderTournament on AppProvider {
         chipSet: s.chipSet,
         rebuys: s.rebuys,
         rebuysCloseLevel: s.rebuysCloseLevel,
+        rebuyCloseChosenByOrganizer: s.rebuyCloseChosenByOrganizer,
+        forceStack: s.forceStack,
+        targetDepthBB: s.targetDepthBB,
         reEntry: s.reEntry,
         addOn: s.addOn,
         anteEnabled: s.anteEnabled,
@@ -567,19 +1111,126 @@ extension AppProviderTournament on AppProvider {
         anteStyle: s.anteStyle,
         koEnabled: s.koEnabled,
         koAmount: s.koAmount,
-        organizerPct: s.organizerPct,
+        organizerPct: _effectiveLegalFeePct(s.effectiveOrganizerPct),
         rebuyCost: s.rebuyCost,
         addOnCost: s.addOnCost,
+        breaks: s.breaks,
+        expectedRebuys: s.expectedRebuys,
+        rebuyLimit: s.rebuyLimit,
+        expectedReEntries: s.expectedReEntries,
+        expectedAddOns: s.expectedAddOns,
+        rebuyChips: s.rebuyChips,
+        reEntryChips: s.reEntryChips,
+        addOnChips: s.addOnChips,
+        levelDurationMins: s.levelDurationMins,
+        pace: s.pace,
+        // Framework §14 / §F1 — the host's own nights when there are eight or
+        // more of them, the stated default below that. An explicit host
+        // override (`s.expectedRebuys`) still wins: it is passed above and
+        // takes precedence inside `effectiveExpectedRebuys`.
+        //
+        // The add-on take-up goes in too. §F1 measures it over the players
+        // alive at the break but §F1.3 applies it to the whole field, which
+        // over-counts slightly — and does so in the safe direction, since a
+        // larger `C` ends the night sooner rather than later. It is safe
+        // because §F1.5 point 1 keeps the chip BANK on a different number
+        // entirely: every player assumed to take the add-on, so a 70 %
+        // forecast can never under-size the box.
+        expectedRebuyRate: s.expectedRebuyRate ?? s.forecastRebuyRate,
+        addOnTakeUpRate: s.forecastAddOnTakeUp,
+        format: s.format,
+        maxReEntries: s.maxReEntries,
+        shootoutTables: s.shootoutTables,
+        shootoutTableTargetMins: s.shootoutTableTargetMins,
+        earlyArrivalBonusEnabled: s.earlyArrivalBonusEnabled,
+        earlyArrivalCutoffMins: s.earlyArrivalCutoffMins,
+        earlyArrivalBonusPctOverride: s.earlyArrivalBonusPctOverride,
       ),
+      s.levelPins,
     );
+    // Addendum acceptance criterion 10: the engine may move the rebuy cutoff
+    // while optimising, and that choice has to reach the settings that gate
+    // rebuys live -- otherwise it is a number in a structure nobody reads.
+    final withRebuyClose = structure.rebuysCloseLevel > 0
+        ? s.copyWith(rebuysCloseLevel: structure.rebuysCloseLevel)
+        : s;
+
+    // §11.4: this generation ALWAYS produces Stage A's structure for a
+    // shootout (see TournamentEngine.generate's own shootout branch), so a
+    // shootout game lands in Stage A here — every time this reruns, right up
+    // through Start, which is exactly what makes it safe to call repeatedly.
+    // Never moves a game OUT of Stage B: only `startShootoutFinalTable` does
+    // that, on the host's own say-so (boundary #9).
+    final shootoutStage =
+        s.effectiveFormat == TournamentFormat.shootout &&
+            game.shootoutStage != ShootoutStage.stageB
+        ? ShootoutStage.stageA
+        : null;
+
+    var finalStructure = structure;
+    final pins = <PinnedLevel>[];
+    for (final l in game.structure.levels) {
+      if (l.manuallyEdited) {
+        pins.add(PinnedLevel(levelNum: l.level, sb: l.sb, bb: l.bb));
+      }
+    }
+    if (pins.isNotEmpty && !force) {
+      final cmin = structure.chipPlan.isNotEmpty
+          ? structure.chipPlan.first.value
+          : 25;
+      final rebuilt = TournamentEngine.resolveAroundPins(
+        existingBB: structure.levels.map((l) => l.bb).toList(),
+        cminOfLevel: List.filled(structure.levels.length, cmin),
+        pins: pins,
+        bbEnd: structure.levels.isNotEmpty
+            ? structure.levels.last.bb.toDouble()
+            : 1000.0,
+      );
+      if (rebuilt.feasible &&
+          rebuilt.bbLadder.length == structure.levels.length) {
+        final restored = <BlindLevel>[];
+        for (var i = 0; i < structure.levels.length; i++) {
+          final oldL = structure.levels[i];
+          final wasPinned = pins.any((p) => p.levelNum == oldL.level);
+          final oldPinned = game.structure.levels
+              .where((l) => l.level == oldL.level)
+              .firstOrNull;
+          restored.add(
+            oldL.copyWith(
+              sb: wasPinned && oldPinned != null
+                  ? oldPinned.sb
+                  : rebuilt.sbLadder[i],
+              bb: wasPinned && oldPinned != null
+                  ? oldPinned.bb
+                  : rebuilt.bbLadder[i],
+              manuallyEdited: wasPinned,
+            ),
+          );
+        }
+        finalStructure = structure.copyWith(
+          levels: restored,
+          startingStack: game.structure.startingStack > 0
+              ? game.structure.startingStack
+              : structure.startingStack,
+        );
+      }
+    } else if (game.structure.startingStack > 0 &&
+        !force &&
+        game.structure.levels.any((l) => l.manuallyEdited)) {
+      finalStructure = structure.copyWith(
+        startingStack: game.structure.startingStack,
+      );
+    }
+
     _currentGame = game.copyWith(
-      settings: s,
-      structure: structure,
-      originalLevels: List.of(structure.levels),
-      totalChipsInPlay: structure.startingStack * count,
+      settings: withRebuyClose,
+      structure: finalStructure,
+      originalLevels: List.of(finalStructure.levels),
+      totalChipsInPlay: finalStructure.startingStack * count,
       currentLevel: 1,
-      secondsRemaining: structure.levelDuration * 60,
+      secondsRemaining: finalStructure.levelDuration * 60,
       structureConfirmed: false,
+      shootoutStage: shootoutStage,
     );
     addAuditRecord(
       'structure_estimate',
@@ -588,28 +1239,436 @@ extension AppProviderTournament on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
-  void recalculateStructure() {
+  /// The head-count physical preparation should be based on (section 6).
+  ///
+  /// Section 6 orders these deliberately. Locked wins when set, because the
+  /// host has already counted chips into stacks against it; otherwise the
+  /// admin override; otherwise the RSVP-derived figure. Actual checked-in is
+  /// a separate thing and drives the start CTA, not the preparation.
+  int plannedHeadcount(LiveGame game) {
+    final locked = game.settings.lockedExpectedPlayers;
+    if (locked != null) return locked;
+    final override = game.settings.expectedPlayersOverride;
+    if (override != null) return override;
+    return expectedPlayersFromRsvps(game);
+  }
+
+  /// Freezes the expected count for physical preparation (section 6).
+  ///
+  /// Passing null locks whatever the current planning figure is, which is the
+  /// normal case: the host has decided and wants it held still.
+  void lockExpectedPlayers([int? count]) {
+    final game = _currentGame;
+    if (game == null) return;
+    final value = count ?? plannedHeadcount(game);
+    if (value < 2) return;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(lockedExpectedPlayers: value),
+    );
+    addAuditRecord(
+      'headcount_lock',
+      'Expected players locked at $value for chip preparation.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Releases the freeze so the count tracks RSVPs again (section 6).
+  void unlockExpectedPlayers() {
+    final game = _currentGame;
+    if (game == null || game.settings.lockedExpectedPlayers == null) return;
+    _pushUndo();
+    final was = game.settings.lockedExpectedPlayers;
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(clearLockedExpectedPlayers: true),
+    );
+    addAuditRecord(
+      'headcount_unlock',
+      'Expected players unlocked (was $was) — following RSVPs again.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// How far RSVPs have drifted from a locked preparation (section 6).
+  ///
+  /// Section 6: "late RSVP changes do not silently reshuffle the locked
+  /// preparation." They do not change anything — they surface here so the host
+  /// can decide whether to re-lock. Positive means more people than prepared
+  /// for. Null when nothing is locked.
+  int? lockedHeadcountDrift(LiveGame game) {
+    final locked = game.settings.lockedExpectedPlayers;
+    if (locked == null) return null;
+    return expectedPlayersFromRsvps(game) - locked;
+  }
+
+  /// How many future levels a Recalculate would discard.
+  ///
+  /// Specification sections 11 and 29 forbid silently overwriting manual
+  /// edits, so the caller asks this first and puts the number in front of the
+  /// host before doing anything.
+  int manuallyEditedFutureLevels() {
+    final game = _currentGame;
+    if (game == null) return 0;
+    return game.structure.levels
+        .where((l) => l.level > game.currentLevel && l.manuallyEdited)
+        .length;
+  }
+
+  /// Rebuilds the structure from current settings and attendance.
+  ///
+  /// [keepManualLevels] preserves hand-tuned future levels through the rebuild
+  /// (sections 11, 29). It defaults to true: losing a manual edit must be a
+  /// deliberate choice, never the path of least resistance. The UI asks which
+  /// the host wants whenever `manuallyEditedFutureLevels()` is non-zero.
+  void recalculateStructure({bool keepManualLevels = true}) {
     final game = _currentGame;
     if (game == null) return;
     _pushUndo();
 
+    // Snapshot the hand-tuned future levels BEFORE the rebuild replaces them.
+    final preserved = keepManualLevels
+        ? {
+            for (final l in game.structure.levels)
+              if (l.level > game.currentLevel && l.manuallyEdited) l.level: l,
+          }
+        : const <int, BlindLevel>{};
+
     final confirmed = game.players.where((p) => p.confirmed).length;
-    final count = confirmed >= 2 ? confirmed : expectedPlayersFromRsvps(game);
-    _recalculateWithPlayers(count);
+    final derived = confirmed >= 2 ? confirmed : expectedPlayersFromRsvps(game);
+    // Same precedence as `generateFinalStructure`: Locked, then the admin
+    // override, then the derived figure — floored at whoever is confirmed.
+    final stated =
+        game.settings.lockedExpectedPlayers ??
+        game.settings.expectedPlayersOverride;
+    final count = stated != null ? max(stated, confirmed) : derived;
+    _recalculateWithPlayers(count < 2 ? 2 : count);
+
+    if (preserved.isEmpty) return;
+    // Re-apply by level NUMBER and solve unpinned levels around anchors
+    // using resolveAroundPins (§F1.12).
+    final rebuilt = _currentGame!.structure;
+    final pins = preserved.values
+        .map((l) => PinnedLevel(levelNum: l.level, sb: l.sb, bb: l.bb))
+        .toList();
+    final existingBB = rebuilt.levels.map((l) => l.bb).toList();
+    final minChipVal = rebuilt.chipPlan.isNotEmpty
+        ? rebuilt.chipPlan.first.value
+        : 25;
+    final cminOfLevel = List<int>.filled(existingBB.length, minChipVal);
+    final resolved = TournamentEngine.resolveAroundPins(
+      existingBB: existingBB,
+      cminOfLevel: cminOfLevel,
+      pins: pins,
+      bbEnd: existingBB.isNotEmpty ? existingBB.last.toDouble() : 1000.0,
+    );
+
+    final restored = <BlindLevel>[];
+    for (var i = 0; i < rebuilt.levels.length; i++) {
+      final l = rebuilt.levels[i];
+      if (l.level <= _currentGame!.currentLevel) {
+        restored.add(l);
+      } else if (preserved.containsKey(l.level)) {
+        restored.add(preserved[l.level]!);
+      } else if (resolved.feasible && i < resolved.bbLadder.length) {
+        restored.add(
+          l.copyWith(sb: resolved.sbLadder[i], bb: resolved.bbLadder[i]),
+        );
+      } else {
+        restored.add(l);
+      }
+    }
+    final kept = restored.where((l) => l.manuallyEdited).length;
+    final lost = preserved.length - kept;
+    _currentGame = _currentGame!.copyWith(
+      structure: _structureWithLevels(rebuilt, restored),
+    );
+    addAuditRecord(
+      'structure_recalculate',
+      'Structure recalculated for $count players. '
+          '$kept manual level${kept == 1 ? '' : 's'} preserved'
+          '${lost > 0 ? ', $lost dropped (no longer in the schedule)' : ''}.',
+    );
+    if (!_disposed) notifyListeners();
+  }
+
+  /// §11.4 Stage B. The host has decided every Stage A table has reported its
+  /// winner(s) and it is time to seat and play the final table. NEVER
+  /// automatic — boundary #9 is explicit that Stage B's trigger is a human
+  /// judgement call, not a player-count threshold the app can safely guess.
+  ///
+  /// Returns a human summary of what changed, or null if this game is not an
+  /// eligible shootout (wrong format, already in Stage B, or has no structure
+  /// yet).
+  String? startShootoutFinalTable() {
+    final game = _currentGame;
+    if (game == null) return null;
+    if (game.settings.effectiveFormat != TournamentFormat.shootout) {
+      return null;
+    }
+    if (game.shootoutStage == ShootoutStage.stageB) return null;
+    if (game.structure.levels.isEmpty) return null;
+
+    _forceClaimEditor();
+    _pushUndo();
+
+    // Same params-building block as [generateFinalStructure] — the only
+    // deliberate difference is the player count, which here is the ACTUAL
+    // number of survivors rather than an expected/confirmed head-count.
+    // `generateShootout` derives Stage B's own field size from `tables x
+    // advancePerTable`; this count only feeds `effectiveShootoutTables`
+    // (through `s.shootoutTables`) the same way Stage A's generation did.
+    final count = max(2, game.activePlayers.length);
+    final s = game.settings.copyWith(players: count);
+    final plan = TournamentEngine.generateShootout(
+      TournamentParams(
+        players: count,
+        durationHours: s.durationHours,
+        buyIn: s.buyIn,
+        chipSet: s.chipSet,
+        rebuys: s.rebuys,
+        rebuysCloseLevel: s.rebuysCloseLevel,
+        rebuyCloseChosenByOrganizer: s.rebuyCloseChosenByOrganizer,
+        reEntry: s.reEntry,
+        addOn: s.addOn,
+        anteEnabled: s.anteEnabled,
+        anteAfterLevel: s.anteAfterLevel,
+        anteStyle: s.anteStyle,
+        koEnabled: s.koEnabled,
+        koAmount: s.koAmount,
+        organizerPct: _effectiveLegalFeePct(s.effectiveOrganizerPct),
+        rebuyCost: s.rebuyCost,
+        addOnCost: s.addOnCost,
+        breaks: s.breaks,
+        expectedRebuys: s.expectedRebuys,
+        rebuyLimit: s.rebuyLimit,
+        expectedRebuyRate: s.expectedRebuyRate,
+        expectedReEntries: s.expectedReEntries,
+        expectedAddOns: s.expectedAddOns,
+        rebuyChips: s.rebuyChips,
+        reEntryChips: s.reEntryChips,
+        addOnChips: s.addOnChips,
+        levelDurationMins: s.levelDurationMins,
+        pace: s.pace,
+        format: s.format,
+        maxReEntries: s.maxReEntries,
+        shootoutTables: s.shootoutTables,
+        shootoutTableTargetMins: s.shootoutTableTargetMins,
+        earlyArrivalBonusEnabled: s.earlyArrivalBonusEnabled,
+        earlyArrivalCutoffMins: s.earlyArrivalCutoffMins,
+        earlyArrivalBonusPctOverride: s.earlyArrivalBonusPctOverride,
+      ),
+    );
+    final stageB = plan.stageB;
+
+    // The Stage A split no longer applies — every survivor sits at the one
+    // remaining table, seated in order.
+    final finalists = game.activePlayers;
+    final seatOf = {
+      for (var i = 0; i < finalists.length; i++) finalists[i].id: i + 1,
+    };
+    final players = game.players.map((p) {
+      final seat = seatOf[p.id];
+      return seat == null ? p : p.copyWith(table: 1, seat: seat);
+    }).toList();
+
+    _currentGame = game.copyWith(
+      players: players,
+      structure: stageB,
+      shootoutStage: ShootoutStage.stageB,
+      currentLevel: 1,
+      secondsRemaining: stageB.levels.isNotEmpty
+          ? stageB.levels.first.durationMins * 60
+          : 0,
+      // Clears the OLD structure's countdown so the clock does not read as
+      // mid-level against a level that no longer exists — mirrors how a
+      // structure edit already leaves `timerRunning` untouched (whatever
+      // resume control the host already had stays exactly as it was).
+      levelEndTime: null,
+      clearLevelEndTime: true,
+    );
+
+    final summary =
+        'Final table seated: ${finalists.length} player'
+        '${finalists.length == 1 ? '' : 's'}, ${stageB.levels.length} '
+        'level${stageB.levels.length == 1 ? '' : 's'} ahead.';
+    addAuditRecord('shootout_final_table', summary);
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return summary;
+  }
+
+  /// The structure builder's result for the current event (WP2): its settings
+  /// (carrying the forced stack, depth, pinned levels and a chosen rebuy close,
+  /// so they survive Recalculate) and the structure those settings produce.
+  ///
+  /// Replaces the old "Adjust starting stack" edit-in-place, which changed the
+  /// stack but left blinds the stack no longer matched. Saving progress never
+  /// confirms; [confirm] is the host's final tap. A structure the chip case
+  /// cannot deal is refused (a placeholder ladder is not a plan), and once play
+  /// has started the stacks are physical, so nothing changes.
+  bool applyBuilderResult(
+    GameSettings settings,
+    TournamentStructure structure, {
+    bool confirm = false,
+  }) {
+    final game = _currentGame;
+    if (game == null || game.stacksLocked || structure.isBlocked) return false;
+    _forceClaimEditor();
+    if (!_isGameAuthority) return false;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      settings: settings,
+      structure: structure,
+      originalLevels: List.of(structure.levels),
+      totalChipsInPlay: structure.startingStack * settings.players,
+      currentLevel: 1,
+      secondsRemaining: structure.levelDuration * 60,
+      // Editing invalidates a previous confirmation (section 17).
+      structureConfirmed: false,
+    );
+    addAuditRecord(
+      'structure_builder',
+      'Structure set in the builder: stack ${structure.startingStack}, '
+          '${structure.levels.length} levels'
+          '${settings.levelPins.isEmpty ? '' : ', ${settings.levelPins.length} pinned'}.',
+    );
+    _syncGroupGame();
+    if (confirm) {
+      confirmStructure();
+    } else if (!_disposed) {
+      notifyListeners();
+    }
+    return true;
   }
 
   void updateStructurePlayerCount(int players) {
     final game = _currentGame;
-    if (game == null) return;
+    if (game == null || !canEditStructure) return;
     _pushUndo();
     _recalculateWithPlayers(players);
   }
 
-  void _recalculateWithPlayers(int count) {
-    final game = _currentGame!;
+  /// Applies the host's generation overrides and rebuilds the structure.
+  ///
+  /// Every one of these feeds `expectedTotalChips`, which sets the final blind
+  /// target, which sets the growth rate — so there is no way to change one
+  /// without regenerating. Passing null for a field leaves it alone;
+  /// [reset] returns all of them to the engine's own defaults.
+  ///
+  /// The settings are written BEFORE the regeneration so the structure and the
+  /// inputs that produced it are stored together — otherwise another device
+  /// would re-derive from stale settings and [StructureVerification] would
+  /// report the honest structure as a mismatch.
+  void updateGenerationParams({
+    int? expectedRebuys,
+    int? expectedReEntries,
+    int? expectedAddOns,
+    int? rebuyChips,
+    int? reEntryChips,
+    int? addOnChips,
+    int? levelDurationMins,
+    bool reset = false,
+  }) {
+    final game = _currentGame;
+    if (game == null) return;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(
+        expectedRebuys: expectedRebuys,
+        expectedReEntries: expectedReEntries,
+        expectedAddOns: expectedAddOns,
+        rebuyChips: rebuyChips,
+        reEntryChips: reEntryChips,
+        addOnChips: addOnChips,
+        levelDurationMins: levelDurationMins,
+        clearGenerationOverrides: reset,
+      ),
+    );
+    _recalculateWithPlayers(_currentGame!.settings.players);
+  }
+
+  /// §F1.5 point 7's third named escape: "play a freeze-out".
+  ///
+  /// When the chip case cannot deal a playable stack, the forecast rebuys and
+  /// add-ons are usually what tipped it — they are the chips the bank has to
+  /// cover on top of the starting stacks (Framework §11, "stress-test the chip
+  /// bank"). Dropping them frees the whole reserve, so a case that could not
+  /// fund the field very often funds it as a freeze-out.
+  ///
+  /// Turns off rebuys, re-entries and the add-on together, because a
+  /// "freeze-out" with an add-on still standing is not one, and regenerates.
+  void switchToFreezeOut() {
+    final game = _currentGame;
+    if (game == null) return;
     final s = game.settings;
-    final newSettings = s.copyWith(players: count);
-    var structure = TournamentEngine.generate(
+    if (!s.rebuys && !s.reEntry && !s.addOn) return;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      settings: s.copyWith(
+        rebuys: false,
+        reEntry: false,
+        addOn: false,
+        format: TournamentFormat.freezeOut,
+      ),
+    );
+    // The stored rebuy-night stack must not survive: a freeze-out deals the
+    // whole bank. Once play has started the stacks are physical, so keep them.
+    _recalculateWithPlayers(
+      _currentGame!.settings.players,
+      rebuildStacks: !game.stacksLocked,
+    );
+    addAnnouncement(
+      'Switched to a freeze-out — rebuys and the add-on are off.',
+      false,
+    );
+  }
+
+  /// Applies ONE shallow-start option the host tapped (SHALLOW_WARN_BB): the
+  /// card only SHOWS options, each with the depth the engine produced for it;
+  /// this is the host's explicit choice taking effect, never run implicitly.
+  /// Regenerates the structure and says what changed. Refused once play has
+  /// started, because the stacks are then physical.
+  void applyShallowFix(ShallowFix fix) {
+    final game = _currentGame;
+    if (game == null || game.stacksLocked) return;
+    _pushUndo();
+    _currentGame = game.copyWith(settings: fix.applyToSettings(game.settings));
+    _recalculateWithPlayers(
+      _currentGame!.settings.players,
+      rebuildStacks: true,
+    );
+    addAnnouncement(
+      '${fix.label} — the night now opens about '
+      '${fix.resultingDepthBB.round()} big blinds deep.',
+      false,
+    );
+  }
+
+  /// Suggestion for small field sizes (<= 8 players): enable unlimited rebuys
+  /// until level 6 to keep table play continuous.
+  void enableUnlimitedRebuys() {
+    final game = _currentGame;
+    if (game == null || !isAdmin) return;
+    final s = game.settings;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      settings: s.copyWith(
+        rebuys: true,
+        rebuysCloseLevel: 6,
+        clearRebuyLimit: true,
+        format: TournamentFormat.rebuy,
+      ),
+    );
+    _recalculateWithPlayers(_currentGame!.settings.players);
+    addAnnouncement('Updated to unlimited rebuys until level 6.', false);
+  }
+
+  /// The engine params for [newSettings] at [count] players. The one place the
+  /// recalculation builds them, so [shallowFixesForCurrentGame] explains
+  /// exactly the night that is on screen.
+  TournamentParams _engineParamsFor(GameSettings newSettings, int count) =>
       TournamentParams(
         players: count,
         durationHours: newSettings.durationHours,
@@ -617,6 +1676,9 @@ extension AppProviderTournament on AppProvider {
         chipSet: newSettings.chipSet,
         rebuys: newSettings.rebuys,
         rebuysCloseLevel: newSettings.rebuysCloseLevel,
+        rebuyCloseChosenByOrganizer: newSettings.rebuyCloseChosenByOrganizer,
+        forceStack: newSettings.forceStack,
+        targetDepthBB: newSettings.targetDepthBB,
         reEntry: newSettings.reEntry,
         addOn: newSettings.addOn,
         anteEnabled: newSettings.anteEnabled,
@@ -624,25 +1686,93 @@ extension AppProviderTournament on AppProvider {
         anteStyle: newSettings.anteStyle,
         koEnabled: newSettings.koEnabled,
         koAmount: newSettings.koAmount,
-        organizerPct: newSettings.organizerPct,
+        organizerPct: _effectiveLegalFeePct(
+          newSettings.effectiveOrganizerPct,
+        ), // Fixed H4 legal gate
         rebuyCost: newSettings.rebuyCost,
         addOnCost: newSettings.addOnCost,
-      ),
+        breaks: newSettings.breaks,
+        expectedRebuys: newSettings.expectedRebuys,
+        rebuyLimit: newSettings.rebuyLimit,
+        expectedReEntries: newSettings.expectedReEntries,
+        expectedAddOns: newSettings.expectedAddOns,
+        rebuyChips: newSettings.rebuyChips,
+        reEntryChips: newSettings.reEntryChips,
+        addOnChips: newSettings.addOnChips,
+        levelDurationMins: newSettings.levelDurationMins,
+        pace: newSettings.pace,
+        expectedRebuyRate:
+            newSettings.expectedRebuyRate ?? newSettings.forecastRebuyRate,
+        addOnTakeUpRate: newSettings.forecastAddOnTakeUp,
+        format: newSettings.format,
+        maxReEntries: newSettings.maxReEntries,
+        shootoutTables: newSettings.shootoutTables,
+        shootoutTableTargetMins: newSettings.shootoutTableTargetMins,
+        earlyArrivalBonusEnabled: newSettings.earlyArrivalBonusEnabled,
+        earlyArrivalCutoffMins: newSettings.earlyArrivalCutoffMins,
+        earlyArrivalBonusPctOverride: newSettings.earlyArrivalBonusPctOverride,
+      );
+
+  /// Options for the game's shallow start (SHALLOW_WARN_BB): empty unless the
+  /// structure on screen is shallow and the stacks are still changeable. Pure —
+  /// it changes nothing.
+  List<ShallowFix> shallowFixesForCurrentGame() {
+    final game = _currentGame;
+    if (game == null || game.stacksLocked || !game.structure.isShallow) {
+      return const [];
+    }
+    return TournamentEngine.shallowFixes(
+      _engineParamsFor(game.settings, game.settings.players),
     );
-    // Once play has started the starting stacks are frozen — blinds, levels
-    // and the player count may still change (client rule).
-    if (game.stacksLocked) {
+  }
+
+  void _recalculateWithPlayers(int count, {bool rebuildStacks = false}) {
+    final game = _currentGame!;
+    final s = game.settings;
+    // Same as [generateFinalStructure]: an accepted §10.1 adjustment already
+    // lives in `levelDurationMins`, so every rebuild — including the firm
+    // recalculation at Start — keeps it.
+    final newSettings = s.copyWith(players: count);
+    var structure = solveWithPins(
+      _engineParamsFor(newSettings, count),
+      newSettings.levelPins,
+    );
+    // Starting stacks are frozen once play has started, or when the host
+    // hand-tuned the starting stack. [rebuildStacks] is the host's explicit
+    // choice of a plan change that MUST change the stacks (a shallow-start
+    // fix): without it the stored stack would silently survive and the option
+    // would advertise a depth it never delivers.
+    final hasManualStack =
+        game.structure.startingStack > 0 && game.structure.chipPlan.isNotEmpty;
+    if (!rebuildStacks && (game.stacksLocked || hasManualStack)) {
       structure = structure.copyWith(
         startingStack: game.structure.startingStack,
         chipPlan: game.structure.chipPlan,
-        rebuyStack: game.structure.rebuyStack,
-        rebuyChipPlan: game.structure.rebuyChipPlan,
-        addOnStack: game.structure.addOnStack,
-        addOnChipPlan: game.structure.addOnChipPlan,
+        rebuyStack: game.structure.rebuyStack > 0
+            ? game.structure.rebuyStack
+            : structure.rebuyStack,
+        rebuyChipPlan: game.structure.rebuyChipPlan.isNotEmpty
+            ? game.structure.rebuyChipPlan
+            : structure.rebuyChipPlan,
+        addOnStack: game.structure.addOnStack > 0
+            ? game.structure.addOnStack
+            : structure.addOnStack,
+        addOnChipPlan: game.structure.addOnChipPlan.isNotEmpty
+            ? game.structure.addOnChipPlan
+            : structure.addOnChipPlan,
       );
     }
 
     final newLevel = game.currentLevel.clamp(1, structure.levels.length);
+    // §11.4: same rule as [generateFinalStructure] — this path (recalculate,
+    // the T-minus-10 recalculation, and the firm regeneration `startTimer`
+    // triggers) always regenerates Stage A's structure for a shootout, so it
+    // may set Stage A here but must never undo a host's move to Stage B.
+    final shootoutStage =
+        newSettings.effectiveFormat == TournamentFormat.shootout &&
+            game.shootoutStage != ShootoutStage.stageB
+        ? ShootoutStage.stageA
+        : null;
     _currentGame = game.copyWith(
       settings: newSettings,
       structure: structure,
@@ -650,6 +1780,7 @@ extension AppProviderTournament on AppProvider {
       secondsRemaining: structure.levels[newLevel - 1].durationMins * 60,
       speedRecommendation: null,
       clearSpeedRecommendation: true,
+      shootoutStage: shootoutStage,
     );
     addAnnouncement(
       'Structure recalculated for $count confirmed player${count != 1 ? 's' : ''}.',
@@ -659,18 +1790,26 @@ extension AppProviderTournament on AppProvider {
 
   /// Applies admin edits to future levels (the structure editor modal).
   /// The active and already-finished levels are left untouched.
-  /// Shared validation for blind-level durations (allowed: 10/15/20 min).
-  /// Returns null when valid, otherwise the rejection message.
+  /// Shared validation for blind-level durations.
+  ///
+  /// Was 10/15/20 only. Those three are still the presets, but the host now
+  /// chooses the level length outright, and a structure generated at 12 minutes
+  /// could not have a single one of its levels edited afterwards — the editor
+  /// rejected the value the generator had just produced. The real bound is the
+  /// engine's.
   String? _validateLevelDuration(int durationMins) {
-    if (durationMins != 10 && durationMins != 15 && durationMins != 20) {
-      return 'Level duration must be 10, 15 or 20 minutes.';
+    if (durationMins < TournamentEngine.kMinLevelDurationMins ||
+        durationMins > TournamentEngine.kMaxLevelDurationMins) {
+      return 'Level duration must be between '
+          '${TournamentEngine.kMinLevelDurationMins} and '
+          '${TournamentEngine.kMaxLevelDurationMins} minutes.';
     }
     return null;
   }
 
   void applyLevelEdits(List<LevelEdit> edits) {
     final game = _currentGame;
-    if (game == null || edits.isEmpty) return;
+    if (game == null || !canEditStructure || edits.isEmpty) return;
     for (final e in edits) {
       if (_validateLevelDuration(e.durationMins) != null ||
           e.sb <= 0 ||
@@ -694,16 +1833,19 @@ extension AppProviderTournament on AppProvider {
     _currentGame = game.copyWith(
       structure: _structureWithLevels(game.structure, levels),
     );
-    addAnnouncement('Level structure updated by admin.', false);
+    addAnnouncement('Level structure updated by host.', false);
   }
 
   /// Replaces the future levels (everything from the current level onward)
   /// with a renumbered list produced by the structure editor. Inserting or
   /// removing levels is supported because the whole future segment is swapped,
   /// not patched by level number (checklist §12.4).
-  void applyFutureLevels(List<BlindLevel> futureLevels) {
+  void applyFutureLevels(
+    List<BlindLevel> futureLevels, [
+    List<ScheduledBreak>? futureBreaks,
+  ]) {
     final game = _currentGame;
-    if (game == null || futureLevels.isEmpty) return;
+    if (game == null || !canEditStructure || futureLevels.isEmpty) return;
     for (final l in futureLevels) {
       if (_validateLevelDuration(l.durationMins) != null ||
           l.sb <= 0 ||
@@ -715,6 +1857,11 @@ extension AppProviderTournament on AppProvider {
     // Keep all completed levels PLUS the currently active level.
     final prefix = game.structure.levels.take(game.currentLevel).toList();
     // Renumber sequentially so inserting a level shifts the rest correctly.
+    //
+    // Everything arriving here came out of the structure editor, so it is by
+    // definition a manual edit (specification sections 11 and 29). The marker
+    // is what stops Recalculate from throwing it away without asking, and what
+    // the UI badges.
     var n = game.currentLevel + 1;
     final renumbered = [
       for (final l in futureLevels)
@@ -724,11 +1871,21 @@ extension AppProviderTournament on AppProvider {
           bb: l.bb,
           ante: l.ante,
           durationMins: l.durationMins,
+          manuallyEdited: true,
         ),
     ];
     final levels = [...prefix, ...renumbered];
+    var structure = _structureWithLevels(game.structure, levels);
+    if (futureBreaks != null) {
+      final prefixBreaks = game.structure.breaks
+          .where((b) => b.afterLevel <= game.currentLevel)
+          .toList();
+      structure = structure.copyWith(
+        breaks: [...prefixBreaks, ...futureBreaks],
+      );
+    }
     _currentGame = game.copyWith(
-      structure: _structureWithLevels(game.structure, levels),
+      structure: structure,
       secondsRemaining: game.secondsRemaining,
     );
     addAuditRecord(
@@ -736,7 +1893,93 @@ extension AppProviderTournament on AppProvider {
       'Future levels updated: ${renumbered.length} future level'
           '${renumbered.length == 1 ? '' : 's'} (was ${(game.structure.levels.length - prefix.length).clamp(0, 999)})',
     );
-    addAnnouncement('Level structure updated by admin.', false);
+    addAnnouncement('Level structure updated by host.', false);
+  }
+
+  // DECISION: Support pen on every dashboard level with "this level only" or "recalculate after this" (fixes Dani T5 / S4).
+  void editSingleDashboardLevel({
+    required int levelNumber,
+    required int sb,
+    required int bb,
+    int? ante,
+    required int durationMins,
+    required bool recalculateAfter,
+  }) {
+    final game = _currentGame;
+    if (game == null || !canEditStructure) return;
+    if (sb <= 0 || bb <= sb) return;
+
+    _pushUndo();
+    final allLevels = [...game.structure.levels];
+    final idx = allLevels.indexWhere((l) => l.level == levelNumber);
+    if (idx < 0) return;
+
+    final editedLevel = allLevels[idx].copyWith(
+      sb: sb,
+      bb: bb,
+      ante: ante,
+      durationMins: durationMins,
+      manuallyEdited: true,
+    );
+
+    if (!recalculateAfter) {
+      // "This level only": update only this level
+      allLevels[idx] = editedLevel;
+    } else {
+      // "Recalculate after this":
+      // Levels before this level (0..idx-1) remain untouched!
+      allLevels[idx] = editedLevel;
+
+      final minChip = game.structure.chipPlan.isNotEmpty
+          ? game.structure.chipPlan.first.value
+          : 25;
+
+      int curBB = bb;
+      for (var i = idx + 1; i < allLevels.length; i++) {
+        final stepMultiplier = 1.35;
+        var nextBB = ((curBB * stepMultiplier) / minChip).round() * minChip;
+        if (nextBB <= curBB) {
+          nextBB = curBB + minChip;
+        }
+        var nextSB = nextBB ~/ 2;
+        if (nextSB % minChip != 0) {
+          nextSB = ((nextSB / minChip).round() * minChip).clamp(minChip, nextBB);
+        }
+        if (nextSB >= nextBB) {
+          nextSB = nextBB - minChip;
+        }
+
+        int? nextAnte;
+        if (ante != null || allLevels[i].ante != null) {
+          if (game.settings.anteStyle == AnteStyle.individual) {
+            nextAnte = (nextBB * 0.5).round();
+          } else {
+            nextAnte = nextBB;
+          }
+        }
+
+        allLevels[i] = allLevels[i].copyWith(
+          sb: nextSB,
+          bb: nextBB,
+          ante: nextAnte,
+          manuallyEdited: true,
+        );
+        curBB = nextBB;
+      }
+    }
+
+    _currentGame = game.copyWith(
+      structure: _structureWithLevels(game.structure, allLevels),
+      secondsRemaining: (levelNumber == game.currentLevel && game.secondsRemaining > durationMins * 60)
+          ? durationMins * 60
+          : game.secondsRemaining,
+    );
+    addAuditRecord(
+      'level_edited',
+      'Level $levelNumber edited (${recalculateAfter ? "recalculated following" : "this level only"})',
+    );
+    addAnnouncement('Level $levelNumber updated by host.', false);
+    if (!_disposed) notifyListeners();
   }
 
   /// Inserts one intermediate future level directly after [afterLevel]
@@ -760,6 +2003,7 @@ extension AppProviderTournament on AppProvider {
   ) {
     final game = _currentGame;
     if (game == null) return 'No active game.';
+    if (!canEditStructure) return 'Host authority required to edit structure.';
     if (afterLevel < game.currentLevel) {
       return 'Completed and active levels cannot be changed.';
     }
@@ -957,6 +2201,164 @@ extension AppProviderTournament on AppProvider {
     return null;
   }
 
+  /// C-deal item 5 — "Confirm deal & end tournament".
+  ///
+  /// Takes only the agreed amounts, keyed by player id, and derives the finish
+  /// order itself. That is deliberate: `finishOrder` is first-out-first, a
+  /// player's place is its index from the END, and the results screen builds
+  /// the whole podium from that one list. A caller-supplied order would have to
+  /// reproduce that inversion exactly, and a table that dealt after two earlier
+  /// busts would drop those two players off the results entirely.
+  ///
+  /// Ends the game through the same [recordFinishOrder] path a night that ended
+  /// by busts uses, so the deal produces one completion, one undo entry and one
+  /// announcement rather than a second, parallel notion of "finished".
+  ///
+  /// Returns null on success, or the reason it was refused. The caller shows
+  /// that reason verbatim — [PayoutsEngine.dealAmountsError] already renders
+  /// the C-deal wording, and the completion validator's reasons are the same
+  /// strings the finish screen shows.
+  String? confirmDealAndEnd({required Map<String, double> amountsByPlayerId}) {
+    // Before the authority check, not after: the claim is what MAKES this
+    // device authoritative, and every other writer here (`updatePrizes`,
+    // `recordFinishOrder`) claims first. Checking first refuses the host who
+    // has just opened the game, because the claim has not happened yet.
+    _forceClaimEditor();
+    if (!_isGameAuthority) {
+      return 'Only the host of this game can agree a deal.';
+    }
+    final game = _currentGame;
+    if (game == null) return 'There is no game to deal.';
+    if (game.status == LiveGameStatus.completed) {
+      return 'This game is already over.';
+    }
+
+    final leftToPay = dealTotalLeftToPay();
+    final agreed = amountsByPlayerId.values.fold<double>(
+      0,
+      (sum, a) => sum + a,
+    );
+    final mismatch = PayoutsEngine.dealAmountsError(agreed, leftToPay);
+    if (mismatch != null) return mismatch;
+
+    // A player still at the table who is not in the deal would silently drop
+    // money the pot was supposed to hand out. (The sum check cannot catch it:
+    // skipping one player and giving the rest more still adds up.)
+    final missing = game.activePlayers
+        .where((p) => !amountsByPlayerId.containsKey(p.id))
+        .map((p) => p.name)
+        .toList();
+    if (missing.isNotEmpty) {
+      return 'No agreed amount for ${missing.join(', ')}.';
+    }
+    // A figure for somebody who already busted is equally wrong: they were
+    // paid from the ladder when they went out, not from the deal.
+    final strays = amountsByPlayerId.keys
+        .where(
+          (id) =>
+              game.players.where((p) => p.id == id).firstOrNull?.eliminated ??
+              true,
+        )
+        .toList();
+    if (strays.isNotEmpty) {
+      return 'The deal covers only the players still at the table.';
+    }
+
+    // The undo entry is pushed HERE and [recordFinishOrder] is told so, rather
+    // than pushed by both: a second push would snapshot this half-written game
+    // (deal agreed, tournament still running), so one host tap left two entries
+    // and the first Undo press landed on that half-written state instead of the
+    // night the host agreed to end. The snapshot has to be taken before the
+    // deal is written, which is why recordFinishOrder cannot own it.
+    _pushUndo();
+    final order = _dealFinishOrder(game);
+    // Set before completing: recordFinishOrder's copyWith leaves the existing
+    // value alone, so the deal rides through to the finished game. One entry
+    // per place in `order`, so the results screen can index straight into it
+    // beside its own `finishOrder[i]`.
+    _currentGame = _currentGame!.copyWith(
+      dealAmounts: [
+        for (final id in order) _agreedForPlace(game, id, amountsByPlayerId),
+      ],
+    );
+    if (!recordFinishOrder(order, undoAlreadyPushed: true)) {
+      // Undo the partial write so a refused completion cannot leave a
+      // half-recorded deal behind. The clear flag, not `[]` — an empty list
+      // would read as "a deal was agreed that paid nobody".
+      _currentGame = _currentGame!.copyWith(clearDealAmounts: true);
+      // ...and the undo entry goes with it. The deal was refused, so there is
+      // no action to reverse, and a surviving entry would offer the host an
+      // Undo that reverts a game which never changed.
+      _undoStack.removeLast();
+      _saveUndoStack();
+      return _completionError ?? 'Cannot end tournament.';
+    }
+    return null;
+  }
+
+  /// The finish order a deal produces: everyone already out, in the order they
+  /// went out, then the table sorted so the leader is LAST.
+  ///
+  /// Mirrors the reading in [_finalPositions] and [_validateCompletionState]
+  /// rather than inventing a third convention — a place is
+  /// `finishOrder.length - index`, so the first name in the list is the worst
+  /// finisher. The table is sorted by chips ascending for exactly that reason.
+  List<String> _dealFinishOrder(LiveGame game) {
+    // DESCENDING, because `eliminationPos` is the FINISHING PLACE and not an
+    // out-order: `eliminatePlayer` stamps it with the number of players still
+    // in at the bust, so the biggest value is the player who went out FIRST
+    // and is the worst finisher — exactly the slot a first-out-first list opens
+    // with. Reading it ascending would show the best of the eliminated players
+    // at the bottom of the results. Same comparator as [validateCompletion] and
+    // the C8 finish screen, which build the same list.
+    final out = game.players.where((p) => p.eliminated).toList()
+      ..sort(
+        (a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0),
+      );
+    final table = game.activePlayers.toList()
+      ..sort((a, b) => (a.stack ?? 0).compareTo(b.stack ?? 0));
+    return [for (final p in out) p.id, for (final p in table) p.id];
+  }
+
+  /// What the player in that slot actually received: the agreed figure for
+  /// someone still at the table, or the ladder prize for someone who had
+  /// already busted (the deal only divides what was LEFT, and they were paid
+  /// from the plan when they went out).
+  double _agreedForPlace(
+    LiveGame game,
+    String playerId,
+    Map<String, double> amountsByPlayerId,
+  ) {
+    final agreed = amountsByPlayerId[playerId];
+    if (agreed != null) return agreed;
+    final pos =
+        game.players
+            .where((p) => p.id == playerId)
+            .firstOrNull
+            ?.eliminationPos ??
+        0;
+    final prize = game.structure.prizes
+        .where((p) => p.place == pos)
+        .firstOrNull;
+    return (prize?.amount ?? 0) / 100;
+  }
+
+  /// C-deal item 2 — "the prizes still to pay", in currency units.
+  ///
+  /// A deal is offered with everyone still in, so the places on the table are
+  /// the first prizes the structure lists, and this is their sum. A structure
+  /// with no payout ladder pays everyone still in, which is the same list of
+  /// prizes and therefore the same total.
+  double dealTotalLeftToPay() {
+    final game = _currentGame;
+    if (game == null) return 0;
+    final activeCount = game.activePlayers.length;
+    final prizes = game.structure.prizes;
+    if (prizes.isEmpty) return 0;
+    final payable = prizes.take(min(activeCount, prizes.length));
+    return payable.fold<int>(0, (sum, p) => sum + p.amount) / 100;
+  }
+
   /// Updates the payout prizes (for custom deals/chops before finalizing results).
   void updatePrizes(List<Prize> customPrizes) {
     _forceClaimEditor();
@@ -964,15 +2366,289 @@ extension AppProviderTournament on AppProvider {
     if (_currentGame == null) return;
     _pushUndo();
     _currentGame = _currentGame!.copyWith(
-      structure: _currentGame!.structure.copyWith(
-        prizes: customPrizes,
-      ),
+      structure: _currentGame!.structure.copyWith(prizes: customPrizes),
     );
     _syncGroupGame();
     if (!_disposed) notifyListeners();
   }
 
-  bool recordFinishOrder(List<String> order) {
+  // ── C-bubble: hand-for-hand, bubble save, tied busts ─────────────────────
+  // All client-side. The three synced fields live on the game doc
+  // (host writes pass `gameValuesSafe`, which only checks invariants), and
+  // projections carry them untouched, so players and the TV see the banner.
+
+  /// Table numbers still in play, ascending.
+  List<int> get handForHandTables {
+    final game = _currentGame;
+    if (game == null) return const [];
+    final tables = <int>{};
+    for (final p in game.activePlayers) {
+      if (p.table > 0) tables.add(p.table);
+    }
+    final sorted = tables.toList()..sort();
+    return sorted;
+  }
+
+  /// Starts hand-for-hand: pauses the clock (C-bubble) and opens hand 1.
+  /// Returns null on success, or the reason it was refused.
+  String? startHandForHand() {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return 'Only the host can start hand-for-hand.';
+    final game = _currentGame;
+    if (game == null) return 'There is no game running.';
+    if (game.handForHandActive) return null;
+    if (!game.isOnBubble) {
+      return 'Hand-for-hand starts on the bubble.';
+    }
+    if (handForHandTables.length < 2) {
+      return 'Hand-for-hand needs at least two tables.';
+    }
+    _pushUndo();
+    _currentGame = game.copyWith(
+      handForHandActive: true,
+      handForHandHand: 1,
+      handForHandDoneTables: const [],
+    );
+    pauseTimer();
+    addAnnouncement(
+      'Hand-for-hand. Hand 1. '
+      'Waiting for ${handForHandTables.map((t) => 'Table $t').join(' and ')} '
+      'to finish hand 1.',
+      true,
+    );
+    addAuditRecord(
+      'hand_for_hand_start',
+      'Hand-for-hand started on the bubble.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return null;
+  }
+
+  /// Marks one table done with the current hand. When every table is done,
+  /// the next hand opens. Returns null on success, or the refusal reason.
+  String? markHandForHandTableDone(int table) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return 'Only the host can mark hands done.';
+    final game = _currentGame;
+    if (game == null || !game.handForHandActive) return null;
+    if (game.handForHandDoneTables.contains(table)) return null;
+    _pushUndo();
+    final done = [...game.handForHandDoneTables, table];
+    final tables = handForHandTables;
+    if (tables.every(done.contains)) {
+      final next = game.handForHandHand + 1;
+      _currentGame = game.copyWith(
+        handForHandHand: next,
+        handForHandDoneTables: const <int>[],
+      );
+      addAnnouncement('All tables finished — deal hand $next.', true);
+      addAuditRecord(
+        'hand_for_hand_hand',
+        'Hand ${game.handForHandHand} done — hand $next.',
+      );
+    } else {
+      _currentGame = game.copyWith(handForHandDoneTables: done);
+      if (!_disposed) notifyListeners();
+    }
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return null;
+  }
+
+  /// Stops hand-for-hand at any time (a mis-tap, a table breaking).
+  void stopHandForHand({bool auto = false}) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return;
+    final game = _currentGame;
+    if (game == null || !game.handForHandActive) return;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      handForHandActive: false,
+      handForHandDoneTables: const <int>[],
+    );
+    if (auto) {
+      addAnnouncement('Everyone left is in the money.', true);
+      addAuditRecord(
+        'hand_for_hand_end',
+        'Hand-for-hand ended automatically — in the money.',
+      );
+    } else {
+      addAuditRecord('hand_for_hand_end', 'Hand-for-hand stopped by the host.');
+    }
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Offers the bubble save (D10): the bubble gets its buy-in back, every
+  /// paid place contributes pro-rata in whole units, 1st pays the remainder.
+  /// Records the new ladder via the same path as the finish-screen edit, so
+  /// payouts, TV and every player's view update with one Undo.
+  /// Returns null on success, or the reason it was refused.
+  String? recordBubbleSave() {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return 'Only the host can record a bubble save.';
+    final game = _currentGame;
+    if (game == null) return 'There is no game running.';
+    if (!game.isOnBubble) return 'A bubble save is offered on the bubble.';
+    if (game.bubbleSaveRecorded) return 'The bubble save is already recorded.';
+    final prizes = game.structure.prizes;
+    if (prizes.isEmpty) return 'There is no payout ladder to save from.';
+    final unit = PayoutsEngine.cashUnit(game.settings.buyIn) * 100;
+    late final List<int> ladder;
+    try {
+      ladder = PayoutsEngine.bubbleSave(
+        [for (final p in prizes) p.amount],
+        game.settings.buyIn * 100,
+        'proRata',
+        unit,
+      );
+    } on ArgumentError catch (e) {
+      return e.message;
+    } on StateError catch (e) {
+      return e.message;
+    }
+    _pushUndo();
+    _currentGame = game.copyWith(
+      structure: game.structure.copyWith(
+        prizes: [
+          for (var i = 0; i < ladder.length; i++)
+            Prize(place: i + 1, amount: ladder[i]),
+        ],
+      ),
+      bubbleSaveRecorded: true,
+    );
+    final bubble = ladder.last;
+    addAnnouncement(
+      'Bubble save recorded — the bubble gets ${AutomationsService.formatMoney(bubble ~/ 100)} back.',
+      true,
+    );
+    addAuditRecord(
+      'bubble_save',
+      'Bubble save recorded: ${ladder.map((a) => '${a ~/ 100}').join('/')} '
+          '(places 1-${ladder.length}).',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return null;
+  }
+
+  /// Busts several players "in the same hand" (hand-for-hand across tables).
+  /// The covered places' prizes are added and split equally with `roundDeal`
+  /// (leftover unit to the biggest starting stack), the ladder rewritten so
+  /// the finish screen pays exactly that with no further edits, then each
+  /// player busts smallest-stack-first so places land worst-first.
+  /// Returns null on success, or the reason it was refused.
+  String? recordTiedBusts(List<String> playerIds) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return 'Only the host can record busts.';
+    final game = _currentGame;
+    if (game == null) return 'There is no game running.';
+    final unique = playerIds.toSet().toList();
+    if (unique.length < 2) return 'Pick at least two players for a tie.';
+    final targets = <Player>[];
+    for (final id in unique) {
+      final p = game.players.where((x) => x.id == id).firstOrNull;
+      if (p == null || p.eliminated || !p.active) {
+        return 'Every tied player must still be at the table.';
+      }
+      targets.add(p);
+    }
+    if (targets.map((p) => p.table).toSet().length < 2) {
+      return 'Same table — order them by starting chips instead, no tie.';
+    }
+    final remaining = game.activePlayers.length;
+    final k = targets.length;
+    final prizes = game.structure.prizes;
+    final unit = PayoutsEngine.cashUnit(game.settings.buyIn) * 100;
+    // Covered places, worst-first: R-k+1 .. R (0 past the ladder = unpaid).
+    final covered = [for (var i = 0; i < k; i++) remaining - k + 1 + i];
+    final amounts = [
+      for (final place in covered)
+        place <= prizes.length ? prizes[place - 1].amount : 0,
+    ];
+    final total = amounts.fold<int>(0, (a, b) => a + b);
+    // Biggest starting stack first, so a leftover unit lands on them (TDA).
+    final ordered = targets.toList()
+      ..sort((a, b) => (b.stack ?? 0).compareTo(a.stack ?? 0));
+    late final List<int> split;
+    try {
+      split = PayoutsEngine.roundDeal(amounts, unit, total, total);
+    } on ArgumentError catch (e) {
+      return e.message;
+    }
+    // Best stack takes the best covered place; ladder rewritten so the
+    // finish screen pays the split with no correction step.
+    final sortedSplit = split.toList()..sort((a, b) => b.compareTo(a));
+    final newPrizes = [
+      for (final p in prizes)
+        covered.contains(p.place)
+            ? Prize(
+                place: p.place,
+                amount: sortedSplit[covered.indexOf(p.place)],
+              )
+            : p,
+    ];
+    _pushUndo();
+    _currentGame = game.copyWith(
+      structure: game.structure.copyWith(prizes: newPrizes),
+    );
+    // Bust worst-first so eliminationPos lands worst-first too.
+    for (final p in ordered.reversed) {
+      eliminatePlayer(p.id);
+    }
+    final names = ordered.map((p) => p.name).join(', ');
+    addAnnouncement('Tied bust — $names share one hand.', true);
+    addAuditRecord(
+      'tied_bust',
+      'Tied bust in one hand ($names): places ${covered.first}-${covered.last} '
+          'split ${sortedSplit.map((a) => '${a ~/ 100}').join('/')} via roundDeal.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return null;
+  }
+
+  /// §3's `actualDurationMins`: WALL-CLOCK minutes from the first level to the
+  /// final hand — "levelEndTime of the last played level − scheduledStart".
+  ///
+  /// This used to sum the PLANNED durations of the levels reached, which is a
+  /// different quantity with the opposite sign. A SLOW group gets through
+  /// FEWER levels, so the planned sum came out SMALL, so §10.1's mean overage
+  /// went NEGATIVE, so accepting the pace proposal scaled `levelDurationMins`
+  /// by (1 − adjustmentPct) > 1 and handed that group LONGER levels — making
+  /// them slower still. It also could not see the biggest pause of the night:
+  /// the end-of-rebuy settlement break runs without a countdown (User Flow
+  /// §4.13). [LiveGame.startedAt] is the first Start press and is never
+  /// rewritten, so `now − startedAt` is the honest elapsed evening.
+  ///
+  /// Returns null rather than a plausible-looking number when the measurement
+  /// cannot be trusted — §10.1 averages this field over five nights, so one
+  /// bad sample drags every future structure the group generates. A game
+  /// restored from a stale recovery snapshot (phone left closed for days) or
+  /// one whose clock was never started would otherwise record a three-day
+  /// tournament; those are discarded here.
+  int? measuredWallClockMins(LiveGame game) {
+    final startedAt = game.startedAt;
+    // Legacy game, or the clock was never started through `startTimer`. There
+    // is no wall-clock origin to measure from, and the summed schedule is the
+    // wrong quantity — so record nothing.
+    if (startedAt == null) return null;
+    final mins = _serverNow.difference(startedAt).inMinutes;
+    // Clock skew or a device whose time moved backwards.
+    if (mins <= 0) return null;
+    if (mins > AppProvider._maxPlausibleGameMins) return null;
+    return mins;
+  }
+
+  /// Records [order] as the night's finish (first-out first) and completes the
+  /// game, or refuses it and leaves it running.
+  ///
+  /// [undoAlreadyPushed] is for a caller that had to write something of its own
+  /// before calling — `confirmDealAndEnd` records the agreed amounts first,
+  /// because the completion's `copyWith` preserves them — and so pushed the
+  /// undo entry before that write. Without it a single host tap would push two.
+  bool recordFinishOrder(List<String> order, {bool undoAlreadyPushed = false}) {
     _forceClaimEditor();
     final game = _currentGame;
     if (game == null) return false;
@@ -995,20 +2671,91 @@ extension AppProviderTournament on AppProvider {
       return false;
     }
     _completionError = null;
-    _pushUndo();
+    if (!undoAlreadyPushed) _pushUndo();
+
     _currentGame = _currentGame!.copyWith(
       finishOrder: order,
       status: LiveGameStatus.completed,
       timerRunning: false,
+      actualDurationMins: measuredWallClockMins(game),
     );
+    RecoveryService.clearGame();
     _syncGroupGame();
-    // This device settled the game — write my own result now (other members'
-    // devices record theirs when the completed doc reaches them).
-    if (_backendUp) {
-      _maybeRecordOwnResult(_currentGame!);
+    if (!hasCurrentGroup || _currentGroup.id.isEmpty) {
+      _soloTournaments = [_currentGame!, ..._soloTournaments];
+      final uid = user?.id;
+      if (uid != null) {
+        unawaited(
+          _repo
+              .saveSoloTournament(uid, _currentGame!)
+              .catchError(
+                (Object e) => debugPrint('saveSoloTournament failed: $e'),
+              ),
+        );
+      }
+    }
+    // Framework §14 — measure the night that just finished, so the next one
+    // can be forecast from it rather than from a constant. Gated on the D9
+    // consent inside [recordCalibration].
+    recordCalibration(_currentGame!);
+
+    // Host authoritative settlement: write each member's private settlement row
+    // (Build Spec §B7, §E14) so members can adopt their unscrubbed financial
+    // result without anyone reading another player's private counters.
+    final settlements = _buildSettlementsForGame(_currentGame!);
+    if (hasCurrentGroup && _currentGroup.id.isNotEmpty && settlements.isNotEmpty) {
+      _pendingSettlements[_currentGame!.id] = settlements;
+      unawaited(_persistPendingSettlements());
+      if (_backendUp) {
+        unawaited(
+          () async {
+            try {
+              await _repo.saveGameSettlements(
+                _currentGroup.id,
+                _currentGame!.id,
+                settlements,
+              );
+              _pendingSettlements.remove(_currentGame!.id);
+              await _persistPendingSettlements();
+            } catch (e) {
+              debugPrint('saveGameSettlements failed: $e, kept in offline queue');
+            }
+          }(),
+        );
+      }
+    }
+
+    // This device settled the game — record my authoritative row directly from
+    // settlements[uid] so there is zero race against the network write/read.
+    final uid = _repo.currentUid;
+    final myRow = uid != null ? settlements[uid] : null;
+    if (uid != null && myRow != null) {
+      _myResults = [
+        ..._myResults.where((r) => r.gameId != _currentGame!.id),
+        myRow,
+      ];
+      _user = _user?.copyWith(stats: _statsFromResults(_myResults));
+      if (!_disposed) notifyListeners();
+      if (_backendUp) {
+        unawaited(
+          () async {
+            try {
+              await _repo.saveGameResult(uid, _currentGame!.id, myRow);
+              _resultsRecorded.add(_currentGame!.id);
+            } catch (e) {
+              debugPrint('saveGameResult failed: $e');
+            }
+          }(),
+        );
+      } else {
+        _resultsRecorded.add(_currentGame!.id);
+      }
     } else {
-      // Offline fallback: aggregate locally so stats still move in demo mode.
-      _recordOwnResultOffline(_currentGame!);
+      if (_backendUp) {
+        _maybeRecordOwnResult(_currentGame!);
+      } else {
+        _recordOwnResultOffline(_currentGame!);
+      }
     }
     addAnnouncement('We have a winner!', true);
     pushNotification(
@@ -1122,5 +2869,99 @@ extension AppProviderTournament on AppProvider {
       auditHistory: [..._currentGame!.auditHistory, record],
     );
     if (!_disposed) notifyListeners();
+  }
+
+  /// Builds authoritative settlement rows for all non-guest participants
+  /// (Build Spec §B7, §E14).
+  Map<String, GameResultRow> buildSettlementsForGame(LiveGame game) =>
+      _buildSettlementsForGame(game);
+
+  Map<String, GameResultRow> _buildSettlementsForGame(LiveGame game) {
+    final settlements = <String, GameResultRow>{};
+    final finishOrder = game.finishOrder;
+    if (finishOrder.isEmpty) return settlements;
+
+    for (final p in game.players) {
+      if (p.isGuest) continue;
+      final index = finishOrder.indexOf(p.id);
+      if (index == -1) continue;
+      final position = finishPositionFromIndex(
+        index: index,
+        listLength: finishOrder.length,
+      );
+      final buyInsPaid = _calculatePlayerBuyInsPaid(game, p);
+      final prize = game.structure.prizes
+          .where((pr) => pr.place == position)
+          .firstOrNull
+          ?.amount ?? 0;
+      settlements[p.id] = GameResultRow(
+        gameId: game.id,
+        groupId: game.groupId,
+        position: position,
+        playerCount: finishOrder.length,
+        knockouts: p.knockouts,
+        finishedAt: game.endedAt ?? DateTime.now(),
+        eliminatedAtLevel: p.eliminatedAtLevel,
+        prize: prize,
+        buyInsPaid: buyInsPaid,
+        hasExplicitBuyIns: true,
+      );
+    }
+    return settlements;
+  }
+
+  /// Calculates buy-ins paid by a player, correctly accounting for payments
+  /// ledger records, unrecorded rebuys/add-ons taken in play, and comps.
+  int _calculatePlayerBuyInsPaid(LiveGame game, Player p) {
+    final myPayments = game.payments
+        .where((pay) => pay.playerId == p.id && pay.status == PaymentStatus.paid)
+        .toList();
+
+    final rebuyUnit = game.settings.rebuyCost ?? game.settings.buyIn;
+    final addOnUnit = game.settings.addOnCost ?? game.settings.buyIn;
+    final buyInUnit = game.settings.buyIn;
+
+    if (game.payments.isEmpty) {
+      return buyInUnit +
+          (p.rebuys * rebuyUnit) +
+          (p.reEntries * buyInUnit) +
+          (p.hasAddOn ? addOnUnit : 0);
+    }
+
+    int paidTotal = 0;
+    for (final pay in myPayments) {
+      paidTotal += pay.amount;
+    }
+
+    final hasBuyInPayment = myPayments.any(
+      (pay) => pay.purpose == PaymentPurpose.buyIn,
+    );
+    final paidRebuysCount = myPayments
+        .where((pay) => pay.purpose == PaymentPurpose.rebuy)
+        .length;
+    final paidReEntriesCount = myPayments
+        .where((pay) => pay.purpose == PaymentPurpose.reEntry)
+        .length;
+    final hasAddOnPayment = myPayments.any(
+      (pay) => pay.purpose == PaymentPurpose.addOn,
+    );
+
+    final unrecordedRebuys = (p.rebuys - paidRebuysCount).clamp(0, 999);
+    final unrecordedReEntries = (p.reEntries - paidReEntriesCount).clamp(0, 999);
+    final unrecordedAddOn = (p.hasAddOn && !hasAddOnPayment) ? 1 : 0;
+
+    int unrecordedTotal = (unrecordedRebuys * rebuyUnit) +
+        (unrecordedReEntries * buyInUnit) +
+        (unrecordedAddOn * addOnUnit);
+
+    final isComped = game.payments.any(
+      (pay) => pay.playerId == p.id && (pay.amount == 0 || pay.failureReason == 'comp'),
+    );
+
+    if (!hasBuyInPayment && !isComped) {
+      unrecordedTotal += buyInUnit;
+    }
+
+    return paidTotal + unrecordedTotal;
   }
 }

@@ -22,6 +22,27 @@ extension AppProviderSocial on AppProvider {
     _chatSendTimes.putIfAbsent(userId, () => <DateTime>[]).add(DateTime.now());
   }
 
+  /// Structured @mention check: true when [body] @-names a group member or
+  /// current-game player (case-insensitive, punctuation-trimmed).
+  bool _mentionsMember(String body) {
+    final names = <String>{
+      for (final m in _currentGroup.members) m.name.toLowerCase(),
+      for (final p in _currentGame?.players ?? const []) p.name.toLowerCase(),
+    }..removeWhere((n) => n.isEmpty);
+    if (names.isEmpty) return false;
+    final tokens = body.split(RegExp(r'\s+'));
+    for (final t in tokens) {
+      if (!t.startsWith('@') || t.length < 2) continue;
+      final ref =
+          t.substring(1).replaceAll(RegExp(r'[^a-z0-9_.]+'), '').toLowerCase();
+      if (ref.isEmpty) continue;
+      for (final n in names) {
+        if (n == ref || n.startsWith(ref) || ref.startsWith(n)) return true;
+      }
+    }
+    return false;
+  }
+
   /// Marks an entire chat scope as read up to now so its unread counter
   /// resets. Callers (chat sheet / group hub screens) invoke this when the
   /// conversation becomes visible.
@@ -32,13 +53,20 @@ extension AppProviderSocial on AppProvider {
 
   /// Unread count over one chat list: non-deleted messages authored by
   /// someone else, posted after the scope's last-read timestamp.
+  ///
+  /// A blocked author's messages are skipped here as well as in the list, so
+  /// the tab badge can never count something the chat will not show (§E10:
+  /// "Unread = messages not deleted, not mine, newer than my last read" —
+  /// a blocked message is none of those things the member can act on).
   int _unreadChatCount(String scopeKey, List<ChatMessage> messages) {
     final uid = _user?.id;
     if (uid == null) return 0;
+    final blocked = blockedUserIds;
     final lastRead = _chatLastRead[scopeKey];
     var count = 0;
     for (final m in messages) {
-      if (m.deleted || m.authorId == uid) continue;
+      if (m.deleted) continue;
+      if (blocked.contains(m.authorId)) continue;
       if (lastRead != null && !m.timestamp.isAfter(lastRead)) continue;
       count++;
     }
@@ -58,7 +86,7 @@ extension AppProviderSocial on AppProvider {
   /// Sends a chat message. Returns a validation message when the message
   /// cannot be sent (empty, too long or rate limited), or null on success.
   String? sendChatMessage(String? gameId, String body) {
-    if (_user == null) return null;
+    if (_user == null) return 'You must be signed in to send a message.';
     // Spec §22: sanitize input before processing.
     final sanitized = Sanitization.sanitizeChat(body);
     if (sanitized.isEmpty) return 'Message cannot be empty.';
@@ -66,7 +94,7 @@ extension AppProviderSocial on AppProvider {
       return 'Message is too long — maximum ${AppProvider.maxChatMessageLength} characters.';
     }
     if (_chatRateLimited(_user!.id)) {
-      return 'You are sending messages too quickly — wait a moment and try again.';
+      return AppProvider.chatThrottleMessage;
     }
     _recordChatSend(_user!.id);
     final isGameChat = gameId != null && _currentGame?.id == gameId;
@@ -102,21 +130,24 @@ extension AppProviderSocial on AppProvider {
       _postGroupChat(msg);
     }
 
-    // Fan out a push notification for this chat message (UAT 12-108/13-059).
-    // The sender is excluded inside _fanOutPush so they don't banner themselves.
-    pushNotification(
-      AppNotification(
-        id: 'chat-${msg.id}',
-        title: isGameChat
-            ? 'Game Chat: ${_currentGame?.settings.name ?? 'Live Game'}'
-            : 'Group Chat: ${_currentGroup.name}',
-        body: '${_user!.name}: $sanitized',
-        timestamp: DateTime.now(),
-        type: NotificationType.chat,
-        link: isGameChat ? '/game/$gameId' : '/chat',
-        read: false,
-      ),
-    );
+    // Push only for structured mentions per Spec E10 (not every line).
+    // Plain chat stays in-app to avoid push spam and rules throttle.
+    final mentionsMe = _mentionsMember(sanitized);
+    if (mentionsMe) {
+      pushNotification(
+        AppNotification(
+          id: 'chat-${msg.id}',
+          title: isGameChat
+              ? 'Game Chat: ${_currentGame?.settings.name ?? 'Live Game'}'
+              : 'Group Chat: ${_currentGroup.name}',
+          body: '${_user!.name}: $sanitized',
+          timestamp: DateTime.now(),
+          type: NotificationType.chat,
+          link: isGameChat ? '/game/$gameId' : '/chat',
+          read: false,
+        ),
+      );
+    }
 
     if (!_disposed) notifyListeners();
     return null;
@@ -125,6 +156,10 @@ extension AppProviderSocial on AppProvider {
   /// Every visible message for a game's chat: the per-game chat subcollection
   /// merged with any pinned/system cards carried on the game document, sorted
   /// oldest-first so the chat view reads top-to-bottom.
+  ///
+  /// Blocked authors' messages are filtered out of the returned view (§E10 (3)
+  /// — "everywhere"), not out of [_gameChatMessages], so the raw stream keeps
+  /// the full transcript and unblocking restores it immediately.
   List<ChatMessage> gameChatMessages(String gameId) {
     final LiveGame? base = _currentGame?.id == gameId
         ? _currentGame
@@ -138,7 +173,57 @@ extension AppProviderSocial on AppProvider {
     }
     final list = byId.values.toList()
       ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    return list;
+    return visibleChat(list);
+  }
+
+  // ── Blocked members (§E10 moderation (3) / B4 "Block {name}") ──────────────
+
+  /// Ids this member has blocked, as a set for the per-message filter. Empty
+  /// while signed out, so a guest's read is never filtered by accident.
+  Set<String> get blockedUserIds =>
+      _user?.blockedUserIds.toSet() ?? const <String>{};
+
+  /// True when this member has blocked [userId]. §E6's matrix gives blocking to
+  /// host, co-host and member; a guest gets nothing back from here.
+  bool isBlocked(String userId) => _user?.isBlocked(userId) ?? false;
+
+  /// [messages] minus the blocked authors' messages, order preserved. This is
+  /// the single read path both chats go through, so "hides their messages …
+  /// everywhere" (§E10 (3)) cannot be true of one scope and false of another.
+  List<ChatMessage> visibleChat(Iterable<ChatMessage> messages) =>
+      ChatMessage.visibleTo(messages, blockedUserIds);
+
+  /// The group chat as this member should see it — the unfiltered list minus
+  /// the muted authors, oldest first.
+  List<ChatMessage> visibleGroupChat() =>
+      visibleChat(_currentGroup.chat)
+        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+  /// Blocks [userId]. Returns false, having changed nothing, when there is no
+  /// signed-in member, when [userId] is blank or is your own id, or when they
+  /// are blocked already. No message is touched: the block is a filter on
+  /// [visibleChat], and the messages stay in the group's chat collection for
+  /// everyone else.
+  bool blockUser(String userId) => _setBlocked(userId, blocked: true);
+
+  /// Undoes [blockUser], putting the member's messages and polls back.
+  bool unblockUser(String userId) => _setBlocked(userId, blocked: false);
+
+  bool _setBlocked(String userId, {required bool blocked}) {
+    final current = _user;
+    if (current == null) return false;
+    final next = blocked
+        ? current.withBlocked(userId)
+        : current.withoutBlocked(userId);
+    // withBlocked/withoutBlocked hand back the SAME instance for every no-op,
+    // so an unchanged list is never re-persisted.
+    if (identical(next, current)) return false;
+    _user = next;
+    if (!_disposed) notifyListeners();
+    // §E10 (3): "stored on the blocker's user document" — the profile doc this
+    // member already owns (`users/{uid}.prefs.blockedUserIds`).
+    _persistPref('blockedUserIds', next.blockedUserIds);
+    return true;
   }
 
   /// Persists a group-chat message to `groups/{gid}/chat` (fire-and-forget).
@@ -161,6 +246,218 @@ extension AppProviderSocial on AppProvider {
           .savePoll(_currentGroupId!, poll, asVote: asVote)
           .catchError((Object e) => debugPrint('savePoll failed: $e')),
     );
+  }
+
+  // ── Reports (Addendum 1 / Apple 1.2) ────────────────────────────────────────
+
+  /// Open reports for the current group. Empty for anyone who is not a host -
+  /// the rules refuse the read, so the list is never even subscribed.
+  List<ChatReport> get reports => List.unmodifiable(_reports);
+
+  /// The badge on the Reports row.
+  int get reportCount => _reports.length;
+
+  /// Seeds the open reports without touching the backend. The reports stream
+  /// is admin-and-backend gated, so without this a host's report card can
+  /// only ever be seen empty in a test.
+  @visibleForTesting
+  void setReportsForTesting(List<ChatReport> reports) {
+    _reports = List.unmodifiable(reports);
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Subscribes to the group's reports once this user is known to be an admin.
+  void _syncReportsSub(String gid) {
+    if (!_backendUp || _currentGroupId != gid) return;
+    if (!isAdmin) {
+      if (_reportsSub != null) {
+        _reportsSub!.cancel();
+        _reportsSub = null;
+        _reports = const [];
+      }
+      return;
+    }
+    if (_reportsSub != null) return;
+    _reportsSub = _repo.reportsStream(gid).listen((list) {
+      _reports = list;
+      if (!_disposed) notifyListeners();
+    }, onError: (Object e) => debugPrint('reports stream error: $e'));
+  }
+
+  // ── Imported past results (B12) ─────────────────────────────────────────────
+
+  /// Nights the host imported into the current group, oldest first. They join
+  /// the all-time standings and the season table (no knockouts).
+  List<ImportedNight> get importedNights => List.unmodifiable(_importedNights);
+
+  /// Every date already in this season — played games and previously imported
+  /// nights alike — as `YYYY-MM-DD`.
+  ///
+  /// §B12 refuses a line whose date is "already in the season - skipped", and
+  /// that means BOTH sources. Checking only the imported list would let a host
+  /// import a night that duplicates a game the group actually played, and the
+  /// standings would then count it twice.
+  List<String> get seasonDates => [
+        for (final g in currentGroup.games)
+          if (g.settings.date.length >= 10) g.settings.date.substring(0, 10),
+        for (final n in _importedNights)
+          if (n.date.length >= 10) n.date.substring(0, 10),
+      ];
+
+  /// Members by their normalised name, for `ImportResultsParser.toNight`.
+  ///
+  /// First member wins when two share a name, which the parser's own index
+  /// also does — building it here rather than in the screen keeps the matching
+  /// rule in one place, since a second implementation is how a guest row
+  /// silently becomes a member row for some nights and not others.
+  Map<String, String> get importMemberIndex =>
+      ImportResultsParser.memberIndex([
+        for (final m in currentGroup.members) (id: m.id, name: m.name),
+      ]);
+
+  /// Every member can read the imported nights (they feed the standings).
+  void _syncImportedSub(String gid) {
+    if (!_backendUp || _currentGroupId != gid) return;
+    if (_importedSub != null) return;
+    _importedSub = _repo.importedNightsStream(gid).listen((list) {
+      _importedNights = list;
+      if (!_disposed) notifyListeners();
+    }, onError: (Object e) => debugPrint('importedNights stream error: $e'));
+  }
+
+  /// Seeds already-imported nights without touching the backend. For tests
+  /// and for the recovery bundle, which restores a session's imported nights
+  /// before the Firestore stream has delivered its first value.
+  @visibleForTesting
+  void setImportedNightsForTesting(List<ImportedNight> nights) {
+    _importedNights = [...nights]
+      ..sort((a, b) => a.date.compareTo(b.date));
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Host only. Saves [nights] and returns how many were stored; a date that
+  /// is already imported is left alone. Returns 0 when nothing could be saved.
+  Future<int> importNights(List<ImportedNight> nights) async {
+    final gid = _currentGroup.id;
+    if (!isAdmin || gid.isEmpty || nights.isEmpty) return 0;
+    final have = seasonDates.toSet();
+    final fresh = [
+      for (final n in nights)
+        if (have.add(n.date)) n,
+    ];
+    if (fresh.isEmpty) return 0;
+    final before = _importedNights;
+    _importedNights = [...before, ...fresh]
+      ..sort((a, b) => a.date.compareTo(b.date));
+    if (!_disposed) notifyListeners();
+    if (_backendUp) {
+      try {
+        await _repo.saveImportedNights(gid, fresh);
+      } catch (e) {
+        debugPrint('saveImportedNights failed: $e');
+        _importedNights = before;
+        if (!_disposed) notifyListeners();
+        return 0;
+      }
+    }
+    return fresh.length;
+  }
+
+  /// Whether [message] can be reported by the signed-in user: someone else's
+  /// message, not a pinned system card, not already removed.
+  bool canReport(ChatMessage message) {
+    final uid = _user?.id;
+    return uid != null &&
+        !message.pinned &&
+        !message.deleted &&
+        message.authorId != uid &&
+        message.authorId.isNotEmpty;
+  }
+
+  /// Reports [message]. Always tells the group's host by push - Apple 1.2
+  /// requires a way to report objectionable content that reaches a person, so
+  /// this notification has no mute and no setting; it is not a "chat" alert.
+  ///
+  /// [reason] is the §E10 (2) choice (offensive / spam / other). It is
+  /// optional so a caller that has not asked the member yet still files a
+  /// valid report - the field is nullable and a stored report without one is
+  /// exactly what every report filed before this field existed looks like.
+  ///
+  /// §E10 (2)'s "a report not handled in 24 h is emailed to support" is a
+  /// Cloud Function on `reports/{id}` (the `createdAt` server timestamp it
+  /// orders on is written by `reportChatMessage`), not something the member's
+  /// device does.
+  ///
+  /// Returns a message to show when it could not be sent.
+  Future<String?> reportMessage(ChatMessage message, {String? reason}) async {
+    final uid = _user?.id;
+    if (uid == null || !canReport(message)) {
+      return 'This message cannot be reported.';
+    }
+    final gid = _currentGroup.id;
+    if (gid.isEmpty) return 'Open the group first.';
+    final report = ChatReport(
+      id: ChatReport.idFor(message.id, uid),
+      messageId: message.id,
+      authorId: message.authorId,
+      authorName: message.authorName,
+      reporterId: uid,
+      excerpt: message.body,
+      createdAt: DateTime.now(),
+      gameId: message.gameId,
+      reason: ChatReport.normalizeReason(reason),
+    );
+    if (_backendUp) {
+      try {
+        await _repo.reportChatMessage(gid, report);
+      } catch (e) {
+        // A second report of the same message from the same member lands on
+        // an existing document and is refused - the host already knows.
+        debugPrint('reportChatMessage failed: $e');
+        if (e.toString().contains('permission-denied')) return null;
+        return 'Could not send the report. Check your connection and try again.';
+      }
+    }
+    final hosts = <String>{
+      if (_currentGroup.ownerId.isNotEmpty) _currentGroup.ownerId,
+      for (final m in _currentGroup.members)
+        if (m.isAdmin) m.id,
+    }..remove(uid);
+    if (hosts.isNotEmpty) {
+      pushNotification(
+        AppNotification(
+          id: 'report-${report.id}',
+          title: 'A message in ${_currentGroup.name} was reported',
+          body: 'Open Reports to review it.',
+          timestamp: DateTime.now(),
+          type: NotificationType.admin,
+          link: '/reports',
+          read: false,
+          audience: hosts.toList(),
+        ),
+      );
+    }
+    return null;
+  }
+
+  /// Clears a report once the host has dealt with it. When [removeMessage] is
+  /// set the offending message is also taken down for everyone.
+  Future<void> resolveReport(
+    ChatReport report, {
+    bool removeMessage = false,
+  }) async {
+    final gid = _currentGroup.id;
+    if (!isAdmin || gid.isEmpty) return;
+    if (removeMessage) deleteMessage(report.messageId);
+    _reports = _reports.where((r) => r.id != report.id).toList();
+    if (!_disposed) notifyListeners();
+    if (_backendUp) {
+      try {
+        await _repo.clearReport(gid, report.id);
+      } catch (e) {
+        debugPrint('clearReport failed: $e');
+      }
+    }
   }
 
   void deleteMessage(String msgId) {
@@ -382,6 +679,15 @@ extension AppProviderSocial on AppProvider {
     _applyRsvpFor(participantId, rsvp, gameId: gameId, announce: false);
   }
 
+  List<String> _recomputeWaitlist(LiveGame game) {
+    final capacity = effectiveTableSettings.maxPerTable.clamp(1, 999);
+    final goingIds = game.players
+        .where((p) => !p.isGuest && p.rsvp?.isGoing == true)
+        .map((p) => p.id)
+        .toList();
+    return goingIds.length > capacity ? goingIds.skip(capacity).toList() : const <String>[];
+  }
+
   void _applyRsvpFor(
     String userId,
     Rsvp? rsvp, {
@@ -456,9 +762,35 @@ extension AppProviderSocial on AppProvider {
 
     final before = target;
     final after = applyRsvp(target);
+    final promotedId = before.waitlist.isNotEmpty &&
+            (mine?.rsvp?.isGoing ?? false) &&
+            !(rsvp?.isGoing ?? false)
+        ? before.waitlist.first
+        : null;
+    final promotedPlayer = promotedId == null
+        ? null
+        : after.players.where((p) => p.id == promotedId).firstOrNull;
+    final afterWithWaitlist = after.copyWith(waitlist: _recomputeWaitlist(after));
 
     if (isCurrent) {
-      _currentGame = after;
+      _currentGame = afterWithWaitlist;
+    }
+
+    if (promotedId != null && promotedPlayer != null) {
+      final former = before.players.where((p) => p.id == userId).firstOrNull;
+      final formerName = former?.name ?? 'A member';
+      final promotedName = promotedPlayer.name;
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Waitlist update',
+          body: '$formerName dropped out — $promotedName is in.',
+          type: NotificationType.rsvp,
+          link: '/invitation',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
     }
     // All paths: hold the selection locally until a remote snapshot confirms
     // it. This prevents any lagging Firebase snapshot from reverting the
@@ -499,10 +831,14 @@ extension AppProviderSocial on AppProvider {
     }
 
     // Keep the group's copy of the game in sync so hub badges update at once.
+    final syncedGroupGame = applyRsvp(_currentGroup.games
+        .where((g) => g.id == targetId)
+        .firstOrNull ??
+        target);
     _setGroup(
       _currentGroup.copyWith(
         games: _currentGroup.games
-            .map((g) => g.id == targetId ? applyRsvp(g) : g)
+            .map((g) => g.id == targetId ? syncedGroupGame.copyWith(waitlist: _recomputeWaitlist(syncedGroupGame)) : g)
             .toList(),
       ),
     );
@@ -869,10 +1205,14 @@ extension AppProviderSocial on AppProvider {
         .where((p) => !p.isGuest && p.rsvp == null)
         .toList();
     if (pending.isEmpty) return;
-    for (final _ in pending) {
+    for (final p in pending) {
+      // Addressed to THIS member only: an untargeted broadcast repeated N
+      // times delivered every member of the group N "you haven't responded"
+      // rows, including the people who had already answered.
       pushNotification(
         AppNotification(
-          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          id: 'rsvp-reminder-${game.id}-${p.id}-'
+              '${DateTime.now().millisecondsSinceEpoch}',
           title: 'RSVP reminder',
           body:
               'You haven\'t responded to ${target.settings.name} '
@@ -882,6 +1222,7 @@ extension AppProviderSocial on AppProvider {
           link: '/invitation',
           read: false,
           timestamp: DateTime.now(),
+          audience: [p.id],
         ),
       );
     }

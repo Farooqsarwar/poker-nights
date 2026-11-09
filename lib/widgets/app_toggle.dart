@@ -1,31 +1,32 @@
 import 'package:flutter/material.dart';
 
-import '../constants/app_constants.dart';
+import '../app/colors.dart';
 import '../app/typography.dart';
-import 'glass_styles.dart';
+import '../constants/app_constants.dart';
 
-/// Toggle switch mirroring the web `Toggle` component with glassmorphism.
+/// Toggle switch mirroring the mobile-first redesign.
 ///
-/// Glass track with frosted thumb, ambient glow when active, and subtle
-/// neumorphic shadows.
+/// Features clean rounded pill track with smooth animated thumb, matching
+/// the Figma settings specification.
 class AppToggle extends StatelessWidget {
   const AppToggle({
     super.key,
     required this.value,
     required this.onChanged,
     this.label,
+    this.semanticLabel,
   });
 
   final bool value;
   final ValueChanged<bool> onChanged;
   final String? label;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    Theme.of(context);
     return Semantics(
       toggled: value,
-      label: label ?? 'Toggle',
+      label: semanticLabel ?? label ?? 'Toggle',
       button: true,
       child: InkWell(
         onTap: () => onChanged(!value),
@@ -36,30 +37,56 @@ class AppToggle extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-            AnimatedContainer(
-              duration: AppDurations.normal,
-              curve: Curves.easeInOut,
-              width: 44,
-              height: 24,
-              padding: const EdgeInsets.all(2),
-              decoration: Glass.glassToggle(active: value),
-              child: AnimatedAlign(
-                duration: AppDurations.normal,
+              AnimatedContainer(
+                duration: AppDurations.fast,
                 curve: Curves.easeInOut,
-                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  width: 20,
-                  height: 20,
-                  decoration: Glass.glassToggleThumb(),
+                width: 48,
+                height: 28,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: value ? AppColors.primary : AppColors.border,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  boxShadow: value
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: AnimatedAlign(
+                  duration: AppDurations.fast,
+                  curve: Curves.easeInOut,
+                  alignment: value
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: value
+                          ? AppColors.foreground
+                          : AppColors.mutedForeground,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.shadowSoft,
+                          blurRadius: 4,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-            if (label != null) ...[
-              const SizedBox(width: AppSpacing.md),
-              Text(label!, style: AppTypography.bodySm),
+              if (label != null) ...[
+                const SizedBox(width: AppSpacing.md),
+                Text(label!, style: AppTypography.bodySm),
+              ],
             ],
-          ],
-        ),
+          ),
         ),
       ),
     );

@@ -16,6 +16,7 @@ extension AppProviderAuth on AppProvider {
       // Nothing to hydrate for a signed-out user — release the router now.
       _authReady = true;
       _teardownUserData();
+      _eventDrafts.clear();
       if (_user != null) {
         _user = null;
         if (!_disposed) notifyListeners();
@@ -102,15 +103,18 @@ extension AppProviderAuth on AppProvider {
         } catch (_) {}
       }
 
-      await _retryRead(() => _repo.ensureUserDoc(
-            uid: fbUser.uid,
-            name: fbUser.displayName ?? 'Player',
-            email: fbUser.email ?? '',
-            starterPresets: AppProvider.seedPresets,
-            starterChipSet: AppProvider.seedChipSet,
-          ));
+      await _retryRead(
+        () => _repo.ensureUserDoc(
+          uid: fbUser.uid,
+          name: fbUser.displayName ?? 'Player',
+          email: fbUser.email ?? '',
+          starterPresets: AppProvider.seedPresets,
+          starterChipSet: AppProvider.seedChipSet,
+        ),
+      );
       final loaded = await _retryRead(() => _repo.loadUser(fbUser.uid));
-      _user = loaded ??
+      _user =
+          loaded ??
           _user ?? // never downgrade an already-hydrated profile
           AppUser(
             id: fbUser.uid,
@@ -143,13 +147,18 @@ extension AppProviderAuth on AppProvider {
       final prefs = await _repo.loadUserPrefs(uid);
       final voice = prefs['voiceEnabled'];
       if (voice is bool) _voiceEnabled = voice;
-      final showTour = prefs['showAppTour'];
-      if (showTour is bool) {
-        _showAppTour = showTour;
-      } else {
-        _showAppTour = true;
-        _persistPref('showAppTour', true);
+      final vol = prefs['voiceVolume'];
+      if (vol is num) {
+        _voiceVolume = vol.toDouble();
+        VoiceService.instance.setVolume(_voiceVolume);
       }
+      final haptics = prefs['hapticsEnabled'];
+      if (haptics is bool) _hapticsEnabled = haptics;
+      // D9 consent. Absent means never answered, which is a "no" — the
+      // sign-up checkbox is unchecked by default, so an unset preference must
+      // not read as consent.
+      final keepHistory = prefs['keepHistoryForStructures'];
+      _keepHistoryForStructures = keepHistory is bool && keepHistory;
       final savedPendingCheckIn = prefs['pendingCheckIn'];
       if (savedPendingCheckIn is Map) {
         _pendingCheckIn.addAll(savedPendingCheckIn.cast<String, String>());
@@ -168,6 +177,31 @@ extension AppProviderAuth on AppProvider {
       if (colorTheme is String) _colorTheme = colorTheme;
       final themePref = prefs['themePreference'];
       if (themePref is String) _themePreference = themePref;
+      final defaultChipSet = prefs['defaultChipSetId'];
+      if (defaultChipSet is String) _defaultChipSetId = defaultChipSet;
+      final defaultGamePreset = prefs['defaultGamePresetId'];
+      if (defaultGamePreset is String && defaultGamePreset.isNotEmpty) {
+        _defaultGamePresetId = defaultGamePreset;
+      }
+      final sounds = prefs['soundsEnabled'];
+      if (sounds is bool) _soundsEnabled = sounds;
+      final compact = prefs['compactSummary'];
+      if (compact is bool) _compactSummary = compact;
+      final sms = prefs['smsEnabled'];
+      if (sms is bool) _smsEnabled = sms;
+      final avatar = prefs['avatarColorIndex'];
+      if (avatar is num) _avatarColorIndex = avatar.toInt();
+      _eventDrafts.clear();
+      final eventDrafts = prefs['eventDrafts'];
+      if (eventDrafts is Map) {
+        for (final entry in eventDrafts.entries) {
+          if (entry.key is String && entry.value is Map) {
+            _eventDrafts[entry.key as String] = gameSettingsFromMap(
+              Map<String, dynamic>.from(entry.value as Map),
+            );
+          }
+        }
+      }
       // Restore per-group notification-mirror cursors so history isn't
       // re-mirrored on every sign-in.
       for (final entry in prefs.entries) {
@@ -180,6 +214,17 @@ extension AppProviderAuth on AppProvider {
           final v = entry.value;
           if (v is bool) _outboxPrimed[gid] = v;
         }
+      }
+      // §E10 (3) "Block": the list lives on the blocker's own user document,
+      // so it has to come back with the profile or a block would evaporate on
+      // the next sign-in. `AppUser.blockedUserIds` is the same list the codec
+      // carries; an absent key means nobody blocked.
+      final blocked = prefs['blockedUserIds'];
+      if (blocked is List && _user != null) {
+        _user = _user!.withBlockedList([
+          for (final id in blocked)
+            if (id is String && id.isNotEmpty) id,
+        ]);
       }
       if (!_disposed) notifyListeners();
     } catch (e) {
@@ -200,8 +245,7 @@ extension AppProviderAuth on AppProvider {
       return switch (e.code) {
         'invalid-credential' ||
         'wrong-password' ||
-        'user-not-found' =>
-          'Incorrect email or password.',
+        'user-not-found' => 'Incorrect email or password.',
         'invalid-email' => 'Enter a valid email address.',
         'user-disabled' => 'This account has been disabled.',
         'too-many-requests' => 'Too many attempts. Please try again later.',
@@ -213,6 +257,11 @@ extension AppProviderAuth on AppProvider {
 
   /// Returns `null` on success or a friendly error message for the UI.
   Future<String?> register(String name, String email, String password) async {
+    // A guest (or quick-start host) who registers keeps their uid, so the games
+    // and results recorded so far carry over (Build Spec A2b).
+    if (_repo.isSignedInAsGuest) {
+      return convertGuestAccount(name, email, password);
+    }
     try {
       final cred = await _repo.signUp(
         name: name,
@@ -225,7 +274,8 @@ extension AppProviderAuth on AppProvider {
         // lagged during hydration's ensureUserDoc.
         if (_user != null && _user!.name != name) {
           await _retryRead(
-              () => _repo.updateUserProfile(cred.user!.uid, name: name));
+            () => _repo.updateUserProfile(cred.user!.uid, name: name),
+          );
           _user = _user!.copyWith(name: name);
           if (!_disposed) notifyListeners();
         }
@@ -235,7 +285,8 @@ extension AppProviderAuth on AppProvider {
     } on fa.FirebaseAuthException catch (e) {
       return switch (e.code) {
         'email-already-in-use' => 'An account already exists for that email.',
-        'weak-password' => 'That password is too weak — use at least 8 characters.',
+        'weak-password' =>
+          'That password is too weak — use at least 8 characters.',
         'invalid-email' => 'Enter a valid email address.',
         'network-request-failed' => 'Network error. Check your connection.',
         _ => e.message ?? 'Registration failed. Please try again.',
@@ -248,7 +299,10 @@ extension AppProviderAuth on AppProvider {
   /// a guest carry over automatically (user-flow spec §6.7). Returns `null`
   /// on success or a friendly error message for the UI.
   Future<String?> convertGuestAccount(
-      String name, String email, String password) async {
+    String name,
+    String email,
+    String password,
+  ) async {
     if (!_repo.isSignedInAsGuest) return 'Not a guest session.';
     try {
       final cred = await _repo.linkGuestAccount(
@@ -260,8 +314,7 @@ extension AppProviderAuth on AppProvider {
       return null;
     } on fa.FirebaseAuthException catch (e) {
       return switch (e.code) {
-        'email-already-in-use' ||
-        'credential-already-in-use' =>
+        'email-already-in-use' || 'credential-already-in-use' =>
           'An account already exists for that email.',
         'weak-password' =>
           'That password is too weak — use at least 8 characters.',
@@ -281,8 +334,9 @@ extension AppProviderAuth on AppProvider {
       return null;
     } on fa.FirebaseAuthException catch (e) {
       return switch (e.code) {
-        'user-not-found' || 'invalid-credential' =>
-          'No account found for that email.',
+        // Same answer whether or not the address has an account, so the form
+        // cannot be used to find out who is registered.
+        'user-not-found' || 'invalid-credential' => null,
         'invalid-email' => 'Enter a valid email address.',
         'network-request-failed' => 'Network error. Check your connection.',
         _ => e.message ?? 'Could not send the reset email. Please try again.',
@@ -336,8 +390,7 @@ extension AppProviderAuth on AppProvider {
       return null;
     } on fa.FirebaseAuthException catch (e) {
       return switch (e.code) {
-        'credential-already-in-use' ||
-        'email-already-in-use' =>
+        'credential-already-in-use' || 'email-already-in-use' =>
           'A Google account already exists for this email.',
         'network-request-failed' => 'Network error. Check your connection.',
         _ => e.message ?? 'Google sign-in failed. Please try again.',
@@ -355,6 +408,21 @@ extension AppProviderAuth on AppProvider {
     await _repo.signOut();
     RecoveryService.clearGuestSession();
     _guestSession = null;
+    // Clear offline pending settlements on logout so they do not linger across users
+    _pendingSettlements.clear();
+    unawaited(
+      Localstore.instance
+          .collection('app')
+          .doc('pending_settlements')
+          .delete()
+          .catchError((_) => null),
+    );
+    // Premium belongs to the account, not the phone: drop it with the session
+    // so the next sign-in starts from its own entitlement.
+    Payments.userId = null;
+    premiumTier = PremiumTier.free;
+    premiumIsServerGranted = false;
+    notifyListeners();
   }
 
   /// Deletes the signed-in account (profile doc, membership mirrors, auth
@@ -362,12 +430,42 @@ extension AppProviderAuth on AppProvider {
   /// using a stale live game (checklist 05-014). Returns a friendly error
   /// message on failure — notably `requires-recent-login`, where the caller
   /// must re-authenticate first.
-  Future<String?> deleteAccount() async {
+  /// True when [deleteAccount] needs the account password to re-authenticate.
+  bool get deleteNeedsPassword => _repo.deleteNeedsPassword;
+
+  Future<String?> deleteAccount({String? password}) async {
+    final live = _currentGame;
+    if (live != null &&
+        isAdmin &&
+        (live.status == LiveGameStatus.running ||
+            live.status == LiveGameStatus.paused ||
+            live.status == LiveGameStatus.onBreak ||
+            live.status == LiveGameStatus.finaltable)) {
+      return 'End or hand over your live games first.';
+    }
     try {
-      await _repo.deleteAccount();
+      await _repo.deleteAccount(password: password);
     } on fa.FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {
         return 'For security please sign in again before deleting your account.';
+      }
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        return 'That password is not correct. Nothing was deleted.';
+      }
+      if (e.code == 'user-cancelled' || e.code == 'missing-password') {
+        return e.message ?? 'Deletion cancelled. Nothing was deleted.';
+      }
+      return e.message ?? 'Could not delete the account. Please try again.';
+    } on FirebaseException catch (e) {
+      // The Firestore cleanup is a single atomic batch, so one rejected write
+      // rejects all of them and surfaces here as `permission-denied` -- NOT as
+      // a FirebaseAuthException. Without this clause that exception escaped
+      // `deleteAccount` entirely; the caller never awaited it, so it became an
+      // unhandled async error and the user was shown a successful deletion
+      // that had deleted nothing.
+      if (e.code == 'permission-denied') {
+        return 'Could not delete every part of the account, so nothing was '
+            'removed. Please try again or contact support.';
       }
       return e.message ?? 'Could not delete the account. Please try again.';
     }
@@ -375,6 +473,8 @@ extension AppProviderAuth on AppProvider {
     _currentGame = null;
     _cashSession = null;
     _guestSession = null;
+    _currentGroup = AppProvider._kEmptyGroup;
+    _notifications = const [];
     _restoredFromRecovery = false;
     _recoveryTime = null;
     RecoveryService.clearGame();

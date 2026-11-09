@@ -4,28 +4,73 @@
 part of 'app_provider.dart';
 
 extension AppProviderTimer on AppProvider {
+  /// Voice marks within a level (specification section 17).
+  ///
+  /// Section 17 narrowed the scope to "level-transition announcements only"
+  /// and specifies exactly two moments:
+  ///
+  ///   * at 1 minute — "1 minute remaining", THEN the next level's blinds;
+  ///   * at level end — an audible 5-4-3-2-1, then the new level.
+  ///
+  /// The next-level blinds are the useful half: a player deciding whether to
+  /// play a marginal hand wants to know what it will cost them next level,
+  /// not merely that time is short.
+  ///
+  /// The five-minute warning that used to fire here was removed. It is not in
+  /// section 17's list, and the addendum's "Voice" section names only the
+  /// one-minute warning and the level transition.
   void _announceLevelMark(int remaining) {
     final game = _currentGame;
     if (game == null || !game.timerRunning) return;
+    // A scheduled break has its own rhythm; counting a level down through it
+    // would announce blinds nobody is about to post.
+    if (game.status == LiveGameStatus.onBreak) return;
     final level = game.currentLevel;
     final mark = '$level';
-    if (remaining <= 300 &&
-        remaining > 60 &&
-        !_levelAnnouncementMarks.contains('$mark:300')) {
-      _levelAnnouncementMarks.add('$mark:300');
-      addAnnouncement('Five minutes remaining in level $level.', true);
-    }
-    if (remaining <= 60 &&
-        remaining > 0 &&
+
+    // Client-side only: AutomationsService.isOneMinuteWarning defines the
+    // exact moment; the window guards missed ticks (background/offline) so
+    // the warning still fires once per level. Behaviour unchanged.
+    if ((AutomationsService.isOneMinuteWarning(remaining) ||
+            (remaining <= 60 && remaining > 5)) &&
         !_levelAnnouncementMarks.contains('$mark:60')) {
       _levelAnnouncementMarks.add('$mark:60');
-      addAnnouncement('One minute remaining in level $level.', true);
+      final next = game.currentLevel < game.structure.levels.length
+          ? game.structure.levels[game.currentLevel]
+          : null;
+      addAnnouncement(
+        VoiceService.oneMinuteMessage(
+          nextSb: next?.sb,
+          nextBb: next?.bb,
+          nextAnte: next?.ante,
+        ),
+        true,
+      );
+    }
+
+    // Section 17's audible countdown. Spoken one number per second so it
+    // lands with the clock rather than as a single burst.
+    // Same predicate as AutomationsService.isCountdownUrgency.
+    if (AutomationsService.isCountdownUrgency(remaining)) {
+      final key = '$mark:count:$remaining';
+      if (!_levelAnnouncementMarks.contains(key)) {
+        _levelAnnouncementMarks.add(key);
+        // Silent in the feed — this is a spoken cue, not a written notice,
+        // and five one-digit rows would bury the announcements list.
+        if (_voiceEnabled && thisDeviceIsAudioMaster) {
+          VoiceService.instance.speak('$remaining');
+        }
+      }
     }
   }
 
   void _startTick() {
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      _remindersTickCount++;
+      if (_remindersTickCount % 15 == 0) {
+        _checkScheduledReminders();
+      }
       if (_currentGame == null || !_currentGame!.timerRunning) return;
       int remaining;
       if (_currentGame!.levelEndTime != null) {
@@ -49,13 +94,25 @@ extension AppProviderTimer on AppProvider {
           _rollOverLevelForViewer();
           return;
         }
-        final isLastLevel = _currentGame!.currentLevel >= _currentGame!.structure.levels.length;
+        // A scheduled break that has run its time ends by itself and play
+        // resumes — section 8 makes it part of the structure, so it does not
+        // wait for the host the way a manual pause does.
+        if (_currentGame!.status == LiveGameStatus.onBreak) {
+          endBreak();
+          _evaluateSpeedRecommendation();
+          return;
+        }
+        final isLastLevel =
+            _currentGame!.currentLevel >= _currentGame!.structure.levels.length;
         if (isLastLevel) {
           _currentGame = _currentGame!.copyWith(
             secondsRemaining: 0,
             timerRunning: false,
           );
-          addAnnouncement('Tournament has reached the end of the structure.', true);
+          addAnnouncement(
+            'Tournament has reached the end of the structure.',
+            true,
+          );
           _syncGroupGame();
           if (!_disposed) notifyListeners();
         } else {
@@ -174,7 +231,8 @@ extension AppProviderTimer on AppProvider {
     // nowhere, so the estimate understated by up to a full level — enough on
     // its own to tip a fresh event into a false "Slow Down".
     remainingLevelsMins +=
-        game.currentSecondsRemaining().clamp(0, currentDurationMins * 60) / 60.0;
+        game.currentSecondsRemaining().clamp(0, currentDurationMins * 60) /
+        60.0;
 
     final targetMins = game.settings.durationHours * 60;
     final actualRemaining = game.activePlayers.length;
@@ -269,14 +327,49 @@ extension AppProviderTimer on AppProvider {
     );
   }
 
-  void startTimer() {
+  void startTimer({List<String> noShowIds = const []}) {
+    if (_currentGame == null ||
+        (!isAdmin && !isCoAdmin && !canOperateTheClock)) {
+      return;
+    }
+    _startTick();
     _forceClaimEditor();
+
+    if (noShowIds.isNotEmpty) {
+      _currentGame = _currentGame!.copyWith(
+        players: _currentGame!.players.map((p) {
+          if (noShowIds.contains(p.id)) {
+            return p.copyWith(noShow: true, active: false);
+          }
+          return p;
+        }).toList(),
+      );
+    }
+
     // Client rule: no guessed player count at setup — the AI finalises the
     // stacks/blinds/levels right now, from the actual final headcount
     // (checked-in players if any confirmed, otherwise final RSVPs), the
     // moment the admin presses Start. This supersedes whatever estimate the
     // 30-minute pre-start window may have already shown.
     recalculateStructure();
+
+    // §F1.5 point 7 — the authoritative "can this night be played" check. The
+    // structure was just rebuilt for the REAL headcount, which can differ from
+    // whatever the host saw on the review screen (a late arrival pushes the
+    // field past what the chip case can deal). If the case cannot deal it, the
+    // ladder on the game is only a placeholder: refuse to start, leave the game
+    // un-confirmed and not running, and say why. Every start path
+    // (check-in, invitation, quick start) comes through here.
+    if (_currentGame!.structure.isBlocked) {
+      addAuditRecord(
+        'start_refused',
+        'Start refused: the chip case cannot deal this night for '
+            '${_currentGame!.settings.players} players.',
+      );
+      if (!_disposed) notifyListeners();
+      return;
+    }
+
     _currentGame = _currentGame!.copyWith(structureConfirmed: true);
     addAuditRecord(
       'structure_final',
@@ -284,6 +377,42 @@ extension AppProviderTimer on AppProvider {
           'players: stack ${_currentGame!.structure.startingStack}, '
           '${_currentGame!.structure.levels.length} levels.',
     );
+
+    // §25.1a. The early-arrival bonus is granted here, not at check-in,
+    // because it is a percentage of the STARTING STACK, and that number does
+    // not become final until the structure regeneration two lines up. A
+    // player who was eligible but had already had it computed against a
+    // provisional stack would get the wrong bonus if the field size changed
+    // between check-in and Start.
+    if (_currentGame!.settings.earlyArrivalBonusEnabled) {
+      final bonusChips = earlyArrivalBonusChips(
+        startingStack: _currentGame!.structure.startingStack,
+        effectivePct: _currentGame!.settings.effectiveEarlyArrivalPct,
+      );
+      if (bonusChips > 0) {
+        var totalBonus = 0;
+        final grantedTo = <String>[];
+        final withBonuses = _currentGame!.players.map((p) {
+          if (p.earlyArrivalBonusEligible && p.earlyArrivalBonusChips == null) {
+            totalBonus += bonusChips;
+            grantedTo.add(p.name);
+            return p.copyWith(earlyArrivalBonusChips: bonusChips);
+          }
+          return p;
+        }).toList();
+        if (grantedTo.isNotEmpty) {
+          _currentGame = _currentGame!.copyWith(
+            players: withBonuses,
+            totalChipsInPlay: _currentGame!.totalChipsInPlay + totalBonus,
+          );
+          addAuditRecord(
+            'early_arrival_bonus',
+            'Early-arrival bonus of $bonusChips chips granted to '
+                '${grantedTo.join(', ')}.',
+          );
+        }
+      }
+    }
 
     _levelAnnouncementMarks.clear();
     // Re-calibrate server time and start periodic re-calibration for long
@@ -323,11 +452,14 @@ extension AppProviderTimer on AppProvider {
   }
 
   void pauseTimer() {
+    if (_currentGame == null || (!isAdmin && !canOperateTheClock)) return;
     _forceClaimEditor();
     _currentGame = _currentGame!.copyWith(
       timerRunning: false,
       status: LiveGameStatus.paused,
-      secondsRemaining: _currentGame!.currentSecondsRemaining(_serverTimeOffset ?? Duration.zero),
+      secondsRemaining: _currentGame!.currentSecondsRemaining(
+        _serverTimeOffset ?? Duration.zero,
+      ),
       levelEndTime: null,
       clearLevelEndTime: true,
     );
@@ -336,14 +468,17 @@ extension AppProviderTimer on AppProvider {
   }
 
   void resumeTimer() {
+    if (_currentGame == null || (!isAdmin && !canOperateTheClock)) return;
     _forceClaimEditor();
-    if (_currentGame?.status == LiveGameStatus.completed || 
+    if (_currentGame?.status == LiveGameStatus.completed ||
         _currentGame?.status == LiveGameStatus.cancelled) {
       return;
     }
+    final resumedSettings = _settingsAfterLeavingBreak(_currentGame!);
     _currentGame = _currentGame!.copyWith(
       timerRunning: true,
       status: LiveGameStatus.running,
+      settings: resumedSettings,
       levelEndTime: _serverNow.add(
         Duration(seconds: _currentGame!.secondsRemaining),
       ),
@@ -352,14 +487,113 @@ extension AppProviderTimer on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  /// Addendum 2: the add-on window closes when the host presses Next in the
+  /// settlement flow. If the break ends first, play resumes and the window
+  /// stays open ("Add-on window (overtime)") until step 2 is finished, so a
+  /// slow settlement never silently forfeits anybody's add-on.
+  GameSettings _settingsAfterLeavingBreak(LiveGame game) {
+    final stillOpen =
+        game.status == LiveGameStatus.rebuypause &&
+        game.settings.addOn &&
+        !game.settlementConfirmed &&
+        !game.addOnWindowClosed;
+    return stillOpen
+        ? game.settings.copyWith(addOnOvertime: true)
+        : game.settings;
+  }
+
+  /// Puts a player on the clock (§12).
+  ///
+  /// Host-initiated, never automatic: an automatic clock belongs in a casino
+  /// with floor staff, not at a kitchen table. It runs BESIDE the level timer
+  /// and never touches it -- §12 requires it to be "independent of level
+  /// timer", and a level must not end early because somebody tanked.
+  void startShotClock(String playerId, {int? seconds}) {
+    if (!AppFeatureFlags.enableShotClock) return;
+    final game = _currentGame;
+    if (game == null) return;
+    final duration = seconds ?? ShotClock.defaultSeconds;
+    _currentGame = game.copyWith(
+      shotClock: ShotClock(
+        playerId: playerId,
+        // A timestamp, not a countdown -- every device derives the same
+        // remaining time without having to tick in step, exactly as the level
+        // clock does.
+        endsAt: _serverNow.add(Duration(seconds: duration)),
+        seconds: duration,
+      ),
+    );
+    final name = game.players.where((p) => p.id == playerId).firstOrNull?.name;
+    addAnnouncement(
+      '${name ?? 'Player'} is on the clock — $duration seconds.',
+      true,
+    );
+    addAuditRecord(
+      'shot_clock',
+      '${name ?? playerId} put on the clock for $duration seconds.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Clears the clock — the player acted, or the table waved it off.
+  ///
+  /// Nothing else happens. It is a SOFT clock: running out does not fold a
+  /// hand, and neither does clearing it. The table decides what a expired
+  /// clock means, which is the only workable rule for a home game.
+  void clearShotClock() {
+    final game = _currentGame;
+    if (game == null || game.shotClock == null) return;
+    _currentGame = game.copyWith(clearShotClock: true);
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Ends a scheduled break and starts the next level.
+  ///
+  /// Called by the clock when the break runs out, and by the host if they want
+  /// to cut it short. Section 8 makes the break part of the structure, so
+  /// ending it simply resumes the sequence — it is not a separate "resume"
+  /// with its own rules.
+  void endBreak({bool skipped = false}) {
+    final game = _currentGame;
+    if (game == null || game.status != LiveGameStatus.onBreak) return;
+    _pushUndo();
+    _currentGame = game.copyWith(status: LiveGameStatus.running);
+    addAuditRecord(
+      skipped ? 'break_skipped' : 'break_end',
+      skipped
+          ? 'Break after level ${game.currentLevel} ended early by the host.'
+          : 'Break after level ${game.currentLevel} finished.',
+    );
+    // Now advance for real. The status is no longer onBreak, so `nextLevel`
+    // will not re-enter the same break.
+    nextLevel();
+  }
+
   void nextLevel({String? idempotencyKey}) {
-    final (rev, idemKey) =
-        _claimIdempotency(idempotencyKey ?? '', action: 'nextLevel');
+    final (rev, idemKey) = _claimIdempotency(
+      idempotencyKey ?? '',
+      action: 'nextLevel',
+    );
     if (rev == null) return; // replayed action — already applied
     final next = _currentGame!.currentLevel + 1;
     _pushUndo();
     _levelAnnouncementMarks.clear();
-    // Auto-trigger rebuy pause when crossing rebuysCloseLevel (spec §1, §12 A12)
+    // E17 Rule 12 + 15, client-side only: haptics on host phone + visual twin.
+    // No Cloud Functions; UI pulses via levelFlashSeq / clockPulseSeq.
+    if (_isGameAuthority && _hapticsEnabled) {
+      unawaited(HapticFeedback.lightImpact());
+    }
+    _levelFlashSeq++;
+    _clockPulseSeq++;
+
+    // Section 8 / addendum section 5: a scheduled break is a real state, not
+    // a manual pause. If one falls after the level that just finished, the
+    // tournament enters it and the clock counts the break down; `endBreak`
+    // then advances into the next level. Without this the breaks were
+    // configured, stored and counted in the duration but never actually
+    // happened.
     final wasBelowRebuyClose =
         _currentGame!.currentLevel <= _currentGame!.settings.rebuysCloseLevel;
     final nowAtOrAboveRebuyClose =
@@ -368,13 +602,36 @@ extension AppProviderTimer on AppProvider {
         _currentGame!.settings.rebuys &&
         wasBelowRebuyClose &&
         nowAtOrAboveRebuyClose;
+
+    final scheduled = _currentGame!.structure.breakAfter(
+      _currentGame!.currentLevel,
+    );
+
+    if (_currentGame!.settings.rebuys &&
+        next == _currentGame!.settings.rebuysCloseLevel) {
+      final rebKey = '${_currentGame!.id}-rebuysClosing-$next';
+      if (!_hasFiredReminder(rebKey)) {
+        _sentReminderKeys.add(rebKey);
+        pushNotification(
+          AppNotification(
+            id: 'remind-rebuys-${_currentGame!.id}-$next-${DateTime.now().millisecondsSinceEpoch}',
+            title: 'Rebuys closing',
+            body: 'Rebuys close after Level $next.',
+            type: NotificationType.game,
+            link: '/player-live',
+            read: false,
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
+    }
+
     if (shouldPauseRebuy) {
-      final level = (next <= _currentGame!.structure.levels.length)
-          ? _currentGame!.structure.levels[next - 1]
-          : _currentGame!.structure.levels.last;
+      // DECISION: Rebuy pause uses structure break duration, defaults to 10 min (fixes Dani B6 / M4).
+      final breakMins = scheduled?.durationMins ?? 10;
       _currentGame = _currentGame!.copyWith(
         currentLevel: next,
-        secondsRemaining: level.durationMins * 60,
+        secondsRemaining: breakMins * 60,
         timerRunning: false,
         status: LiveGameStatus.rebuypause,
         speedRecommendation: null,
@@ -384,10 +641,7 @@ extension AppProviderTimer on AppProvider {
         revision: rev,
         lastIdempotencyKey: idemKey,
       );
-      addAnnouncement(
-        'Rebuys are now closed. Add-ons are available.',
-        true,
-      );
+      addAnnouncement('Rebuys are now closed. Add-ons are available.', true);
       pushNotification(
         AppNotification(
           id: 'n-${DateTime.now().millisecondsSinceEpoch}',
@@ -400,6 +654,44 @@ extension AppProviderTimer on AppProvider {
           timestamp: DateTime.now(),
         ),
       );
+      _syncGroupGame();
+      if (!_disposed) notifyListeners();
+      return;
+    }
+
+    if (scheduled != null &&
+        _currentGame!.status != LiveGameStatus.onBreak &&
+        next <= _currentGame!.structure.levels.length) {
+      _currentGame = _currentGame!.copyWith(
+        status: LiveGameStatus.onBreak,
+        timerRunning: true,
+        secondsRemaining: scheduled.durationMins * 60,
+        levelEndTime: _serverNow.add(Duration(minutes: scheduled.durationMins)),
+        speedRecommendation: null,
+        clearSpeedRecommendation: true,
+        revision: rev,
+        lastIdempotencyKey: idemKey,
+      );
+      addAnnouncement('Break — ${scheduled.durationMins} minutes.', true);
+      pushNotification(
+        AppNotification(
+          id: 'break-${_currentGame!.id}-${_currentGame!.currentLevel}-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Break time',
+          body: '${_currentGame!.settings.name} — ${scheduled.durationMins} minute break.',
+          type: NotificationType.game,
+          link: '/player-live',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+      addAuditRecord(
+        'break_start',
+        'Scheduled break after level ${_currentGame!.currentLevel} '
+            '(${scheduled.durationMins} minutes).',
+      );
+      _syncGroupGame();
+      if (!_disposed) notifyListeners();
+      return;
     } else {
       // Play has run past the generated structure.
       //
@@ -453,11 +745,13 @@ extension AppProviderTimer on AppProvider {
         return;
       }
       final extLevel = _currentGame!.structure.levels[next - 1];
+      final advancedSettings = _settingsAfterLeavingBreak(_currentGame!);
       _currentGame = _currentGame!.copyWith(
         currentLevel: next,
         secondsRemaining: extLevel.durationMins * 60,
         timerRunning: true,
         status: LiveGameStatus.running,
+        settings: advancedSettings,
         speedRecommendation: null,
         clearSpeedRecommendation: true,
         levelEndTime: _serverNow.add(Duration(minutes: extLevel.durationMins)),
@@ -465,8 +759,13 @@ extension AppProviderTimer on AppProvider {
         lastIdempotencyKey: idemKey,
       );
       addAnnouncement(
-        'Level $next. Blinds ${extLevel.sb} / ${extLevel.bb}'
-        '${extLevel.ante != null ? " — ante ${extLevel.ante}" : ""}.',
+        VoiceService.levelChangeMessage(
+          level: next,
+          sb: extLevel.sb,
+          bb: extLevel.bb,
+          ante: extLevel.ante,
+          durationMins: extLevel.durationMins,
+        ),
         true,
       );
     }
@@ -492,7 +791,7 @@ extension AppProviderTimer on AppProvider {
     addAuditRecord(
       'structure_extend',
       'Approved extension level ${proposed.level}: '
-      '${proposed.sb}/${proposed.bb} for ${proposed.durationMins} minutes.',
+          '${proposed.sb}/${proposed.bb} for ${proposed.durationMins} minutes.',
     );
     nextLevel(idempotencyKey: 'extend-${proposed.level}');
     return true;
@@ -509,8 +808,10 @@ extension AppProviderTimer on AppProvider {
   /// Rewinds to the previous level (spec §12 "Previous" control). The clock
   /// resets to the full previous-level duration and the game resumes running.
   void previousLevel({String? idempotencyKey}) {
-    final (rev, idemKey) =
-        _claimIdempotency(idempotencyKey ?? '', action: 'previousLevel');
+    final (rev, idemKey) = _claimIdempotency(
+      idempotencyKey ?? '',
+      action: 'previousLevel',
+    );
     if (rev == null) return; // replayed action — already applied
     final prev = _currentGame!.currentLevel - 1;
     if (prev < 1) return;
@@ -529,8 +830,7 @@ extension AppProviderTimer on AppProvider {
       lastIdempotencyKey: idemKey,
     );
     addAnnouncement(
-      'Level $prev. Blinds ${level.sb} and ${level.bb}'
-      '${level.ante != null ? ', ante ${level.ante}' : ''}.',
+      Formatters.levelSpoken(prev, level.sb, level.bb, level.ante),
       true,
     );
     _syncGroupGame();
@@ -548,8 +848,10 @@ extension AppProviderTimer on AppProvider {
         game.status != LiveGameStatus.rebuypause) {
       return;
     }
-    final (rev, idemKey) =
-        _claimIdempotency(idempotencyKey ?? '', action: 'restartLevel');
+    final (rev, idemKey) = _claimIdempotency(
+      idempotencyKey ?? '',
+      action: 'restartLevel',
+    );
     if (rev == null) return; // replayed action — already applied
     _pushUndo();
     _levelAnnouncementMarks.clear();
@@ -572,5 +874,120 @@ extension AppProviderTimer on AppProvider {
     );
     addAnnouncement('Level ${game.currentLevel} restarted.', true);
     if (!_disposed) notifyListeners();
+  }
+
+  /// Evaluates and fires scheduled reminders that would otherwise require
+  /// Cloud Tasks (free-plan client-side automation):
+  /// 1. "Starts in 30 min" (30 minutes before scheduledStart)
+  /// 2. "RSVP deadline" (at rsvpDeadline)
+  /// 3. "rebuys closing" (when rebuysClosingArmed is active)
+  void _checkScheduledReminders() {
+    final candidateGames = <LiveGame>[?_currentGame, ..._currentGroup.games];
+    final seenGameIds = <String>{};
+
+    for (final game in candidateGames) {
+      if (!seenGameIds.add(game.id)) continue;
+
+      // 1. "Starts in 30 min"
+      if (!game.status.isActiveLive &&
+          game.status != LiveGameStatus.completed &&
+          game.status != LiveGameStatus.cancelled) {
+        final start = game.settings.scheduledStart;
+        if (start != null) {
+          final diff = start.difference(_serverNow);
+          if (diff.inSeconds > 0 && diff.inMinutes <= 30) {
+            final key = '${game.id}-starts30';
+            if (!_hasFiredReminder(key)) {
+              _sentReminderKeys.add(key);
+              pushNotification(
+                AppNotification(
+                  id: 'remind-30-${game.id}-${DateTime.now().millisecondsSinceEpoch}',
+                  title: 'Starts in 30 min',
+                  body:
+                      '${game.settings.name} starts in 30 min — check in to keep your seat.',
+                  type: NotificationType.game,
+                  link: '/check-in',
+                  read: false,
+                  timestamp: DateTime.now(),
+                ),
+              );
+            }
+          }
+        }
+
+        // "Check-in is open"
+        final checkInOpens = game.settings.checkInOpensAt;
+        if (checkInOpens != null &&
+            !game.checkInClosed &&
+            _serverNow.isAfter(checkInOpens) &&
+            _serverNow.isBefore(
+              game.settings.scheduledStart ??
+                  _serverNow.add(const Duration(minutes: 10)),
+            )) {
+          final key = '${game.id}-checkInOpen';
+          if (!_hasFiredReminder(key)) {
+            _sentReminderKeys.add(key);
+            pushNotification(
+              AppNotification(
+                id: 'remind-checkin-${game.id}-${DateTime.now().millisecondsSinceEpoch}',
+                title: 'Check-in is open',
+                body: 'Check-in is now open for ${game.settings.name}.',
+                type: NotificationType.game,
+                link: '/check-in',
+                read: false,
+                timestamp: DateTime.now(),
+              ),
+            );
+          }
+        }
+
+        // 2. "RSVP deadline"
+        final deadline = game.settings.rsvpDeadline;
+        if (deadline != null) {
+          final diff = deadline.difference(_serverNow);
+          if (diff.inSeconds <= 0 &&
+              _serverNow.isBefore(
+                game.settings.scheduledStart ??
+                    _serverNow.add(const Duration(days: 1)),
+              )) {
+            final key = '${game.id}-rsvp';
+            if (!_hasFiredReminder(key)) {
+              _sentReminderKeys.add(key);
+              pushNotification(
+                AppNotification(
+                  id: 'remind-rsvp-${game.id}-${DateTime.now().millisecondsSinceEpoch}',
+                  title: 'RSVP deadline',
+                  body: 'RSVP deadline has arrived for ${game.settings.name}.',
+                  type: NotificationType.rsvp,
+                  link: '/invitation',
+                  read: false,
+                  timestamp: DateTime.now(),
+                ),
+              );
+            }
+          }
+        }
+      }
+
+      // 3. "rebuys closing"
+      if (game.settings.rebuys && game.rebuysClosingArmed) {
+        final key = '${game.id}-rebuysClosing-${game.currentLevel}';
+        if (!_hasFiredReminder(key)) {
+          _sentReminderKeys.add(key);
+          pushNotification(
+            AppNotification(
+              id: 'remind-rebuys-${game.id}-${game.currentLevel}-${DateTime.now().millisecondsSinceEpoch}',
+              title: 'Rebuys closing',
+              body:
+                  'Rebuys close after Level ${game.settings.rebuysCloseLevel}.',
+              type: NotificationType.game,
+              link: '/player-live',
+              read: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        }
+      }
+    }
   }
 }

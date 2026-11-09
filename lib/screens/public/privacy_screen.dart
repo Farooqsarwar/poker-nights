@@ -2,112 +2,130 @@ import 'package:flutter/material.dart';
 import '../../app/typography.dart';
 import '../../app/colors.dart';
 import '../../constants/app_constants.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_eyebrow.dart';
+import '../../widgets/app_tag.dart';
+import '../../widgets/legal_page.dart';
 
 class PrivacyScreen extends StatelessWidget {
   const PrivacyScreen({super.key});
 
+  // Draft wording that follows Build Spec D-H1; the final text is the lawyer's
+  // (D13). It only states what the app really does today.
   static const _sections = <({String title, String body})>[
     (
-      title: '1. Information we collect',
+      title: '1. What we collect',
       body:
-          'We collect the information you give us directly: your name, email address, '
-          'and profile details when you create an account. We also collect tournament '
-          'and cash-game data you create on the app, such as players, results, and chip '
-          'counts. All of this data is stored locally on your device unless you choose '
-          'to share it with your group.',
+          'Your name, email address and profile photo when you create an account, and '
+          'what you create in the app: groups, games, results, chat messages and polls. '
+          'Settings such as sound and display stay on your device.',
     ),
     (
-      title: '2. How we use your information',
+      title: '2. How we use it',
       body:
-          'We use your information to run the app: signing you in, powering your game '
-          'history and statistics, sending you game invitations and notifications, and '
-          'improving the product. We never sell your personal information to third parties.',
+          'To sign you in, run your games, keep your history and statistics, and send '
+          'invitations and notifications. Past nights are used to improve blind '
+          'structures only with your consent. We never sell your personal data and we '
+          'do not use it for advertising profiles.',
     ),
     (
       title: '3. Groups and sharing',
       body:
-          'When you join or create a group, members of that group can see the details of '
-          'games hosted within it, including your name, results, and standing. Results '
-          'and prize information for a tournament are visible only to the tournament '
-          'admin unless the admin opts to publish them.',
+          'Members of a group see the group\'s games, chat and standings. Everyone in a '
+          'game sees the prize pool and the payouts. Your lifetime profit and loss and '
+          'your money history are visible only to you. The host\'s organiser'
+          'contribution is visible only to the host.',
     ),
     (
-      title: '4. Data you can control',
+      title: '4. Game history that improves structures',
       body:
-          'You can update your name and email at any time from your profile, choose which '
-          'notifications you receive from the Settings screen, and delete your account '
-          'from Settings. Deleting your account removes your profile and personal game '
-          'history from the app.',
+          'With your consent we keep bust times, the level at each bust and the final '
+          'big blind for each game, per group. You agree at sign-up and can opt out for '
+          'any group in its settings.',
     ),
     (
-      title: '5. Data security',
+      title: '5. Your choices',
       body:
-          'We use industry-standard safeguards to protect your data. Game state is stored '
-          'locally on your device for offline recovery, and nothing is transmitted to '
-          'our servers without your action.',
+          'You can edit your profile, turn notifications off, export your data as JSON '
+          'and delete your account, all from Settings. Deleting removes your account and '
+          'personal data. Your finishes stay in your groups\' history as "Former member".',
     ),
     (
-      title: '6. Children',
+      title: '6. Where data is stored',
       body:
-          'Poker Night is intended for adults. We do not knowingly collect information '
-          'from children under 18. If you believe a child has provided us information, '
-          'contact us and we will delete it.',
+          'Your data is stored with Firebase (Google Cloud) in secure regional data centres '
+          'so your group can see the same game on every phone. Local game state is also '
+          'stored encrypted on your device using on-device persistence so a game can be '
+          'resumed and recovered offline without data loss.',
     ),
     (
-      title: '7. Changes to this policy',
+      title: '7. How long we keep it',
       body:
-          'We may update this Privacy Policy from time to time. If we make material '
-          'changes, we will notify you in the app before the changes take effect.',
+          'Game data and chat history are retained while your group is active. Inactive '
+          'groups with no game activity for 24 months are automatically archived. When you '
+          'request account deletion, all personal credentials, identifiers, and sensitive tokens '
+          'are irreversibly purged within 90 days, while historical finishing positions retain '
+          'the anonymous moniker "Former member".',
     ),
     (
-      title: '8. Contact',
+      title: '8. Children',
+      body:
+          'Poker Night is for adults (18+). We do not knowingly collect information '
+          'from children. If you believe a child has given us information, contact us '
+          'and we will delete it.',
+    ),
+    (
+      title: '9. Contact',
       body:
           'Questions about this policy? Email support@pokernight.app and we will get '
-          'back to you within 2 business days.',
+          'back to you within one business day.',
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text('Privacy Policy', style: AppTypography.displaySm),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Effective date: August 1, 2026',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                Text(
-                  'This Privacy Policy explains what data Poker Night collects, how it is '
-                  'used, and the choices you have over your information.',
-                  style: AppTypography.body(),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                for (final s in _sections) ...[
-                  Text(s.title, style: AppTypography.bodyBold),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(s.body, style: AppTypography.body()),
-                  const SizedBox(height: AppSpacing.xl),
-                ],
-              ],
-            ),
+    return LegalPage(
+      children: [
+        const AppEyebrow('Effective date: August 1, 2026'),
+        const SizedBox(height: AppSpacing.md),
+        const LegalTitle('Privacy Policy'),
+        const SizedBox(height: AppSpacing.xl),
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const AppTag('Overview', tone: AppTagTone.primary),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'This Privacy Policy explains what data Poker Night collects, how it is '
+                'used, and the choices you have over your information.',
+                style: AppTypography.body(height: 1.6),
+              ),
+            ],
           ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.xxl),
+        for (final s in _sections) ...[
+          Text(
+            s.title,
+            style: AppTypography.body(
+              size: AppFontSizes.md,
+              weight: FontWeight.w700,
+              color: AppColors.primaryText,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            s.body,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+              height: 1.65,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+        ],
+      ],
     );
   }
 }

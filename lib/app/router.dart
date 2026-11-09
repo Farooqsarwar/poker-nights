@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
+import '../constants/app_constants.dart';
+import '../models/group.dart';
+import '../models/live_game.dart';
 import '../providers/app_provider.dart';
+import 'typography.dart';
 
 import '../screens/cash/cash_game_live_screen.dart';
 import '../screens/cash/cash_game_screen.dart';
@@ -15,26 +19,37 @@ import '../screens/public/privacy_screen.dart';
 import '../screens/public/terms_screen.dart';
 import '../screens/public/support_screen.dart';
 import '../screens/public/join_screen.dart';
+import '../screens/public/tools_screen.dart';
 import '../screens/shell/chat_screen.dart';
 import '../screens/shell/group_screen.dart';
 import '../screens/shell/history_screen.dart';
 import '../screens/shell/home_screen.dart';
 import '../screens/shell/join_group_screen.dart';
+import '../screens/shell/group_chips_screen.dart';
+import '../screens/shell/group_settings_screen.dart';
+import '../screens/shell/import_results_screen.dart';
 import '../screens/shell/members_screen.dart';
 import '../screens/shell/notifications_screen.dart';
 import '../screens/shell/polls_screen.dart';
+import '../screens/shell/reports_screen.dart';
+import '../screens/shell/standings_screen.dart';
 import '../screens/shell/profile_screen.dart';
 import '../screens/shell/settings_screen.dart';
 import '../screens/shell/stats_screen.dart';
 import '../screens/shell/chip_sets_screen.dart';
+import '../screens/premium/checkout_screen.dart';
+import '../screens/premium/upgrade_screen.dart';
 import '../screens/shell/edit_chip_set_screen.dart';
 import '../screens/shell/presets_screen.dart';
 import '../screens/tournament/admin_dashboard_screen.dart';
 import '../screens/tournament/check_in_screen.dart';
 import '../screens/tournament/complete_tournament_screen.dart';
+import '../screens/tournament/deal_screen.dart';
 import '../screens/tournament/create_tournament_screen.dart';
+import '../screens/tournament/quick_start_screen.dart';
 import '../screens/tournament/final_table_screen.dart';
 import '../screens/tournament/invitation_screen.dart';
+import '../screens/tournament/payouts_screen.dart';
 import '../screens/tournament/player_live_screen.dart';
 import '../screens/tournament/rebuy_settlement_screen.dart';
 import '../screens/tournament/result_podium_screen.dart';
@@ -52,27 +67,82 @@ const _publicPaths = {
   RoutePaths.forgotPassword,
   RoutePaths.tvMode,
   RoutePaths.guestFlow,
+  RoutePaths.quick,
+  RoutePaths.joinGroup,
   RoutePaths.privacy,
   RoutePaths.terms,
   RoutePaths.support,
   RoutePaths.join,
+  RoutePaths.tools,
+  RoutePaths.toolBlinds,
+  RoutePaths.toolClock,
+  RoutePaths.toolIcm,
+  RoutePaths.toolPayouts,
+  RoutePaths.toolQuickBlind,
 };
 
-/// Admin-only routes — non-admins are bounced to invitation (if a game exists)
+/// Build Spec section C2 paths that map onto an existing screen live in
+/// `SpecRoutes.registered` and `SpecRoutes.redirected` (spec `route_paths.dart`),
+/// so there is one table rather than one here and one there. C3 step 1's
+/// `/game/{CODE}` and `/j/{CODE}` rewrites are `SpecRoutes.joinRewrites`.
+///
+/// Every set below is written in flat paths, because that is what the app
+/// navigates by. The guard folds a C2-shaped URL onto its flat twin with
+/// `SpecRoutes.flatFor` before it consults any of them, so `/t/9f3a/dashboard`
+/// is gated exactly as `/host-dashboard` is.
+
+/// Host-only routes — non-hosts are bounced to invitation (if a game exists)
 /// or home.
 const _adminPaths = {
   RoutePaths.createTournament,
   RoutePaths.checkIn,
-  RoutePaths.adminDashboard,
+  RoutePaths.hostDashboard,
   RoutePaths.finalTable,
   RoutePaths.rebuySettlement,
   RoutePaths.completeTournament,
+  RoutePaths.deal,
+  RoutePaths.importResults,
+  RoutePaths.groupSettings,
+  RoutePaths.groupChips,
   RoutePaths.structureReview,
 };
 
+/// Routes a tournament co-host may open, not just the group owner.
+///
+/// Kept separate from [_adminPaths] on purpose. D15 gives a co-host the bust,
+/// rebuy, pause, clock and check-in actions, but NOT tournament creation or
+/// group settings — so widening [_adminPaths] wholesale would hand a co-host
+/// `createTournament`, `groupSettings` and `delete` rights it must not have.
+const _coHostPaths = {
+  RoutePaths.rebuySettlement,
+};
+
 /// Shell routes a guest session (no account) may enter — mirrors
-/// `ScreenShell._guestAllowed`.
-const _guestAllowed = {RoutePaths.playerLive, RoutePaths.resultPodium};
+/// `ScreenShell._guestAllowed`, which is the set that actually draws the guest
+/// shell. The two sets are kept identical on purpose: widening one alone
+/// would pass the router guard and then be refused by `ScreenShell`'s gate
+/// a frame later (or vice versa).
+///
+/// C3 lists `/t/:id/me` (C4p, "guest shell for guests") as a guest route, so
+/// `/t/:id/me` folds onto `RoutePaths.invitation` and both sets admit it. The
+/// builder below still sends link guests to the guest flow — the invitation
+/// screen itself stays member-oriented.
+const _guestAllowed = ScreenShell.guestAllowed;
+
+/// Tournament-scoped routes that should be inaccessible when a game is cancelled.
+const _tournamentPaths = {
+  RoutePaths.invitation,
+  RoutePaths.checkIn,
+  RoutePaths.hostDashboard,
+  RoutePaths.playerLive,
+  RoutePaths.rebuySettlement,
+  RoutePaths.finalTable,
+  RoutePaths.completeTournament,
+  RoutePaths.deal,
+  RoutePaths.structureReview,
+  RoutePaths.createTournament,
+  RoutePaths.quick,
+};
 
 /// Builds the app router wired to [app] so the auth guard re-evaluates on
 /// every provider change (sign-in/out and the initial `authReady` flip).
@@ -94,6 +164,7 @@ class _RouterRefresh extends ChangeNotifier {
         _app.isAuthenticated,
         _app.hasGuestSession,
         _app.isAdmin,
+        _app.canOperateTheClock,
         _app.currentGame?.id,
         _app.currentGame?.status,
         _app.currentGroup.id,
@@ -118,9 +189,115 @@ class _RouterRefresh extends ChangeNotifier {
   }
 }
 
+Widget _buildNotFoundPage(BuildContext context, Uri uri) => Scaffold(
+  backgroundColor: AppColors.background,
+  body: Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.error_outline, color: AppColors.mutedForeground, size: 48),
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          'Page not found',
+          style: AppTypography.body(
+            size: 20,
+            weight: FontWeight.w600,
+          ).copyWith(color: AppColors.foreground),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          uri.toString(),
+          textAlign: TextAlign.center,
+          style: AppTypography.body(size: 12).copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        TextButton(
+          style: TextButton.styleFrom(
+            minimumSize: const Size(44, 44),
+          ),
+          onPressed: () => context.go(RoutePaths.home),
+          child: const Text('Go to Home'),
+        ),
+      ],
+    ),
+  ),
+);
+
 GoRouter buildAppRouter(AppProvider app) {
   // Preserve deep-link paths that arrive before Firebase resolves.
   String? pendingDeepLink;
+
+  Widget buildGroupRoute(
+    BuildContext context,
+    GoRouterState state,
+    Widget child,
+    String flatPath,
+  ) {
+    final gid = state.pathParameters['gid'];
+    if (gid != null && gid.isNotEmpty) {
+      if (app.hasCurrentGroup && app.currentGroup.id == gid) {
+        return shell(child, path: flatPath);
+      }
+      final matching = app.groups.where((g) => g.id == gid).firstOrNull;
+      if (matching != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!app.hasCurrentGroup || app.currentGroup.id != matching.id) {
+            app.setCurrentGroup(matching);
+          }
+        });
+        return shell(child, path: flatPath);
+      }
+      return _buildNotFoundPage(context, state.uri);
+    }
+    return shell(child, path: flatPath);
+  }
+
+  Widget buildGameRoute(
+    BuildContext context,
+    GoRouterState state,
+    Widget child,
+    String flatPath,
+  ) {
+    final id = state.pathParameters['id'];
+    if (id != null && id.isNotEmpty) {
+      if (app.currentGame != null && app.currentGame!.id == id) {
+        return shell(child, path: flatPath);
+      }
+      LiveGame? matching;
+      Group? parentGroup;
+      if (app.hasCurrentGroup) {
+        matching = app.currentGroup.games.where((g) => g.id == id).firstOrNull;
+        if (matching != null) parentGroup = app.currentGroup;
+      }
+      if (matching == null) {
+        for (final g in app.groups) {
+          final found = g.games.where((gm) => gm.id == id).firstOrNull;
+          if (found != null) {
+            matching = found;
+            parentGroup = g;
+            break;
+          }
+        }
+      }
+      if (matching != null) {
+        final targetGame = matching;
+        final targetGroup = parentGroup;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (targetGroup != null && (!app.hasCurrentGroup || app.currentGroup.id != targetGroup.id)) {
+            app.setCurrentGroup(targetGroup);
+          }
+          if (app.currentGame?.id != targetGame.id) {
+            app.setCurrentGame(targetGame);
+          }
+        });
+        return shell(child, path: flatPath);
+      }
+      return _buildNotFoundPage(context, state.uri);
+    }
+    return shell(child, path: flatPath);
+  }
 
   return GoRouter(
   initialLocation: RoutePaths.splash,
@@ -134,14 +311,41 @@ GoRouter buildAppRouter(AppProvider app) {
   refreshListenable: _RouterRefresh(app),
   redirect: (context, state) {
     final path = state.uri.path;
+    // The same screen has two names: the one this app has always navigated by
+    // and the one Build Spec section C2 writes. `flat` is the first, so every
+    // guard below reads it — otherwise a deep link to `/t/9f3a/dashboard`
+    // would reach a host-only screen without the host check `/host-dashboard`
+    // gets. What the guard *returns* is unaffected: the location the caller
+    // asked for still resolves, so the URL in the bar is the one they opened.
+    final flat = SpecRoutes.flatFor(path);
     final ready = app.authReady;
     final authed = app.isAuthenticated;
 
-    // Legacy shared game links (`/game/FP2608`) resolve through the public
-    // unified join screen — rewrite before the auth guard can bounce a guest.
-    if (path.startsWith('/game/')) {
-      final code = path.substring('/game/'.length);
-      return '${RoutePaths.join}?code=${Uri.encodeComponent(code)}';
+    // Legacy shared game links, C3 step 1: "`/game/{CODE}` or `/j/{CODE}` →
+    // rewrite to `/join/{CODE}`". Resolved through the public unified join
+    // screen before the auth guard can bounce a guest. `/j/{CODE}` is the half
+    // this router never had; `/join/:code` is a route in its own right below,
+    // so the code arrives there as a path parameter rather than as a query.
+    for (final prefix in SpecRoutes.joinRewrites) {
+      if (path.startsWith(prefix) && path.length > prefix.length) {
+        final code = Uri.encodeComponent(path.substring(prefix.length));
+        return '${SpecRoutes.join}/$code';
+      }
+    }
+
+    // The seven C2 paths that are only a renaming of a screen the app already
+    // routes to: `/start` → `/`, `/games` → `/group`, `/premium/checkout` →
+    // `/checkout` and so on. The query string rides along untouched.
+    //
+    // A C2 path that is a route in its own right — every parameterised one, plus
+    // `/t/new` and `/cash/new` — is *not* here: it is registered below with its
+    // own `GoRoute`, so its `state.pathParameters` survive to the builder and
+    // the URL stays the one the user opened. [flatFor] above still folds those
+    // onto their flat twin so every guard below reads a path it recognises.
+    final alias = SpecRoutes.redirected[path];
+    if (alias != null) {
+      final query = state.uri.query.isEmpty ? '' : '?${state.uri.query}';
+      return '$alias$query';
     }
 
     // Single navigation layer: the old hub tabs are now top-level screens.
@@ -170,33 +374,51 @@ GoRouter buildAppRouter(AppProvider app) {
       return path == RoutePaths.splash ? null : RoutePaths.splash;
     }
 
-    // Admin-only routes: bounce non-admins away before the screen renders.
-    if (_adminPaths.contains(path) && !app.isAdmin) {
+    // Co-host routes: D15 lets a co-host do the rebuy work, so the screen's own
+    // gate would never be reached if this bounced them first.
+    if (_coHostPaths.contains(flat) && !app.canOperateTheClock) {
       return app.currentGame != null ? RoutePaths.invitation : RoutePaths.home;
     }
 
-    // Auto-redirect members from invitation to live game when game goes live.
-    // GoRouter re-evaluates redirect on every notifyListeners() call, so this
-    // fires automatically when the admin starts the tournament (P1 fix).
+    // Host-only routes: bounce non-hosts away before the screen renders.
+    if (_adminPaths.contains(flat) && !app.isAdmin) {
+      return app.currentGame != null ? RoutePaths.invitation : RoutePaths.home;
+    }
+
+    // Auto-redirect members AND link guests from invitation to live game
+    // when game goes live. GoRouter re-evaluates redirect on every
+    // notifyListeners() call, so this fires automatically when the admin
+    // starts the tournament (P1 fix).
     final game = app.currentGame;
-    if (authed &&
-        !app.isAdmin &&
-        path == RoutePaths.invitation &&
+    // Cancelled tournament: bounce everyone away from tournament screens.
+    if (game != null &&
+        game.status == LiveGameStatus.cancelled &&
+        _tournamentPaths.contains(flat)) {
+      return authed ? RoutePaths.group : RoutePaths.landing;
+    }
+    // Auto-redirect members AND link guests from invitation to live game
+    // when game goes live. GoRouter re-evaluates redirect on every
+    // notifyListeners() call, so this fires automatically when the admin
+    // starts the tournament (P1 fix).
+    if (flat == RoutePaths.invitation &&
         game != null &&
-        game.status.isActiveLive) {
+        game.status.isActiveLive &&
+        ((authed && !app.isAdmin) || app.hasGuestSession)) {
       return RoutePaths.playerLive;
     }
-    // Guard: prevent admin from back-navigating to pre-game screens during live tournament.
+    // Guard: prevent admin from back-navigating to pre-game screens of the active tournament (Spec C3).
+    // Note: Do not block RoutePaths.quick or RoutePaths.createTournament so an admin can start a fresh game.
     if (authed &&
         app.isAdmin &&
         game != null &&
         game.status.isActiveLive &&
-        (path == RoutePaths.structureReview)) {
-      return RoutePaths.adminDashboard;
+        (flat == RoutePaths.structureReview ||
+         flat == RoutePaths.checkIn)) {
+      return RoutePaths.hostDashboard;
     }
 
-    final guestOk = app.hasGuestSession && _guestAllowed.contains(path);
-    if (!authed && !guestOk && !_publicPaths.contains(path)) {
+    final guestOk = app.hasGuestSession && _guestAllowed.contains(flat);
+    if (!authed && !guestOk && !_publicPaths.contains(flat)) {
       final query = state.uri.query.isEmpty ? '' : '?${state.uri.query}';
       return '${RoutePaths.login}?next=${Uri.encodeComponent('$path$query')}';
     }
@@ -210,17 +432,17 @@ GoRouter buildAppRouter(AppProvider app) {
       // only protected targets route through sign-in first.
       final deepPath = Uri.tryParse(deepLink)?.path ?? deepLink;
       if (authed ||
-          _publicPaths.contains(deepPath) ||
-          deepPath.startsWith('/game/')) {
+          _publicPaths.contains(SpecRoutes.flatFor(deepPath)) ||
+          SpecRoutes.joinRewrites.any(deepPath.startsWith)) {
         return deepLink;
       }
       return '${RoutePaths.login}?next=${Uri.encodeComponent(deepLink)}';
     }
     if (authed &&
-        (path == RoutePaths.splash ||
-            path == RoutePaths.login ||
-            path == RoutePaths.register ||
-            path == RoutePaths.forgotPassword)) {
+        (flat == RoutePaths.splash ||
+            flat == RoutePaths.login ||
+            flat == RoutePaths.register ||
+            flat == RoutePaths.forgotPassword)) {
       // If the auth screen captured a ?next= deep link, honour it so that
       // join-via-link and other protected-route flows survive the sign-in.
       final next = state.uri.queryParameters['next'];
@@ -229,37 +451,7 @@ GoRouter buildAppRouter(AppProvider app) {
     }
     return null;
   },
-  // Catch bad/unknown routes and show a friendly page instead of a red crash.
-  errorBuilder: (context, state) => Scaffold(
-    backgroundColor: AppColors.background,
-    body: Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.error_outline, color: AppColors.mutedForeground, size: 48),
-          const SizedBox(height: 16),
-          Text(
-            'Page not found',
-            style: TextStyle(
-              color: AppColors.foreground,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            state.uri.toString(),
-            style: TextStyle(color: AppColors.mutedForeground, fontSize: 12),
-          ),
-          const SizedBox(height: 24),
-          TextButton(
-            onPressed: () => context.go(RoutePaths.home),
-            child: const Text('Go to Home'),
-          ),
-        ],
-      ),
-    ),
-  ),
+  errorBuilder: (context, state) => _buildNotFoundPage(context, state.uri),
   routes: [
     GoRoute(
       path: RoutePaths.splash,
@@ -288,6 +480,17 @@ GoRouter buildAppRouter(AppProvider app) {
       path: RoutePaths.tvMode,
       builder: (context, state) => const TVModeScreen(),
     ),
+
+    // D3 — the TV pairing code, deep-linkable. `/tv-mode` is the screen itself;
+    // `/tv/:code` is the link a host shares: it opens the scoreboard directly
+    // (read-only, no account) with the code pre-filled and auto-connecting.
+    // Game/player codes (`/g/:code`, `/game/`, `/j/`) still land on `/join`.
+    GoRoute(
+      path: SpecRoutes.tvCode,
+      builder: (context, state) => TVModeScreen(
+        initialCode: state.pathParameters[SpecRoutes.codeParam],
+      ),
+    ),
     GoRoute(
       path: RoutePaths.guestFlow,
       builder: (context, state) => const GuestFlowScreen(),
@@ -298,7 +501,9 @@ GoRouter buildAppRouter(AppProvider app) {
     ),
     GoRoute(
       path: RoutePaths.terms,
-      builder: (context, state) => const TermsScreen(),
+      builder: (context, state) => TermsScreen(
+        fromSignUp: state.uri.queryParameters['from'] == 'signup',
+      ),
     ),
     GoRoute(
       path: RoutePaths.support,
@@ -308,6 +513,62 @@ GoRouter buildAppRouter(AppProvider app) {
       path: RoutePaths.join,
       builder: (context, state) =>
           JoinScreen(initialCode: state.uri.queryParameters['code']),
+    ),
+
+    // ── Spec C2 · A · the join routes that carry a code ──────────────────────
+    // `/join/:code` is the A7 deep link: the same screen, with the code arriving
+    // as a path parameter instead of `?code=` — which is exactly what
+    // `JoinScreen.initialCode` documents.
+    GoRoute(
+      path: SpecRoutes.joinCode,
+      builder: (context, state) => JoinScreen(
+        initialCode: state.pathParameters[SpecRoutes.codeParam],
+      ),
+    ),
+
+    // `/g/:gameCode` is A6, the guest's game link, and D3's `/tv/:code` below is
+    // the TV pairing code. Both are a bare code, and `GuestFlowScreen` (A6) and
+    // `TVModeScreen` (D3) take no parameter, so both hand the code to `/join` —
+    // the one screen that can read a code out of a URL. It classifies the code
+    // and opens the guest flow for a game (`join_screen.dart` `_resolve`) or the
+    // TV display for a TV code, which is C2's own note on `/join/:code`:
+    // "resolves to group invite, game (guest) or TV".
+    GoRoute(
+      path: SpecRoutes.guestGame,
+      builder: (context, state) => JoinScreen(
+        initialCode: state.pathParameters[SpecRoutes.gameCodeParam],
+      ),
+    ),
+
+    // The public tools (section 2). No account, no shell, no guard -- a
+    // visitor who came to settle a chop should get the answer, not a login.
+    GoRoute(
+      path: RoutePaths.tools,
+      builder: (context, state) => const ToolsScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.toolBlinds,
+      builder: (context, state) => const ToolBlindsScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.toolClock,
+      builder: (context, state) => ToolClockScreen(
+        handoff: state.extra is ToolClockHandoff
+            ? state.extra as ToolClockHandoff
+            : null,
+      ),
+    ),
+    GoRoute(
+      path: RoutePaths.toolIcm,
+      builder: (context, state) => const ToolIcmScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.toolPayouts,
+      builder: (context, state) => const ToolPayoutsScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.toolQuickBlind,
+      builder: (context, state) => const ToolQuickBlindScreen(),
     ),
 
     // ── App shell ────────────────────────────────────────────────────────────
@@ -331,14 +592,110 @@ GoRouter buildAppRouter(AppProvider app) {
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const MembersScreen(), path: RoutePaths.members)),
     ),
     GoRoute(
+      path: RoutePaths.importResults,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ImportResultsScreen(), path: RoutePaths.importResults)),
+    ),
+    GoRoute(
+      path: RoutePaths.groupSettings,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const GroupSettingsScreen(), path: RoutePaths.groupSettings)),
+    ),
+    GoRoute(
+      path: RoutePaths.groupChips,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const GroupChipsScreen(), path: RoutePaths.groupChips)),
+    ),
+
+    // ── Spec C2 · B · the group-scoped screens ───────────────────────────────
+    // B9, B11, B12 and B10 are the four rows under a group in C2's table. Each
+    // builds the same widget as its flat twin and reports that flat path to
+    // `ScreenShell.requiredPath`, so the host gate, the custom mobile top bar
+    // `:gid` is validated against the active or user groups; unknown groups show not-found.
+    GoRoute(
+      path: SpecRoutes.groupSettings,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGroupRoute(
+          context,
+          state,
+          const GroupSettingsScreen(),
+          RoutePaths.groupSettings,
+        ),
+      ),
+    ),
+    GoRoute(
+      path: SpecRoutes.groupStandings,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGroupRoute(
+          context,
+          state,
+          const StandingsScreen(),
+          RoutePaths.standings,
+        ),
+      ),
+    ),
+    GoRoute(
+      path: SpecRoutes.groupImport,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGroupRoute(
+          context,
+          state,
+          const ImportResultsScreen(),
+          RoutePaths.importResults,
+        ),
+      ),
+    ),
+    GoRoute(
+      path: SpecRoutes.groupChips,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGroupRoute(
+          context,
+          state,
+          const GroupChipsScreen(),
+          RoutePaths.groupChips,
+        ),
+      ),
+    ),
+    GoRoute(
       path: RoutePaths.polls,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const PollsScreen(), path: RoutePaths.polls)),
     ),
     GoRoute(
+      path: RoutePaths.reports,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ReportsScreen(), path: RoutePaths.reports)),
+    ),
+    GoRoute(
+      path: RoutePaths.standings,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const StandingsScreen(), path: RoutePaths.standings)),
+    ),
+    GoRoute(
       path: RoutePaths.joinGroup,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
-        JoinGroupScreen(code: state.uri.queryParameters['code'] ?? ''), path: RoutePaths.joinGroup,
+        JoinGroupScreen(
+          code: state.uri.queryParameters['code'] ?? '',
+          to: state.uri.queryParameters['to'],
+        ),
+        path: RoutePaths.joinGroup,
       )),
+    ),
+
+    // A8 — the group invite link a host shares. Same screen as `/join-group`,
+    // with the group's code as a path parameter, so `/invite/FP2608` is a link
+    // that works without a query string appended to it. This is the one
+    // group-scoped path that consumes its parameter.
+    GoRoute(
+      path: SpecRoutes.inviteCode,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(
+          JoinGroupScreen(
+            code: state.pathParameters[SpecRoutes.codeParam] ?? '',
+            to: state.uri.queryParameters['to'],
+          ),
+          path: RoutePaths.joinGroup,
+        ),
+      ),
     ),
     GoRoute(
       path: RoutePaths.notifications,
@@ -355,6 +712,25 @@ GoRouter buildAppRouter(AppProvider app) {
     GoRoute(
       path: RoutePaths.settings,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const SettingsScreen(), path: RoutePaths.settings)),
+    ),
+    GoRoute(
+      path: RoutePaths.upgrade,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(const UpgradeScreen(), path: RoutePaths.upgrade),
+      ),
+    ),
+    GoRoute(
+      path: RoutePaths.checkout,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(
+          CheckoutScreen(
+            planId: state.uri.queryParameters['plan'] ?? 'demo-monthly',
+          ),
+          path: RoutePaths.checkout,
+        ),
+      ),
     ),
     GoRoute(
       path: RoutePaths.stats,
@@ -381,11 +757,59 @@ GoRouter buildAppRouter(AppProvider app) {
       },
     ),
 
+    // F5 — the chip-set editor, deep-linkable by id. Unlike every other `:id`
+    // in C2 this one is a real lookup rather than the current session: F5 edits
+    // a *saved* chip set, so the parameter is handed to the screen. The flat
+    // `/edit-chip-set` still takes its id from `state.extra`, which is how the
+    // app has always passed it.
+    GoRoute(
+      path: SpecRoutes.chipSet,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(
+          EditChipSetScreen(
+            chipSetId: state.pathParameters[SpecRoutes.gameIdParam],
+          ),
+          path: RoutePaths.editChipSet,
+        ),
+      ),
+    ),
+
     // ── Tournament flow ──────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.createTournament,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(
+          CreateTournamentScreen(
+            presetId: state.uri.queryParameters['preset'],
+            repostGameId: state.uri.queryParameters['repost'],
+          ),
+          path: RoutePaths.createTournament,
+        ),
+      ),
+    ),
+
+    // C1 — C2 spells the wizard `/t/new`. Declared before `/t/:id` below so the
+    // literal segment wins the match: go_router takes the first route whose
+    // pattern fits, and both fit `new`.
+    GoRoute(
+      path: SpecRoutes.newTournament,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(
+          CreateTournamentScreen(
+            presetId: state.uri.queryParameters['preset'],
+            repostGameId: state.uri.queryParameters['repost'],
+          ),
+          path: RoutePaths.createTournament,
+        ),
+      ),
+    ),
+    GoRoute(
+      path: RoutePaths.quick,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
-        CreateTournamentScreen(presetId: state.uri.queryParameters['preset']), path: RoutePaths.createTournament,
+        const QuickStartScreen(), path: RoutePaths.quick,
       )),
     ),
     GoRoute(
@@ -393,6 +817,182 @@ GoRouter buildAppRouter(AppProvider app) {
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
         const StructureReviewScreen(), path: RoutePaths.structureReview,
       )),
+    ),
+
+    // ── Spec C2 · C · the game-scoped screens ────────────────────────────────
+    // C2's tournament table nests fifteen rows under `/t/:id`. Every one builds
+    // the same widget as the flat route above it and reports that flat path to
+    // `ScreenShell`, so `context.go('/host-dashboard')` and a shared
+    // `/t/9f3a/dashboard` land on one screen under one guard.
+    //
+    // `:id` is validated against current or stored games; unknown games show not-found.
+    //
+    // `/t/new` is declared above, before `/t/:id`, so the literal segment wins.
+
+    // C2 — the invitation, the RSVP and the waitlist. Also `/t/:id/me`, C4p:
+    // the player's own check-in, which this screen draws as its primary action
+    // (locked until the window opens, then "Check In", then "Waiting for
+    // Confirmation", then the seat). A link guest (session, no account) gets
+    // the guest flow instead — the invitation screen stays member-oriented.
+    GoRoute(
+      path: SpecRoutes.tournament,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(context, state, const InvitationScreen(), RoutePaths.invitation),
+      ),
+    ),
+    GoRoute(
+      path: SpecRoutes.tournamentMe,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(
+          context,
+          state,
+          app.hasGuestSession && !app.isAuthenticated
+              ? const GuestFlowScreen()
+              : const InvitationScreen(),
+          RoutePaths.invitation,
+        ),
+      ),
+    ),
+
+    // C2 — the level editor. C2's own variant of it for a host.
+    GoRoute(
+      path: SpecRoutes.tournamentReview,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(
+          context,
+          state,
+          const StructureReviewScreen(),
+          RoutePaths.structureReview,
+        ),
+      ),
+    ),
+    GoRoute(
+      path: SpecRoutes.tournamentLevels,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(
+          context,
+          state,
+          const StructureReviewScreen(),
+          RoutePaths.structureReview,
+        ),
+      ),
+    ),
+
+    // C-cfg — reopen the wizard's editor on a game that already exists.
+    GoRoute(
+      path: SpecRoutes.tournamentConfigure,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(
+          context,
+          state,
+          CreateTournamentScreen(
+            presetId: state.uri.queryParameters['preset'],
+            repostGameId: state.uri.queryParameters['repost'],
+          ),
+          RoutePaths.createTournament,
+        ),
+      ),
+    ),
+
+    // C4 (host) — `/t/:id/checkin` is C2's alias for the Active tab of
+    // `/t/:id/players`, so both open the check-in screen.
+    GoRoute(
+      path: SpecRoutes.tournamentCheckIn,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(context, state, const CheckInScreen(), RoutePaths.checkIn),
+      ),
+    ),
+    GoRoute(
+      path: SpecRoutes.tournamentPlayers,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(context, state, const CheckInScreen(), RoutePaths.checkIn),
+      ),
+    ),
+
+    // C5 — the host's live dashboard.
+    GoRoute(
+      path: SpecRoutes.tournamentDashboard,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(
+          context,
+          state,
+          const AdminDashboardScreen(),
+          RoutePaths.hostDashboard,
+        ),
+      ),
+    ),
+
+    // C10 · C11 — the player's live view.
+    GoRoute(
+      path: SpecRoutes.tournamentLive,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(context, state, const PlayerLiveScreen(), RoutePaths.playerLive),
+      ),
+    ),
+    // C-payouts — its own screen (pool, entries, medal rows, KO pot, host
+    // view toggle). Same shell path as the live view, so nav highlighting
+    // and guards behave exactly as before.
+    GoRoute(
+      path: SpecRoutes.tournamentPayouts,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(context, state, const PayoutsScreen(), RoutePaths.playerLive),
+      ),
+    ),
+
+    // C6 — the rebuy settlement, the add-on break.
+    GoRoute(
+      path: SpecRoutes.tournamentRebuys,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(
+          context,
+          state,
+          const RebuySettlementScreen(),
+          RoutePaths.rebuySettlement,
+        ),
+      ),
+    ),
+
+    // C7 — the final table, redrawing the seats.
+    GoRoute(
+      path: SpecRoutes.tournamentFinalTable,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(context, state, const FinalTableScreen(), RoutePaths.finalTable),
+      ),
+    ),
+
+    // C8 — confirm the finish order.
+    GoRoute(
+      path: SpecRoutes.tournamentFinish,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(
+          context,
+          state,
+          const CompleteTournamentScreen(),
+          RoutePaths.completeTournament,
+        ),
+      ),
+    ),
+
+    // C9 — podium, story and share card.
+    GoRoute(
+      path: SpecRoutes.tournamentResults,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: buildGameRoute(context, state, const ResultPodiumScreen(), RoutePaths.resultPodium),
+      ),
     ),
     GoRoute(
       path: RoutePaths.invitation,
@@ -403,8 +1003,8 @@ GoRouter buildAppRouter(AppProvider app) {
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const CheckInScreen(), path: RoutePaths.checkIn)),
     ),
     GoRoute(
-      path: RoutePaths.adminDashboard,
-      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const AdminDashboardScreen(), path: RoutePaths.adminDashboard)),
+      path: RoutePaths.hostDashboard,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const AdminDashboardScreen(), path: RoutePaths.hostDashboard)),
     ),
     GoRoute(
       path: RoutePaths.playerLive,
@@ -427,6 +1027,21 @@ GoRouter buildAppRouter(AppProvider app) {
       )),
     ),
     GoRoute(
+      path: RoutePaths.deal,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        const DealScreen(), path: RoutePaths.deal,
+      )),
+    ),
+
+    // C-deal — the ICM chop, the chip chop and the equal-plus-agreed deals.
+    GoRoute(
+      path: SpecRoutes.tournamentDeal,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(const DealScreen(), path: RoutePaths.deal),
+      ),
+    ),
+    GoRoute(
       path: RoutePaths.resultPodium,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ResultPodiumScreen(), path: RoutePaths.resultPodium)),
     ),
@@ -436,9 +1051,29 @@ GoRouter buildAppRouter(AppProvider app) {
       path: RoutePaths.cashGame,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const CashGameScreen(), path: RoutePaths.cashGame)),
     ),
+
+    // D1 — C2 spells the setup screen `/cash/new`.
+    GoRoute(
+      path: SpecRoutes.newCashGame,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(const CashGameScreen(), path: RoutePaths.cashGame),
+      ),
+    ),
+
     GoRoute(
       path: RoutePaths.cashGameLive,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const CashGameLiveScreen(), path: RoutePaths.cashGameLive)),
+    ),
+
+    // D2 — the session itself. `:id` is not read: the app holds one current
+    // cash session, which this screen reads from the provider.
+    GoRoute(
+      path: SpecRoutes.cashGame,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(const CashGameLiveScreen(), path: RoutePaths.cashGameLive),
+      ),
     ),
   ],
 );
@@ -450,7 +1085,7 @@ Widget shell(Widget child, {required String path}) => ScreenShell(
   requiredPath: path,
   child: child
       .animate(key: ValueKey(child.runtimeType))
-      .fadeIn(duration: 300.ms, curve: Curves.easeOut)
+      .fadeIn(duration: AppDurations.normal, curve: Curves.easeOut)
       .slideY(begin: 0.05),
 );
 

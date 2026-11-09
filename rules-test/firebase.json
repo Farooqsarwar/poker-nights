@@ -1,0 +1,13 @@
+{
+  "emulators": {
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 9199
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true
+  },
+  "_firestoreRulesNote": "The Firebase CLI refuses a rules path outside the project directory, so rules-test/firebase.json cannot point at ../firestore.rules. rules.test.mjs reads ../firestore.rules and pushes it into the running emulator through initializeTestEnvironment({ firestore: { rules } }), which is what actually enforces. Keep them in sync by editing the path constant in the test file."
+}

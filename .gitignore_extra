@@ -1,0 +1,24 @@
+# Extra gitignore for Poker Night - unnecessary items
+*.txt
+analyze_out.txt
+log.txt
+test_output.txt
+V2_ROADMAP.md
+*.pid
+*.local
+
+# Flutter build artifacts (supplementary to .gitignore)
+/build/
+/.dart_tool/
+/.external_build/
+
+# IDE specific
+.idea/
+*.iml
+
+# Coverage
+/coverage/
+
+# Symbolication
+app.*.symbols
+app.*.map.json

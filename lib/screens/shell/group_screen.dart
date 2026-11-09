@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -10,22 +11,28 @@ import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
+import '../../models/app_notification.dart';
 import '../../models/group.dart';
 import '../../models/live_game.dart';
 import '../../models/table_settings.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/formatters.dart';
 import '../../widgets/app_avatar.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_select.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_tabs.dart';
 import '../../widgets/app_toggle.dart';
+import '../../widgets/poll_card.dart';
 import '../../widgets/code_display.dart';
 import '../../widgets/rsvp_badge.dart';
 
-/// Group games hub. Games is the group's landing screen; chat, members, polls
 /// Group games hub. Games is the group's landing screen; chat, members, polls
 /// and history are dedicated top-level screens (single navigation layer).
 class GroupScreen extends StatefulWidget {
@@ -36,6 +43,7 @@ class GroupScreen extends StatefulWidget {
 }
 
 class _GroupScreenState extends State<GroupScreen> {
+  String _activeTab = 'games';
   void _confirmLeaveGroup(BuildContext context) {
     final app = context.read<AppProvider>();
     final dialogInsets = appDialogInsets(context);
@@ -60,7 +68,7 @@ class _GroupScreenState extends State<GroupScreen> {
             },
             child: Text(
               'Leave',
-              style: TextStyle(color: AppColors.destructive),
+              style: TextStyle(color: AppColors.destructiveText),
             ),
           ),
         ],
@@ -80,7 +88,7 @@ class _GroupScreenState extends State<GroupScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
-              insetPadding: dialogInsets,
+          insetPadding: dialogInsets,
           backgroundColor: AppColors.card,
           title: const Text('Transfer Ownership'),
           content: Column(
@@ -94,12 +102,22 @@ class _GroupScreenState extends State<GroupScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-              ...members.map(
-                (m) => RadioListTile<String>(
-                  value: m.id,
-                  groupValue: selectedId,
-                  onChanged: (v) => setState(() => selectedId = v),
-                  title: Text(m.name, style: AppTypography.bodySm),
+              // The selection now lives on the RadioGroup ancestor rather than
+              // on each tile: `RadioListTile.groupValue`/`onChanged` are
+              // deprecated.
+              RadioGroup<String>(
+                groupValue: selectedId,
+                onChanged: (v) => setState(() => selectedId = v),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ...members.map(
+                      (m) => RadioListTile<String>(
+                        value: m.id,
+                        title: Text(m.name, style: AppTypography.bodySm),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -157,7 +175,7 @@ class _GroupScreenState extends State<GroupScreen> {
         ),
       );
     } else if (isAdmin && game.status.isActiveLive) {
-      context.go(RoutePaths.adminDashboard);
+      context.go(RoutePaths.hostDashboard);
     } else if (game.status == LiveGameStatus.checkin && isAdmin) {
       context.go(RoutePaths.checkIn);
     } else if (isAdmin) {
@@ -256,71 +274,150 @@ class _GroupScreenState extends State<GroupScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _GroupHeader(
-            group: group,
-            isAdmin: isAdmin,
-            onLeaveGroup: () => _confirmLeaveGroup(context),
-            onTransferOwnership: isAdmin
-                ? () => _showTransferOwnershipDialog(context)
-                : null,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          // App bar: Squircle back button < on left, squircle more ⋮ button on right.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              CodeDisplay(code: group.joinCode, label: 'Group code'),
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => _showInviteModal(context, group),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.qr_code, size: 16),
-                    SizedBox(width: AppSpacing.xs),
-                    Text('Invite link / QR'),
-                  ],
-                ),
+              Transform.translate(
+                offset: const Offset(-4, 0),
+                child: AppBackButton(onTap: () => context.go(RoutePaths.home)),
               ),
-              if (isAdmin)
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => _showTableSettingsModal(context, app, group),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.table_bar_outlined, size: 16),
-                      SizedBox(width: AppSpacing.xs),
-                      Text('Table settings'),
-                    ],
+              PopupMenuButton<String>(
+                icon: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.borderSubtle),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.more_vert,
+                    size: 20,
+                    color: AppColors.foreground,
                   ),
                 ),
+                padding: EdgeInsets.zero,
+                color: AppColors.muted,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: AppColors.borderSubtle),
+                ),
+                onSelected: (val) {
+                  if (val == 'leave') {
+                    _confirmLeaveGroup(context);
+                  } else if (val == 'transfer') {
+                    _showTransferOwnershipDialog(context);
+                  }
+                },
+                itemBuilder: (context) => [
+                  if (isAdmin)
+                    const PopupMenuItem(
+                      value: 'transfer',
+                      child: Text('Transfer Ownership'),
+                    ),
+                  PopupMenuItem(
+                    value: 'leave',
+                    child: Text(
+                      'Leave Group',
+                      style: TextStyle(color: AppColors.destructiveText),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Group identity card
+          _GroupCardIdentity(group: group),
+          const SizedBox(height: AppSpacing.md),
+          // Action chips row: GROUP CODE · FP2608, Invite link / QR, Table settings
+          _GroupActionChips(
+            group: group,
+            isAdmin: isAdmin,
+            onInvite: () => _showInviteModal(context, group),
+            onTableSettings: () => _showTableSettingsModal(context, app, group),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Secondary button row: Presets, Pin, + New game
+          Row(
+            children: [
+              _SecondaryChip(
+                label: 'Game presets',
+                onTap: () => context.push(RoutePaths.presets),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _SecondaryChip(
+                label: group.pinned ? 'Unpin' : 'Pin',
+                onTap: () => app.togglePinGroup(group),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              AppButton(
+                size: AppButtonSize.sm,
+                onPressed: () => context.push(RoutePaths.createTournament),
+                child: const Text('+ New game'),
+              ),
+            ],
+          ),
+          // Import past results (§B12) is host-only and rare, so it gets its
+          // own row rather than a fourth chip: the row above is already at
+          // its limit at 320px.
+          if (isAdmin) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              fullWidth: true,
+              size: AppButtonSize.sm,
+              variant: AppButtonVariant.secondary,
+              onPressed: () => context.push(RoutePaths.importResults),
+              child: const Text('Import past results'),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          // DECISION: Group hub tabs (Games vs Polls) per Dani P4.
+          AppTabs(
+            active: _activeTab,
+            onChanged: (id) => setState(() => _activeTab = id),
+            tabs: [
+              AppTabItem(
+                id: 'games',
+                label: 'Games',
+                count: upcomingGames.length,
+              ),
+              AppTabItem(
+                id: 'polls',
+                label: 'Polls',
+                count: group.polls.length,
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Games Section with count
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Text(
-                  'Games',
-                  style: AppTypography.bodyStyle.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+              Text(
+                'Games',
+                style: TextStyle(
+                  color: AppColors.foreground,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               Text(
                 '${upcomingGames.length} upcoming',
-                style: AppTypography.bodyXs.copyWith(
+                style: TextStyle(
                   color: AppColors.mutedForeground,
+                  fontSize: 14,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          _buildGames(app, group, upcomingGames, isAdmin, user),
+          const SizedBox(height: AppSpacing.md),
+          if (_activeTab == 'games')
+            _buildGames(app, group, upcomingGames, isAdmin, user)
+          else
+            _buildPollsTab(app, group, isAdmin, user),
         ],
       ),
     );
@@ -342,7 +439,7 @@ class _GroupScreenState extends State<GroupScreen> {
             : 'No upcoming game — wait for the first game to be created.',
         action: isAdmin
             ? AppButton(
-                onPressed: () => context.go(RoutePaths.createTournament),
+                onPressed: () => context.push(RoutePaths.createTournament),
                 child: const Text('Create tournament'),
               )
             : null,
@@ -361,110 +458,69 @@ class _GroupScreenState extends State<GroupScreen> {
     );
   }
 
+  Widget _buildPollsTab(
+    AppProvider app,
+    Group group,
+    bool isAdmin,
+    AppUser? user,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Group polls',
+              style: TextStyle(
+                color: AppColors.foreground,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            AppButton(
+              size: AppButtonSize.sm,
+              onPressed: () => context.push(RoutePaths.polls),
+              child: const Text('+ Create poll'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (group.polls.isEmpty)
+          AppEmptyState(
+            icon: Icons.poll_outlined,
+            title: 'No polls yet',
+            description: 'Create a poll to help plan the next game.',
+            action: AppButton(
+              size: AppButtonSize.sm,
+              onPressed: () => context.push(RoutePaths.polls),
+              child: const Text('Create poll'),
+            ),
+          )
+        else
+          for (final poll in group.polls)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: PollCard(
+                poll: poll,
+                userId: user?.id,
+                isAdmin: isAdmin,
+                onVote: (opts) => app.votePoll(poll.id, opts),
+                onClose: () => app.closePoll(poll.id),
+              ),
+            ),
+      ],
+    );
+  }
+
   void _showInviteModal(BuildContext context, Group group) {
     final link =
         'https://poker-night-tools.web.app/join-group?code=${group.joinCode}';
-    final messenger = ScaffoldMessenger.of(context);
-    var copiedLink = false;
     showAppModal(
       context: context,
-      maxWidth: 400,
+      maxWidth: 480,
       title: 'Invite people',
-      child: StatefulBuilder(
-        builder: (context, setState) => Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Anyone with this link or code can join in one tap.',
-              textAlign: TextAlign.center,
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(
-                    color: AppColors.border.withValues(alpha: 0.5),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.10),
-                      blurRadius: 18,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: QrImageView(
-                  data: link,
-                  size: 140,
-                  backgroundColor: Colors.white,
-                  padding: EdgeInsets.zero,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            // The one-lined small copy link field
-            Container(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.md,
-                right: AppSpacing.xs,
-                top: AppSpacing.xs,
-                bottom: AppSpacing.xs,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.muted,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.link, size: 16, color: AppColors.mutedForeground),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      'poker-night-tools.web.app/...',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.foreground,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  AppButton(
-                    size: AppButtonSize.sm,
-                    variant: copiedLink
-                        ? AppButtonVariant.secondary
-                        : AppButtonVariant.primary,
-                    onPressed: () async {
-                      await Clipboard.setData(ClipboardData(text: link));
-                      if (!mounted) return;
-                      setState(() => copiedLink = true);
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('Invite link copied'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                      Future.delayed(const Duration(seconds: 2), () {
-                        if (mounted) setState(() => copiedLink = false);
-                      });
-                    },
-                    child: Text(copiedLink ? 'Copied' : 'Copy link'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            CodeDisplay(code: group.joinCode, label: 'Or enter code'),
-          ],
-        ),
-      ),
+      child: InviteModalContent(group: group, link: link),
     );
   }
 
@@ -473,18 +529,19 @@ class _GroupScreenState extends State<GroupScreen> {
     AppProvider app,
     Group group,
   ) {
-    var maxPerTable = group.tableSettings.maxPerTable;
+    // Build Spec G1: 4 to 10 seats per table (older groups may hold more).
+    var maxPerTable = group.tableSettings.maxPerTable.clamp(4, 10);
     var randomize = group.tableSettings.randomizeByDefault;
     showAppModal(
       context: context,
-      title: 'Table settings',
+      title: 'Group settings',
       child: StatefulBuilder(
         builder: (context, setState) => Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Default for every tournament this group runs. An admin can '
+              'Default for every tournament this group runs. A host can '
               'still override these during game creation.',
               style: AppTypography.bodyXs.copyWith(
                 color: AppColors.mutedForeground,
@@ -500,14 +557,22 @@ class _GroupScreenState extends State<GroupScreen> {
                   ),
                 ),
                 IconButton(
-                  onPressed: maxPerTable <= 6
+                  tooltip: 'Fewer players per table',
+                  onPressed: maxPerTable <= 4
                       ? null
                       : () => setState(() => maxPerTable--),
                   icon: const Icon(Icons.remove_circle_outline),
                 ),
-                Text('$maxPerTable', style: AppTypography.bodySm),
+                // The bare number means nothing out of context to a screen
+                // reader sitting between two steppers.
+                Semantics(
+                  label: '$maxPerTable players per table',
+                  excludeSemantics: true,
+                  child: Text('$maxPerTable', style: AppTypography.bodySm),
+                ),
                 IconButton(
-                  onPressed: maxPerTable >= 12
+                  tooltip: 'More players per table',
+                  onPressed: maxPerTable >= 10
                       ? null
                       : () => setState(() => maxPerTable++),
                   icon: const Icon(Icons.add_circle_outline),
@@ -562,212 +627,246 @@ class _GroupScreenState extends State<GroupScreen> {
   }
 }
 
-class _GroupHeader extends StatelessWidget {
+class _GroupCardIdentity extends StatelessWidget {
   final Group group;
-  final bool isAdmin;
-  final VoidCallback? onLeaveGroup;
-  final VoidCallback? onTransferOwnership;
-  const _GroupHeader({
-    required this.group,
-    required this.isAdmin,
-    this.onLeaveGroup,
-    this.onTransferOwnership,
-  });
-
-  static const double _mobileBreakpoint = 640;
+  const _GroupCardIdentity({required this.group});
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < _mobileBreakpoint;
-        // Mobile: icon bleeds off the top-right corner (unchanged).
-        // Desktop/laptop: icon is centered in the header instead.
-        // minHeight MUST be large enough to contain the icon at its offset
-        // or the Stack's own bounding box will be shorter than the icon and
-        // hard-clip it into a broken rectangle instead of showing the full
-        // glyph.
-        final iconSize = isMobile ? 96.0 : 150.0;
-        final iconOffset = isMobile ? -14.0 : -22.0;
-        final minHeight = isMobile ? 128.0 : 170.0;
-
-        final info = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              group.name,
-              style: AppTypography.display(
-                size: AppFontSizes.xxxl,
-                weight: FontWeight.w700,
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -8,
+            top: -8,
+            child: IgnorePointer(
+              child: Icon(
+                groupIconMap[group.icon] ?? Icons.casino,
+                size: 72,
+                color: AppColors.primary.withValues(alpha: 0.15),
               ),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: [
-                Text(
-                  '${group.members.length} members',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                group.name,
+                style: TextStyle(
+                  color: AppColors.foreground,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(width: AppSpacing.md),
-                SizedBox(
-                  height: 32,
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < group.members.length && i < 5; i++)
-                        Align(
-                          widthFactor: 0.6,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${group.members.length} members',
+                style: TextStyle(
+                  color: AppColors.mutedForeground,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                height: 32,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < group.members.length && i < 4; i++)
+                      Align(
+                        widthFactor: 0.7,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.card, width: 2),
+                          ),
                           child: AppAvatar(
                             name: group.members[i].name,
                             size: AppAvatarSize.sm,
                           ),
                         ),
-                      if (group.members.length > 5)
-                        Align(
-                          widthFactor: 0.6,
-                          child: CircleAvatar(
-                            radius: 12,
-                            backgroundColor: AppColors.border,
-                            child: Text(
-                              '+${group.members.length - 5}',
-                              style: AppTypography.monoXs,
+                      ),
+                    if (group.members.length > 4)
+                      Align(
+                        widthFactor: 0.7,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.borderSubtle,
+                            border: Border.all(color: AppColors.card, width: 2),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '+${group.members.length - 4}',
+                            style: TextStyle(
+                              color: AppColors.foreground,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
-              ],
-            ),
-          ],
-        );
-
-        final actions = Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            if (isAdmin) ...[
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => context.go(RoutePaths.presets),
-                child: const Text('Presets'),
-              ),
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: () =>
-                    context.read<AppProvider>().togglePinGroup(group),
-                child: Text(group.pinned ? 'Unpin' : 'Pin'),
-              ),
-              AppButton(
-                size: AppButtonSize.sm,
-                onPressed: () => context.go(RoutePaths.createTournament),
-                child: const Text('+ New game'),
-              ),
-              if (isAdmin && onTransferOwnership != null)
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.secondary,
-                  onPressed: onTransferOwnership,
-                  child: const Text('Transfer Ownership'),
-                ),
-            ] else if (onLeaveGroup != null) ...[
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: onLeaveGroup,
-                child: const Text('Leave Group'),
               ),
             ],
-          ],
-        );
-
-        final content = isMobile
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  info,
-                  if (isAdmin) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    actions,
-                  ],
-                ],
-              )
-            : Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: info),
-                  if (isAdmin) actions,
-                ],
-              );
-
-        return ClipRRect(
-          // Rounded clip so the icon bleeds off the corner cleanly instead
-          // of getting sliced into a hard rectangle.
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: minHeight),
-            child: Stack(
-              fit: StackFit.passthrough,
-              clipBehavior: Clip.hardEdge,
-              children: [
-                // Mobile keeps the corner-bleed look (Positioned must be a
-                // direct Stack child; IgnorePointer wraps the visual content
-                // rather than the other way around). Desktop centers the
-                // icon in the header instead.
-                if (isMobile)
-                  Positioned(
-                    right: iconOffset,
-                    top: iconOffset,
-                    child: _GroupHeaderIcon(
-                      icon: groupIconMap[group.icon] ?? Icons.casino,
-                      size: iconSize,
-                    ),
-                  )
-                else
-                  Align(
-                    alignment: Alignment.center,
-                    child: _GroupHeaderIcon(
-                      icon: groupIconMap[group.icon] ?? Icons.casino,
-                      size: iconSize,
-                    ),
-                  ),
-                Align(alignment: Alignment.topLeft, child: content),
-              ],
-            ),
           ),
-        );
-      },
-    );
-  }
-}
-
-/// Decorative background icon for the group header. Uses AppColors.destructive
-/// rather than a hardcoded color, and ignores pointer events so it never
-/// intercepts taps meant for the content above it.
-class _GroupHeaderIcon extends StatelessWidget {
-  const _GroupHeaderIcon({required this.icon, required this.size});
-
-  final IconData icon;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    Theme.of(context);
-    return IgnorePointer(
-      child: Icon(
-        icon,
-        size: size,
-        color: AppColors.primary.withValues(alpha: 0.2),
+        ],
       ),
     );
   }
 }
 
-class _PremiumGameCard extends StatefulWidget {
+class _GroupActionChips extends StatelessWidget {
+  final Group group;
+  final bool isAdmin;
+  final VoidCallback onInvite;
+  final VoidCallback onTableSettings;
+
+  const _GroupActionChips({
+    required this.group,
+    required this.isAdmin,
+    required this.onInvite,
+    required this.onTableSettings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          InkWell(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: group.joinCode));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Group code copied')),
+              );
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.primarySoftBorder),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.copy, size: 14, color: AppColors.primaryText),
+                  const SizedBox(width: 8),
+                  Text(
+                    'GROUP CODE · ${group.joinCode}',
+                    style: AppTypography.eyebrow(size: 11),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: onInvite,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.borderSubtle),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.qr_code,
+                    size: 14,
+                    color: AppColors.mutedForeground,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Invite link / QR',
+                    style: TextStyle(
+                      color: AppColors.foreground,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isAdmin) ...[
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: onTableSettings,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.borderSubtle),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.tune,
+                      size: 14,
+                      color: AppColors.mutedForeground,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Group settings',
+                      style: TextStyle(
+                        color: AppColors.foreground,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SecondaryChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _SecondaryChip({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: AppButton(
+        variant: AppButtonVariant.secondary,
+        size: AppButtonSize.sm,
+        fullWidth: true,
+        onPressed: onTap,
+        child: Text(label, overflow: TextOverflow.ellipsis),
+      ),
+    );
+  }
+}
+
+class _PremiumGameCard extends StatelessWidget {
   final LiveGame game;
   final AppProvider app;
   final AppUser? user;
@@ -781,156 +880,614 @@ class _PremiumGameCard extends StatefulWidget {
   });
 
   @override
-  State<_PremiumGameCard> createState() => _PremiumGameCardState();
+  Widget build(BuildContext context) {
+    final rsvp = game.players.where((p) => p.id == user?.id).firstOrNull?.rsvp;
+    final isLive = game.status.isActiveLive;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isLive ? AppColors.primary : AppColors.borderSubtle,
+        ),
+        boxShadow: isLive
+            ? [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.2),
+                  blurRadius: 16,
+                  offset: Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (isLive)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.successSoft,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.circle,
+                            size: 6,
+                            color: AppColors.successText,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'LIVE',
+                            style: TextStyle(
+                              color: AppColors.successText,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.muted,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        game.status.label.toUpperCase(),
+                        style: TextStyle(
+                          color: AppColors.mutedForeground,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: AppColors.mutedForeground,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                game.settings.name,
+                style: TextStyle(
+                  color: AppColors.foreground,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                runSpacing: 4,
+                children: [
+                  _InfoChip(
+                    icon: Icons.calendar_today_outlined,
+                    text: game.settings.date,
+                  ),
+                  _InfoChip(
+                    icon: Icons.access_time_outlined,
+                    text: game.settings.time,
+                  ),
+                  _InfoChip(
+                    icon: Icons.location_on_outlined,
+                    text: game.settings.locationPrivate
+                        ? 'Private address'
+                        : game.settings.location,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.muted,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Buy-in: ${Formatters.prize(game.settings.buyIn)}',
+                  style: TextStyle(
+                    color: AppColors.foreground,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (user != null) ...[
+                const SizedBox(height: 12),
+                Divider(color: AppColors.borderSubtle, height: 1),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Text(
+                      game.settings.rsvpCutoffPassed
+                          ? 'RSVPs closed'
+                          : 'Your RSVP',
+                      style: TextStyle(
+                        color: AppColors.mutedForeground,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    RSVPBadge(rsvp: rsvp),
+                    const Spacer(),
+                    if (!game.settings.rsvpCutoffPassed)
+                      Text(
+                        rsvp == null ? 'Tap to respond' : 'Tap to change',
+                        style: TextStyle(
+                          color: AppColors.primaryText,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _PremiumGameCardState extends State<_PremiumGameCard> {
-  bool _hovering = false;
+/// Compact icon+label pair for a game card's date/time/location row — the
+/// same shape as the info chips on Home's upcoming-games list.
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    final game = widget.game;
-    final rsvp = game.players
-        .where((p) => p.id == widget.user?.id)
-        .firstOrNull
-        ?.rsvp;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: AppSpacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.border),
-            boxShadow: _hovering
-                ? [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.08),
-                      blurRadius: 12,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : [],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    AppBadge(
-                      label: game.status.name.toUpperCase(),
-                      variant: game.status.isActiveLive
-                          ? AppBadgeVariant.accent
-                          : AppBadgeVariant.muted,
-                    ),
-                    Icon(Icons.chevron_right, color: AppColors.mutedForeground),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  game.settings.name,
-                  style: AppTypography.display(
-                    size: AppFontSizes.xl,
-                    weight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_today,
-                      size: 14,
-                      color: AppColors.mutedForeground,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      game.settings.date,
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.access_time,
-                      size: 14,
-                      color: AppColors.mutedForeground,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      game.settings.time,
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.location_on,
-                      size: 14,
-                      color: AppColors.mutedForeground,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      game.settings.locationPrivate
-                          ? 'Address shared at check-in'
-                          : game.settings.location,
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Buy-in: ${game.settings.buyIn}',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.foreground,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                // RSVP is set on the game screen only — here it is read-only.
-                if (widget.user != null)
-                  Row(
-                    children: [
-                      Text(
-                        game.settings.rsvpCutoffPassed
-                            ? 'RSVPs closed'
-                            : 'Your RSVP',
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      RSVPBadge(rsvp: rsvp),
-                      const Spacer(),
-                      if (!game.settings.rsvpCutoffPassed)
-                        Text(
-                          rsvp == null ? 'Tap to respond' : 'Tap to change',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.primary,
-                          ),
-                        ),
-                    ],
-                  ),
-              ],
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: AppColors.mutedForeground),
+        const SizedBox(width: AppSpacing.xs),
+        // Flexible: this Row sits in a Wrap that bounds it to the card's
+        // width, but a Row hands unbounded main-axis constraints to a bare
+        // Text regardless — same overflow mechanism fixed in guest_flow's
+        // _IntroLine. `text` can be a free-text location/address.
+        Flexible(
+          child: Text(
+            text,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+
+class InviteModalContent extends StatefulWidget {
+  const InviteModalContent({
+    super.key,
+    required this.group,
+    required this.link,
+  });
+
+  final Group group;
+  final String link;
+
+  @override
+  State<InviteModalContent> createState() => _InviteModalContentState();
+}
+
+class _InviteModalContentState extends State<InviteModalContent> {
+  late Group _selectedGroup;
+  String _searchQuery = '';
+  bool _copiedLink = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedGroup = widget.group;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
+    final currentUid = app.user?.id;
+    final currentName = app.user?.name.toLowerCase().trim();
+    final messenger = ScaffoldMessenger.of(context);
+    final currentGroup = _selectedGroup;
+    final isGroupAdmin = currentGroup.ownerId == app.user?.id ||
+        currentGroup.members.any((m) => m.id == app.user?.id && m.isAdmin) ||
+        (currentGroup.id == app.currentGroup.id && app.isAdmin);
+    final groupLink =
+        'https://poker-night-tools.web.app/join-group?code=${currentGroup.joinCode}';
+
+    // Extract past opponents across games the viewer actually played in (Spec §B13, T124)
+    final opponentsMap = <String, ({String id, String name, DateTime lastPlayed, bool isMember})>{};
+
+    for (final g in app.groups) {
+      for (final game in g.pastGames) {
+        final viewerPlayed = game.players.any(
+          (p) =>
+              (currentUid != null && p.id == currentUid) ||
+              (currentName != null && p.name.toLowerCase().trim() == currentName),
+        );
+        if (!viewerPlayed) continue;
+
+        final finishDate = game.endedAt ??
+            DateTime.tryParse(game.settings.date) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+
+        for (final p in game.players) {
+          if (p.isGuest) continue;
+          if (currentUid != null && p.id == currentUid) continue;
+          if (currentName != null && p.name.toLowerCase().trim() == currentName) continue;
+          final key = p.id.isNotEmpty ? p.id : p.name.toLowerCase().trim();
+          final isMember = currentGroup.members.any((m) => m.id == p.id);
+          final existing = opponentsMap[key];
+          if (existing == null || finishDate.isAfter(existing.lastPlayed)) {
+            opponentsMap[key] = (
+              id: p.id,
+              name: p.name,
+              lastPlayed: finishDate,
+              isMember: isMember,
+            );
+          }
+        }
+      }
+    }
+
+    final opponents = opponentsMap.values.toList()
+      ..sort((a, b) => b.lastPlayed.compareTo(a.lastPlayed));
+
+    final filtered = _searchQuery.isEmpty
+        ? opponents
+        : opponents
+            .where((o) => o.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+            .toList();
+
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (app.groups.length > 1) ...[
+            Text(
+              'Which group',
+              style: AppTypography.bodySm.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            AppSelect<String>(
+              value: currentGroup.id,
+              items: [
+                for (final g in app.groups)
+                  DropdownMenuItem(
+                    value: g.id,
+                    child: Text('${g.name} (${g.members.length} members)'),
+                  ),
+              ],
+              onChanged: (id) {
+                if (id == null) return;
+                final found = app.groups.where((g) => g.id == id).firstOrNull;
+                if (found != null) {
+                  setState(() => _selectedGroup = found);
+                }
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          Text(
+            'Anyone with this link or code can join in one tap.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(
+                  color: AppColors.border.withValues(alpha: 0.5),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.black.withValues(alpha: 0.10),
+                    blurRadius: 18,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: QrImageView(
+                data: groupLink,
+                size: 130,
+                backgroundColor: Colors.white,
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  size: AppButtonSize.md,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () async {
+                              
+                    try {
+                      await SharePlus.instance.share(
+                        ShareParams(
+                          text: groupLink,
+                          subject: 'Join my poker group: ${currentGroup.name}',
+                        ),
+                      );
+                    } catch (_) {
+                      await Clipboard.setData(ClipboardData(text: groupLink));
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Invite link copied'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.share, size: 16),
+                      SizedBox(width: AppSpacing.xs),
+                      Flexible(
+                        child: Text(
+                          'Share link',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: AppButton(
+                  size: AppButtonSize.md,
+                  variant: _copiedLink
+                      ? AppButtonVariant.secondary
+                      : AppButtonVariant.primary,
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: groupLink));
+                    if (!mounted) return;
+                    setState(() => _copiedLink = true);
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Invite link copied'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    Future.delayed(const Duration(seconds: 2), () {
+                      if (mounted) setState(() => _copiedLink = false);
+                    });
+                  },
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _copiedLink ? Icons.check : Icons.copy,
+                        size: 16,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Flexible(
+                        child: Text(
+                          _copiedLink ? 'Copied' : 'Copy link',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          CodeDisplay(code: currentGroup.joinCode, label: 'Or enter code'),
+          const SizedBox(height: AppSpacing.lg),
+          const Divider(),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            "People you've played with",
+            style: AppTypography.bodySm.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.foreground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Invite past opponents to this group in one tap.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            onChanged: (val) => setState(() => _searchQuery = val),
+            style: AppTypography.bodySm,
+            decoration: InputDecoration(
+              hintText: 'Search past opponents...',
+              hintStyle: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              prefixIcon: const Icon(Icons.search, size: 18),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.sm,
+              ),
+              filled: true,
+              fillColor: AppColors.muted,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (filtered.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              child: Text(
+                opponents.isEmpty
+                    ? 'No past opponents found yet.'
+                    : 'No matches found.',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            )
+          else
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: filtered.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, i) {
+                  final opponent = filtered[i];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                    child: Row(
+                      children: [
+                        AppAvatar(name: opponent.name, size: AppAvatarSize.sm),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                opponent.name,
+                                style: AppTypography.bodySm.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                opponent.lastPlayed.millisecondsSinceEpoch == 0
+                                    ? 'Played recently'
+                                    : 'Last played ${Formatters.relativeTime(opponent.lastPlayed)}',
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (opponent.isMember)
+                          const AppBadge(
+                            label: 'Member',
+                            variant: AppBadgeVariant.muted,
+                          )
+                        else
+                          AppButton(
+                            size: AppButtonSize.sm,
+                            variant: AppButtonVariant.secondary,
+                            onPressed: () async {
+                              if (isGroupAdmin) {
+                                final oneTapLink =
+                                    'https://poker-night-tools.web.app/join-group?code=${currentGroup.joinCode}&to=${Uri.encodeComponent(opponent.id)}';
+                                unawaited(
+                                  Clipboard.setData(ClipboardData(text: oneTapLink))
+                                      .catchError((_) {}),
+                                );
+                                var stagedOk = false;
+                                try {
+                                  await app.stagePendingGroupInvite(
+                                    uid: opponent.id,
+                                    name: opponent.name,
+                                  );
+                                  stagedOk = true;
+                                } catch (e) {
+                                  debugPrint('stagePendingGroupInvite failed: $e');
+                                }
+                                if (stagedOk) {
+                                  app.pushNotification(
+                                    AppNotification(
+                                      id: 'invite-${currentGroup.id}-${opponent.id}-${DateTime.now().millisecondsSinceEpoch}',
+                                      title: 'Group invitation',
+                                      body: '${app.user?.name ?? "A host"} invited you to join ${currentGroup.name}.',
+                                      type: NotificationType.invite,
+                                      link: '/join-group?code=${currentGroup.joinCode}&to=${Uri.encodeComponent(opponent.id)}',
+                                      audience: [opponent.id],
+                                      read: false,
+                                      timestamp: DateTime.now(),
+                                    ),
+                                  );
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text('One-tap invite link copied and sent for ${opponent.name}'),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                } else {
+                                  messenger.showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Invite link copied to clipboard'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              } else {
+                                // Non-admins cannot stage targeted invites (Firestore rules require isGroupAdmin).
+                                // Copy the standard group join link instead without staging an invite.
+                                unawaited(
+                                  Clipboard.setData(ClipboardData(text: groupLink))
+                                      .catchError((_) {}),
+                                );
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Group invite link copied to clipboard'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            },
+                            child: const Text('Invite'),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     );
   }

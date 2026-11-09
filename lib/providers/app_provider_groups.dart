@@ -3,8 +3,83 @@
 /// Extracted verbatim from app_provider.dart (`// ── Group ──`). Do not change business logic.
 part of 'app_provider.dart';
 
+/// What the invite screen shows before someone joins (E6). Comes from the
+/// public `joinCodes` doc, so it is readable with only the code.
+class GroupInvitePreview {
+  const GroupInvitePreview({
+    required this.gid,
+    required this.name,
+    required this.icon,
+    this.hostName,
+    this.memberCount,
+    this.gamesPlayed,
+  });
+
+  final String gid;
+  final String name;
+  final String icon;
+  final String? hostName;
+  final int? memberCount;
+  final int? gamesPlayed;
+}
+
 extension AppProviderGroups on AppProvider {
   Group get currentGroup => _currentGroup;
+
+  /// True when the signed-in user already belongs to [gid].
+  bool isMemberOfGroup(String gid) => _groups.any((g) => g.id == gid);
+
+  /// Looks up the group behind an invite [code] without joining it. Null when
+  /// the code is unknown, is not a group code, or the lookup failed.
+  Future<GroupInvitePreview?> previewInvite(String code) async {
+    if (!_backendUp) return null;
+    try {
+      final data = await _repo.peekJoinCode(code);
+      if (data == null) return null;
+      final gid = data['gid'] as String?;
+      final gameId = data['gameId'] as String?;
+      if (gid == null || (gameId != null && gameId.isNotEmpty)) return null;
+      return GroupInvitePreview(
+        gid: gid,
+        name: (data['name'] as String?) ?? '',
+        icon: (data['icon'] as String?) ?? '♠',
+        hostName: data['hostName'] as String?,
+        memberCount: (data['memberCount'] as num?)?.toInt(),
+        gamesPlayed: (data['gamesPlayed'] as num?)?.toInt(),
+      );
+    } catch (e) {
+      debugPrint('previewInvite failed: $e');
+      return null;
+    }
+  }
+
+  /// Host-side: keeps the invite preview's member and game counts current.
+  /// Skipped when nothing changed since the last write.
+  void _syncInvitePreview(Group g) {
+    final uid = _repo.currentUid;
+    if (!_backendUp || uid == null || g.joinCode.isEmpty) return;
+    if (g.ownerId != uid) return;
+    final host = g.members.where((m) => m.id == g.ownerId).firstOrNull;
+    final hostName = host?.name ?? _user?.name ?? '';
+    final played = g.pastGames.length;
+    final key =
+        '${g.joinCode}|${g.name}|${g.icon}|$hostName|${g.members.length}|$played';
+    if (key == _lastInvitePreviewKey) return;
+    _lastInvitePreviewKey = key;
+    unawaited(_repo
+        .updateInvitePreview(
+          g.joinCode,
+          name: g.name,
+          icon: g.icon,
+          hostName: hostName,
+          memberCount: g.members.length,
+          gamesPlayed: played,
+        )
+        .catchError((Object e) {
+      _lastInvitePreviewKey = null;
+      debugPrint('updateInvitePreview failed: $e');
+    }));
+  }
 
   /// Id of the selected group — set the instant a group is chosen, even before
   /// its live bundle has loaded (unlike `currentGroup.id`, which lags).
@@ -60,7 +135,7 @@ extension AppProviderGroups on AppProvider {
 
   /// Creates a new group with this account as owner. Returns null when the
   /// caller is unauthenticated or the write failed.
-  Future<Group?> createGroup(String name, {String icon = '♠️'}) async {
+  Future<Group?> createGroup(String name, {String icon = 'Spade'}) async {
     final user = _user;
     if (!_backendUp || user == null) return null;
     final group = Group(
@@ -88,6 +163,7 @@ extension AppProviderGroups on AppProvider {
   }
 
   /// Pins/unpins a group so it floats to the top of the sidebar's group list.
+  // void togglePinGroup(Group group) { // Dead code removed
   void togglePinGroup(Group group) {
     _setGroup(group.copyWith(pinned: !group.pinned));
     if (!_disposed) notifyListeners();
@@ -100,8 +176,8 @@ extension AppProviderGroups on AppProvider {
     }
   }
 
-  /// Owner-only: sets a member's role (Member / Co-Admin / Admin). Co-Admin
-  /// can add members directly and grant rebuys; only Admin (or the owner)
+  /// Owner-only: sets a member's role (Member / Co-host / Host). Co-host
+  /// can add members directly and grant rebuys; only Host (or the owner)
   /// can advance the tournament or touch blinds/seating settings.
   void setGroupRole(String userId, GroupRole role) {
     if (_user?.id != _currentGroup.ownerId) return; // Only owner can do this
@@ -110,11 +186,11 @@ extension AppProviderGroups on AppProvider {
     final members = _currentGroup.members.map((m) {
       if (m.id == userId) {
         return m.copyWith(
-          isAdmin: role == GroupRole.admin,
-          isCoAdmin: role == GroupRole.coAdmin,
+          isAdmin: role == GroupRole.host,
+          isCoAdmin: role == GroupRole.coHost,
         );
       }
-      if (role == GroupRole.admin &&
+      if (role == GroupRole.host &&
           m.isAdmin &&
           m.id != _currentGroup.ownerId) {
         demoted.add(m.id);
@@ -128,7 +204,7 @@ extension AppProviderGroups on AppProvider {
       final former = _currentGroup.members.firstWhere(
           (m) => m.id == demoted.first);
       addAnnouncement(
-        '${former.name} is no longer an admin — ${promoted.name} is now the group admin.',
+        '${former.name} is no longer the host — ${promoted.name} is now the group host.',
         true,
       );
     }
@@ -140,17 +216,17 @@ extension AppProviderGroups on AppProvider {
               (Object e) => debugPrint('setMemberRole failed: $e')));
       for (final id in demoted) {
         unawaited(_repo
-            .setMemberRole(_currentGroup.id, id, GroupRole.coAdmin.storageValue)
+            .setMemberRole(_currentGroup.id, id, GroupRole.coHost.storageValue)
             .catchError(
                 (Object e) => debugPrint('setMemberRole (demote) failed: $e')));
       }
     }
   }
 
-  /// Host/Admin or Co-Admin: adds a registered user directly to the group by
+  /// Host or Co-host: adds a registered user directly to the group by
   /// email, without going through an invite link/QR/join code. Returns null
   /// on success, or a friendly error message for the UI.
-  Future<String?> addMemberByEmail(String email) async {
+  Future<String?> addMemberByEmail(String email) async { // Fixed: use joinGroup
     if (!canManageMembers) return 'Only the Host can add members.';
     if (!_backendUp) return 'You are offline.';
     final trimmed = email.trim();
@@ -178,12 +254,45 @@ extension AppProviderGroups on AppProvider {
         found,
         groupName: _currentGroup.name,
         groupIcon: _currentGroup.icon,
+        joinCode: _currentGroup.joinCode,
       );
     } catch (e) {
       debugPrint('addMemberByEmail failed: $e');
       return 'Could not add that member. Please try again.';
     }
     return null;
+  }
+
+  /// Staged invite for past opponents (Spec §B13, T124) into the pendingInvites collection.
+  Future<void> stagePendingGroupInvite({
+    required String uid,
+    required String name,
+  }) async {
+    if (uid.isEmpty) return;
+    try {
+      await _repo.addMemberToGroup(
+        _currentGroup.id,
+        AppUser(
+          id: uid,
+          name: name,
+          email: '',
+          isAdmin: false,
+          isCoAdmin: false,
+          stats: const UserStats(
+            played: 0,
+            wins: 0,
+            podium: 0,
+            avgFinish: 0,
+            knockouts: 0,
+          ),
+        ),
+        groupName: _currentGroup.name,
+        groupIcon: _currentGroup.icon,
+        joinCode: _currentGroup.joinCode,
+      );
+    } catch (e) {
+      debugPrint('stagePendingGroupInvite failed: $e');
+    }
   }
 
   /// Owner-only: updates the group's default table-capacity/randomization
@@ -201,7 +310,46 @@ extension AppProviderGroups on AppProvider {
     }
   }
 
-  /// Admin-only: sets (or clears, passing null) this tournament's override of
+  /// Spec B9/H5: Owner-only group pace learning opt-out.
+  void setGroupLearningOptOut(bool optOut) {
+    if (_user?.id != _currentGroup.ownerId) return;
+    _setGroup(_currentGroup.copyWith(learningOptOut: optOut));
+    if (!_disposed) notifyListeners();
+    if (_backendUp) {
+      unawaited(
+        _repo
+            .updateGroupLearningOptOut(_currentGroup.id, optOut)
+            .catchError(
+              (Object e) =>
+                  debugPrint('updateGroupLearningOptOut failed: $e'),
+            ),
+      );
+    }
+  }
+
+  /// Owner-only: points the group at one of the owner's saved chip sets, or
+  /// clears the pointer by passing null (the Standard box).
+  ///
+  /// B10 keeps a pointer rather than a copy of the chips, so this is the only
+  /// thing that has to be written: editing a set in F5 reaches every group
+  /// pointing at it without touching the group at all.
+  void setGroupDefaultChipSet(String? id) {
+    if (_user?.id != _currentGroup.ownerId) return;
+    if (_currentGroup.defaultChipSetId == id) return;
+    _setGroup(_currentGroup.copyWith(
+      defaultChipSetId: id,
+      clearDefaultChipSetId: id == null,
+    ));
+    if (!_disposed) notifyListeners();
+    if (_backendUp) {
+      unawaited(_repo
+          .updateGroupDefaultChipSet(_currentGroup.id, id)
+          .catchError((Object e) =>
+              debugPrint('setGroupDefaultChipSet failed: $e')));
+    }
+  }
+
+  /// Host-only: sets (or clears, passing null) this tournament's override of
   /// the group's default table settings.
   void updateTournamentTableSettings(TableSettings? override) {
     final game = _currentGame;
@@ -253,6 +401,89 @@ extension AppProviderGroups on AppProvider {
   }
 
   /// Non-owner members may leave a group voluntarily.
+  /// B9: retires the group's join code and issues a new one.
+  ///
+  /// Owner-scoped, like the other group settings. Returns false when there is
+  /// no backend to write to or every candidate code was taken, so the UI can
+  /// leave the code alone rather than showing a new one that does not work.
+  Future<bool> rerollGroupJoinCode() async {
+    final user = _user;
+    if (user == null || user.id != _currentGroup.ownerId) return false;
+    if (!_backendUp) return false;
+
+    final gid = _currentGroup.id;
+    final oldCode = _currentGroup.joinCode;
+    // Codes are 6 characters from a 32-character alphabet, so a clash is
+    // rare; eight draws is generous and still instant.
+    for (var attempt = 0; attempt < 8; attempt++) {
+      final candidate = Formatters.generateCode();
+      if (candidate.toUpperCase() == oldCode.toUpperCase()) continue;
+      try {
+        final ok = await _repo.rerollGroupJoinCode(
+          gid: gid,
+          oldCode: oldCode,
+          newCode: candidate,
+          name: _currentGroup.name,
+          icon: _currentGroup.icon,
+          hostName: user.name,
+          memberCount: _currentGroup.members.length,
+          gamesPlayed: _currentGroup.games.length,
+        );
+        if (!ok) continue;
+        _setGroup(_currentGroup.copyWith(joinCode: candidate));
+        if (!_disposed) notifyListeners();
+        return true;
+      } catch (e) {
+        debugPrint('rerollGroupJoinCode failed: $e');
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /// B9: deletes the group for good. Owner-only.
+  ///
+  /// A host cannot leave their own group, so this is the only way out of one
+  /// and it is not reversible -- the UI says so before calling it. Returns
+  /// whether the delete was started, so a caller can hold the dialog open and
+  /// report a refusal instead of pretending it worked.
+  Future<bool> deleteGroup() async {
+    final userId = _user?.id;
+    if (userId == null || userId != _currentGroup.ownerId) return false;
+
+    final gid = _currentGroup.id;
+    final code = _currentGroup.joinCode;
+    if (_backendUp && gid.isNotEmpty) {
+      try {
+        await _repo.deleteGroupRecursive(gid, joinCode: code);
+      } catch (e) {
+        debugPrint('deleteGroup failed: $e');
+        return false;
+      }
+    }
+
+    // Same teardown as leaving, taken from the session's point of view: the
+    // group is gone, so the bundle watching it has to stop either way.
+    _bundleSub?.cancel();
+    _bundleSub = null;
+    _cashSub?.cancel();
+    _cashSub = null;
+    _requestsSub?.cancel();
+    _requestsSub = null;
+    _currentGroupId = null;
+    _bundleLoaded = false;
+    _bundleReady = null;
+    _groups = _groups.where((g) => g.id != gid).toList();
+    final next = orderedGroups.firstOrNull;
+    if (next != null) {
+      _selectGroup(next.id);
+    } else {
+      _currentGroup = AppProvider._kEmptyGroup;
+    }
+    if (!_disposed) notifyListeners();
+    return true;
+  }
+
   void leaveGroup() {
     final userId = _user?.id;
     if (userId == null || userId == _currentGroup.ownerId) return;
@@ -269,6 +500,8 @@ extension AppProviderGroups on AppProvider {
     _bundleSub = null;
     _cashSub?.cancel();
     _cashSub = null;
+    _requestsSub?.cancel();
+    _requestsSub = null;
     _currentGroupId = null;
     _bundleLoaded = false;
     _bundleReady = null;

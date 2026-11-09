@@ -1,38 +1,58 @@
+import '../utils/payout_bridge.dart';
+import '../utils/payouts_engine.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
 import '../app/route_paths.dart';
+import '../constants/app_constants.dart';
+import '../utils/cash_settlement.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'
-    show DocumentSnapshot, FieldValue;
+    show DocumentSnapshot, FieldValue, FirebaseException;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import 'package:localstore/localstore.dart';
 
 import '../models/app_notification.dart';
 import '../models/cash_game.dart';
+import '../models/calibration_record.dart';
+import '../models/chat_report.dart';
 import '../models/game.dart';
 import '../models/group.dart';
+import '../models/imported_night.dart';
+import '../utils/import_results_parser.dart';
 import '../models/live_game.dart';
+import '../models/payment_record.dart';
+import '../models/shot_clock.dart';
 import '../models/table_settings.dart';
 import '../models/tournament.dart';
+import '../models/tournament_format.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
 import '../models/chip_color.dart';
 import '../repositories/firebase_repository.dart';
+import '../services/entitlements.dart';
+import '../services/permissions.dart';
+import '../services/payment_service.dart';
 import '../utils/formatters.dart';
+import '../utils/live_play_rules.dart';
 import '../utils/mock_data.dart';
 import '../utils/model_codec.dart';
+import '../utils/automations_service.dart';
 import '../utils/sanitization.dart';
-import '../utils/tournament_engine.dart';
 import '../utils/voice_service.dart';
+import '../utils/builder_solve.dart';
+import '../utils/tournament_engine.dart';
 import '../services/browser_notifications.dart';
 import '../services/onesignal_sender.dart';
 import '../services/projections.dart' as projections;
 import '../services/push_service.dart';
 import '../services/recovery_service.dart';
+import '../services/tab_leader.dart';
+import '../services/telemetry.dart';
 
 part 'app_provider_auth.dart';
 part 'app_provider_cloud_sync.dart';
@@ -44,6 +64,7 @@ part 'app_provider_players.dart';
 part 'app_provider_tournament.dart';
 part 'app_provider_social.dart';
 part 'app_provider_codes_cash.dart';
+part 'app_provider_payments.dart';
 part 'app_provider_notifications_settings.dart';
 
 /// One future-level edit produced by the admin structure editor.
@@ -109,8 +130,11 @@ class SeatMoveRecommendation {
 ///    it via their +N count / guest names; the admin never edits slots).
 ///
 /// Pure and side-effect free so it can be unit tested.
-LiveGame mergeMemberOwnedFields(LiveGame local, LiveGame remote,
-    {String? adminId}) {
+LiveGame mergeMemberOwnedFields(
+  LiveGame local,
+  LiveGame remote, {
+  String? adminId,
+}) {
   if (remote.id != local.id) return local;
   final localById = {for (final p in local.players) p.id: p};
   var changed = false;
@@ -127,7 +151,7 @@ LiveGame mergeMemberOwnedFields(LiveGame local, LiveGame remote,
             // Merge checkedIn if the member checked themselves in remotely,
             // taking care not to let a stale remote overwrite an admin's local check-in.
             final checkInArrived = r.checkedIn && !p.checkedIn;
-            
+
             if (rsvpChanged || checkInArrived) {
               changed = true;
               return p.copyWith(
@@ -193,14 +217,17 @@ LiveGame restoreAdminPrivateFields(LiveGame remote, LiveGame local) {
     // over the wire is always empty. Re-attach the one already in memory —
     // otherwise every remote snapshot would wipe the host's audit history and
     // flip the content signature on every emit.
-    auditHistory:
-        remote.auditHistory.isEmpty ? local.auditHistory : remote.auditHistory,
+    auditHistory: remote.auditHistory.isEmpty
+        ? local.auditHistory
+        : remote.auditHistory,
     // Same story for the pending request queue: scrubbed on the wire, held
     // in memory and in the admin sidecar.
-    rebuyRequests:
-        remote.rebuyRequests.isEmpty ? local.rebuyRequests : remote.rebuyRequests,
-    addOnRequests:
-        remote.addOnRequests.isEmpty ? local.addOnRequests : remote.addOnRequests,
+    rebuyRequests: remote.rebuyRequests.isEmpty
+        ? local.rebuyRequests
+        : remote.rebuyRequests,
+    addOnRequests: remote.addOnRequests.isEmpty
+        ? local.addOnRequests
+        : remote.addOnRequests,
   );
 }
 
@@ -219,6 +246,24 @@ class AppProvider extends ChangeNotifier {
   /// entry point checks this before touching the repository.
   bool _backendUp = true;
   bool _disposed = false;
+
+  /// True while a game was running when the app closed — used to offer resume
+  /// on splash restart (§A1 rule / T86). Client-side only, persisted via
+  /// RecoveryService, no Cloud Functions.
+  // ignore: prefer_final_fields
+  bool _previousGameRunning = false;
+
+  /// Timestamp of when the app closed, so resume can be offered within a
+  /// reasonable window (e.g. 30 minutes).
+  DateTime? _previousGameClosedAt;
+
+  /// Records that a game was running at close, for splash resume offer.
+  /// Called from app lifecycle (paused/detached) — pure client-side.
+  void recordGameRunningForResume(bool running) {
+    _previousGameRunning = running;
+    _previousGameClosedAt = running ? DateTime.now() : null;
+    notifyListeners();
+  }
 
   /// Firebase auth session subscription — cancelled on dispose.
   StreamSubscription<fa.User?>? _authSub;
@@ -272,9 +317,203 @@ class AppProvider extends ChangeNotifier {
   final Map<String, String> _pendingCheckIn = {};
   final Map<String, bool> _checkInLanded = {};
 
+  /// Pending settlement documents to be pushed to Firestore when online (Spec §B7, §E14).
+  final Map<String, Map<String, GameResultRow>> _pendingSettlements = {};
+  AppNotification? _lastPushedNotification;
+  AppNotification? get lastPushedNotification => _lastPushedNotification;
+
+  Future<void> _persistPendingSettlements() async {
+    try {
+      final serialized = <String, dynamic>{};
+      for (final entry in _pendingSettlements.entries) {
+        serialized[entry.key] = entry.value.map(
+          (k, v) => MapEntry(k, {
+            ...v.toMap(),
+            if (v.finishedAt != null)
+              'finishedAt': v.finishedAt!.toIso8601String(),
+          }),
+        );
+      }
+      await Localstore.instance.collection('app').doc('pending_settlements').set({
+        'settlements': serialized,
+      });
+    } catch (e) {
+      debugPrint('Failed to save pending settlements: $e');
+    }
+  }
+
+  Future<void> _hydratePendingSettlements() async {
+    try {
+      final doc = await Localstore.instance
+          .collection('app')
+          .doc('pending_settlements')
+          .get();
+      final raw = doc?['settlements'];
+      if (raw is! Map) return;
+      for (final gameEntry in raw.entries) {
+        final gameId = gameEntry.key.toString();
+        final rowsMap = gameEntry.value;
+        if (rowsMap is Map) {
+          final rowMap = <String, GameResultRow>{};
+          for (final rowEntry in rowsMap.entries) {
+            if (rowEntry.value is Map) {
+              rowMap[rowEntry.key.toString()] = GameResultRow.fromMap(
+                rowEntry.key.toString(),
+                (rowEntry.value as Map).map((k, v) => MapEntry('$k', v)),
+              );
+            }
+          }
+          if (rowMap.isNotEmpty) {
+            _pendingSettlements[gameId] = rowMap;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to hydrate pending settlements: $e');
+    }
+  }
+
+  @visibleForTesting
+  Map<String, Map<String, GameResultRow>> get pendingSettlementsForTesting =>
+      _pendingSettlements;
+
+  @visibleForTesting
+  Future<void> persistPendingSettlementsForTesting() =>
+      _persistPendingSettlements();
+
+  @visibleForTesting
+  Future<void> hydratePendingSettlementsForTesting() =>
+      _hydratePendingSettlements();
+
+  Future<void> maybeBackfillAuthoritativeResult(LiveGame game) =>
+      AppProviderUserData(this).maybeBackfillAuthoritativeResult(game);
+
+  Future<void> stagePendingGroupInvite({
+    required String uid,
+    required String name,
+  }) =>
+      AppProviderGroups(this).stagePendingGroupInvite(uid: uid, name: name);
+
   /// Last member-RSVP patch failure, surfaced on the invitation screen so
   /// backend rejections are never invisible (vs silent optimistic state that
   /// vanishes on refresh). Debug aid for the persistence audit.
+  /// Addendum §3: free hosting covers one table, up to nine active players.
+  ///
+  /// Device-local, read from [MockPaymentService]. Real Premium authorization
+  /// belongs on a server (§7, acceptance 12) and does not exist yet, so this
+  /// is an honest product limit rather than security. A determined user can
+  /// change it; the point is that an ordinary host is told before the night
+  /// goes wrong, not that it cannot be defeated.
+  PremiumTier premiumTier = PremiumTier.free;
+
+  /// Whether the user has active Premium access.
+  bool get isPremium => premiumTier == PremiumTier.premium;
+
+  /// Plays a test speech announcement for the Sound & Voice settings.
+  Future<void> testVoice() async {
+    await VoiceService.instance.speak(
+      VoiceService.levelChangeMessage(
+        level: 1,
+        sb: 25,
+        bb: 50,
+        durationMins: 15,
+      ),
+    );
+  }
+
+  /// Resolves the effective Premium tier.
+  ///
+  /// Two sources, deliberately:
+  ///
+  ///  * `entitlements/{uid}` in Firestore — AUTHORITATIVE. Read-only to every
+  ///    client by security rule, so it cannot be forged from the app. This is
+  ///    the enforcement the specification asks for (§7, acceptance 12), and it
+  ///    needs no Cloud Functions: the rule runs on Google's servers and there
+  ///    is no write condition a client request can satisfy.
+  ///
+  ///  * [MockPaymentService] on the device — DEMO ONLY. It is what the
+  ///    dummy checkout screen writes, so the upgrade flow can be shown and
+  ///    reviewed while the commercial terms are unsettled. Trivially
+  ///    bypassed, and never treated as proof of anything.
+  ///
+  /// Either grants Premium, because the demo has to work. When real billing
+  /// arrives, delete the local branch and this becomes enforcement outright.
+  /// Whether the device-local demo entitlement may grant Premium.
+  ///
+  /// True by default so the dummy checkout screen works while the commercial
+  /// terms are unsettled. Build with `--dart-define=DEMO_PREMIUM=false` and
+  /// ONLY the server-held entitlement counts -- at which point a manipulated
+  /// client flag grants nothing, which is what QA cases PN-SEC-003 and
+  /// PN-NEG-001 are actually asking for.
+  static const bool demoPremiumEnabled = bool.fromEnvironment(
+    'DEMO_PREMIUM',
+    defaultValue: true,
+  );
+
+  /// True if a game was running when the app last closed and enough time has
+  /// not yet passed to consider it stale. Used to offer resume on splash
+  /// restart (§A1 rule / T86).
+  bool get canResumePreviousGame {
+    final closedAt = _previousGameClosedAt;
+    return _previousGameRunning &&
+        closedAt != null &&
+        DateTime.now().difference(closedAt).inMinutes < 30;
+  }
+
+  Future<void> toggleDemoPremium() async {
+    if (premiumTier == PremiumTier.premium) {
+      await Payments.instance.cancel();
+    } else {
+      await Payments.instance.purchase(PremiumPlan.placeholders.first);
+    }
+    await loadPremiumTier();
+  }
+
+  Future<void> loadPremiumTier() async {
+    // Both awaits below sit behind a ternary: with the backend down and
+    // DEMO_PREMIUM off, neither is taken and this method runs start to finish
+    // synchronously — `notifyListeners()` included. UpgradeScreen calls it
+    // from `initState`, so that notification landed mid-build and the
+    // framework threw "setState() or markNeedsBuild() called during build",
+    // blanking the screen. `await null` yields to the microtask queue, which
+    // cannot run until the build phase has finished, so the notification is
+    // always delivered from outside a build no matter which branch is taken.
+    await null;
+    Payments.userId = _repo.currentUid;
+    final server = _backendUp ? await _repo.fetchPremiumEntitlement() : false;
+    final local = demoPremiumEnabled
+        ? await Payments.instance.currentTier()
+        : PremiumTier.free;
+    if (_disposed) return;
+    premiumTier = (server || local == PremiumTier.premium)
+        ? PremiumTier.premium
+        : PremiumTier.free;
+    premiumIsServerGranted = server;
+    notifyListeners();
+  }
+
+  /// True when Premium came from the server rather than the local demo flag.
+  ///
+  /// Screens that need to be honest about this — a settings panel, a support
+  /// view — can say "granted" rather than implying a purchase happened.
+  bool premiumIsServerGranted = false;
+
+  /// Whether this device may host a field of [players] (D4/D5): free stops at
+  /// the second table, so this is "does the field still fit one table".
+  bool canHostPlayers(int players) => Entitlements.canHost(
+    premiumTier,
+    players,
+    maxPerTable: effectiveTableSettings.maxPerTable,
+  );
+
+  /// The host-facing reason [canHostPlayers] said no, or null.
+  String? hostingBlockedReason(int players) =>
+      Entitlements.hostingBlockedReason(
+        premiumTier,
+        players,
+        maxPerTable: effectiveTableSettings.maxPerTable,
+      );
+
   String? lastRsvpError;
 
   /// Last authority whole-document save failure. Non-null means the admin's
@@ -286,13 +525,16 @@ class AppProvider extends ChangeNotifier {
 
   StreamSubscription<dynamic>? _lookupSub;
   StreamSubscription<List<TournamentPreset>>? _presetsSub;
-  StreamSubscription<
-          List<({String id, String name, List<ChipColor> chips})>>?
-      _chipSetsSub;
+  StreamSubscription<List<({String id, String name, List<ChipColor> chips})>>?
+  _chipSetsSub;
   StreamSubscription<List<AppNotification>>? _notificationsSub;
   StreamSubscription<List<GameRequest>>? _requestsSub;
   StreamSubscription<List<CashSession>>? _cashSub;
+  StreamSubscription<List<ChatReport>>? _reportsSub;
+  StreamSubscription<List<ImportedNight>>? _importedSub;
   StreamSubscription<List<GameResultRow>>? _resultsSub;
+  StreamSubscription<List<CashSession>>? _soloSub;
+  StreamSubscription<List<LiveGame>>? _soloTournamentsSub;
   StreamSubscription<List<Map<String, dynamic>>>? _pendingInvitesSub;
 
   /// Live member-rosters per group id, so the index-derived group list on the
@@ -306,14 +548,32 @@ class AppProvider extends ChangeNotifier {
 
   /// This player's lifetime results — aggregated into [_user.stats].
   List<GameResultRow> _myResults = const [];
+  List<GameResultRow> get myResults => _myResults;
+
+  GameResultRow? resultForGame(String gameId) =>
+      _myResults.where((r) => r.gameId == gameId).firstOrNull;
 
   /// Signature of the last stats summary pushed to roster rows (dedupe).
   String? _lastPushedStatsKey;
+  String? _lastInvitePreviewKey;
 
   /// Browser-notification delivery bookkeeping: the first inbox emission is
   /// treated as history (never pushed); afterwards only new unread ids fire.
   final Set<String> _seenNotificationIds = <String>{};
   bool _notificationsPrimed = false;
+
+  /// Tracks scheduled reminders ("Starts in 30 min", RSVP deadline, rebuys closing)
+  /// so each fires at most once per game (free-plan client replacement for Cloud Tasks).
+  final Set<String> _sentReminderKeys = <String>{};
+
+  bool _hasFiredReminder(String key) {
+    if (_sentReminderKeys.contains(key)) return true;
+    if (_notifications.any((n) => n.id.contains(key))) {
+      _sentReminderKeys.add(key);
+      return true;
+    }
+    return false;
+  }
 
   /// Debounces whole-document game saves so rapid admin edits coalesce.
   Timer? _gameSaveDebounce;
@@ -376,6 +636,11 @@ class AppProvider extends ChangeNotifier {
   DateTime? _recoveryTime;
   DateTime? get recoveryTime => _recoveryTime;
 
+  @visibleForTesting
+  void setRestoredFromRecoveryForTesting(bool value) {
+    _restoredFromRecovery = value;
+  }
+
   /// Timestamp of the last non-clock data sync. TV/player/guest views use it
   /// to show "last updated" and distinguish a live feed from a stale one
   /// (checklist 15-039, 18-028, 20-038). Clock ticks do not count as syncs.
@@ -432,7 +697,7 @@ class AppProvider extends ChangeNotifier {
   final Map<String, bool> _adminVerdictByGroup = {};
 
   DateTime? _lastEditorHeartbeatAt;
-  static const Duration _editorHeartbeatInterval = Duration(seconds: 25);
+  static const Duration _editorHeartbeatInterval = Duration(seconds: 30);
 
   /// Resolves `(gid, gameId)` for cloud operations on the active game, or
   /// null when there is nothing to target yet.
@@ -465,7 +730,7 @@ class AppProvider extends ChangeNotifier {
 
   // ── Notification outbox mirror (free-plan fan-out) ─────────────────────────
   final Map<String, StreamSubscription<List<OutboxNotification>>>
-      _groupOutboxSubs = {};
+  _groupOutboxSubs = {};
   final Set<String> _mirroredOutboxIds = <String>{};
   final Map<String, bool> _outboxPrimed = {};
   final Map<String, int> _mirrorCursors = {};
@@ -480,17 +745,23 @@ class AppProvider extends ChangeNotifier {
     if (key == 'colorTheme' || key == 'themePreference') {
       try {
         final db = Localstore.instance;
-        db.collection('app').doc('prefs').set({key: value}, SetOptions(merge: true));
+        db.collection('app').doc('prefs').set({
+          key: value,
+        }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('Failed to save theme to localstore: $e');
       }
     }
-    
+
     final uid = _repo.currentUid;
     if (!_backendUp || uid == null) return;
-    unawaited(_repo
-        .saveUserPref(uid, key, value)
-        .catchError((Object e) => debugPrint('saveUserPref($key) failed: $e')));
+    unawaited(
+      _repo
+          .saveUserPref(uid, key, value)
+          .catchError(
+            (Object e) => debugPrint('saveUserPref($key) failed: $e'),
+          ),
+    );
   }
 
   // ── Chip Sets ──────────────────────────────────────────────────────────────
@@ -499,7 +770,8 @@ class AppProvider extends ChangeNotifier {
   static const seedChipSet = (
     id: 'cs-default',
     name: 'Home Set (4 colour)',
-    chips: MockData.defaultChipSet,
+    // DECISION: Home Set (4 colour) must strictly contain 4 colours (fixes C1 contradictory count).
+    chips: MockData.homeSet4Colour,
   );
 
   final List<({String id, String name, List<ChipColor> chips})> _savedChipSets =
@@ -510,42 +782,77 @@ class AppProvider extends ChangeNotifier {
   /// tournament wizard works out of the box.
   static final List<TournamentPreset> seedPresets = [
     TournamentPreset(
-      id: 'pr-friday',
-      name: 'Friday Night Regular',
-      buyIn: 15,
+      id: 'starter-freezeout',
+      name: 'Classic Freezeout',
+      buyIn: 20,
       koEnabled: false,
       koAmount: 5,
-      rebuys: true,
-      rebuysCloseLevel: 6,
-      reEntry: true,
-      addOn: true,
-      durationHours: 3.5,
-      anteEnabled: true,
-      anteAfterLevel: 6,
-      organizerPct: 10,
-      chipSetName: 'Home Set (4 colour)',
-      chipSet: List.of(MockData.defaultChipSet),
-    ),
-    TournamentPreset(
-      id: 'pr-deep',
-      name: 'Deep Stack Turbo',
-      buyIn: 25,
-      koEnabled: true,
-      koAmount: 10,
       rebuys: false,
-      rebuysCloseLevel: 5,
+      rebuysCloseLevel: 0,
       reEntry: false,
       addOn: false,
-      durationHours: 5,
+      durationHours: 3.0,
       anteEnabled: true,
       anteAfterLevel: 5,
       organizerPct: 0,
       chipSetName: 'Standard 500',
       chipSet: List.of(TournamentEngine.getPreset('Standard 500')),
     ),
+    TournamentPreset(
+      id: 'starter-sprint',
+      name: 'Sprint Turbo',
+      buyIn: 10,
+      koEnabled: false,
+      koAmount: 5,
+      rebuys: true,
+      rebuysCloseLevel: 4,
+      reEntry: true,
+      addOn: false,
+      durationHours: 2.0,
+      anteEnabled: true,
+      anteAfterLevel: 3,
+      organizerPct: 0,
+      chipSetName: 'Home Set (4 colour)',
+      chipSet: List.of(MockData.homeSet4Colour),
+    ),
+    TournamentPreset(
+      id: 'starter-deep',
+      name: 'Deep Stack',
+      buyIn: 25,
+      koEnabled: false,
+      koAmount: 5,
+      rebuys: false,
+      rebuysCloseLevel: 0,
+      reEntry: false,
+      addOn: false,
+      durationHours: 4.5,
+      anteEnabled: true,
+      anteAfterLevel: 6,
+      organizerPct: 0,
+      chipSetName: 'Standard 500',
+      chipSet: List.of(TournamentEngine.getPreset('Standard 500')),
+    ),
+    TournamentPreset(
+      id: 'starter-ko',
+      name: 'KO Bounty',
+      buyIn: 20,
+      koEnabled: true,
+      koAmount: 10,
+      rebuys: true,
+      rebuysCloseLevel: 5,
+      reEntry: true,
+      addOn: true,
+      durationHours: 3.5,
+      anteEnabled: true,
+      anteAfterLevel: 5,
+      organizerPct: 10,
+      chipSetName: 'Standard 500',
+      chipSet: List.of(TournamentEngine.getPreset('Standard 500')),
+    ),
   ];
 
   final List<TournamentPreset> _presets = List.of(seedPresets);
+  String? _defaultGamePresetId;
 
   // ── Group ──────────────────────────────────────────────────────────────────
   /// Neutral placeholder until the first group of the signed-in user is
@@ -570,10 +877,90 @@ class AppProvider extends ChangeNotifier {
   // ── Game ───────────────────────────────────────────────────────────────────
   LiveGame? _currentGame;
 
+  /// In-progress lightweight event posts, keyed by group. The create-event
+  /// screen updates this after every edit so navigating away does not throw
+  /// the host's work away. The same map is mirrored into user preferences
+  /// when a backend session is available.
+  final Map<String, GameSettings> _eventDrafts = {};
+
+  GameSettings? get eventDraftForCurrentGroup => _eventDrafts[_currentGroup.id];
+
+  void saveEventDraft(GameSettings settings) {
+    final groupId = _currentGroup.id;
+    if (groupId.isEmpty) return;
+    _eventDrafts[groupId] = settings;
+    _persistEventDrafts();
+  }
+
+  void clearEventDraft() {
+    final groupId = _currentGroup.id;
+    if (groupId.isEmpty || _eventDrafts.remove(groupId) == null) return;
+    _persistEventDrafts();
+  }
+
+  void _persistEventDrafts() {
+    _persistPref('eventDrafts', {
+      for (final entry in _eventDrafts.entries)
+        entry.key: gameSettingsToMap(entry.value),
+    });
+  }
+
+  /// Elects a single leader among same-browser tabs viewing [_tabLeaderScope]
+  /// (a live game id), so the editor-authority check below cannot let two
+  /// tabs of one browser both act as the single writer. No-op off the web —
+  /// see `services/tab_leader.dart`. Rebound by [_syncTabLeader] whenever the
+  /// open game changes.
+  TabLeader? _tabLeader;
+  String? _tabLeaderScope;
+
+  /// Keeps [_tabLeader] bound to whichever game is currently open, creating
+  /// or replacing it only when the game id actually changes so the election
+  /// (and its in-flight peer list) survives ordinary re-renders.
+  void _syncTabLeader() {
+    final gameId = _currentGame?.id;
+    if (gameId == _tabLeaderScope) return;
+    try {
+      _tabLeader?.dispose();
+      _tabLeaderScope = gameId;
+      _tabLeader = gameId == null ? null : TabLeader(gameId);
+    } catch (e) {
+      // BroadcastChannel is missing on older Safari and blocked in some
+      // embedded contexts. This runs inside notifyListeners(), so letting it
+      // throw would take the UI update with it — and the cost of losing the
+      // election is only that two tabs of one browser can both write again,
+      // which is exactly the behaviour that shipped before it existed. A null
+      // leader reads as "assume leader" at every call site, so the host keeps
+      // control of their own game rather than being locked out of editing.
+      debugPrint('tab leader election unavailable, continuing without it: $e');
+      _tabLeader = null;
+      _tabLeaderScope = gameId;
+    }
+  }
+
   // Undo stack (checklist 12-042/12-043/12-044, technical §11.3). Before every
   // admin mutation we snapshot the previous game; undo pops and restores it.
   static const int _maxUndoDepth = 30;
   final List<LiveGame?> _undoStack = [];
+
+  // ── Pace learning (§10.1) ──────────────────────────────────────────────────
+  /// The longest wall-clock run that can still plausibly be one poker night.
+  /// Anything beyond this is a stale recovery snapshot, not a tournament, and
+  /// must not be recorded as `actualDurationMins` — see
+  /// [AppProviderTournament.measuredWallClockMins].
+  static const int _maxPlausibleGameMins = 24 * 60;
+
+  /// The pace adjustment the host explicitly ACCEPTED for the open tournament,
+  /// or null when they declined or were never asked.
+  ///
+  /// §10.1 is emphatic that the adjustment "is NEVER applied silently", so the
+  /// proposal itself ([AppProviderTournament.paceProposal]) changes nothing;
+  /// only [AppProviderTournament.acceptPaceAdjustment] writes here, and only
+  /// in response to a host action.
+  double? _acceptedPaceAdjustmentPct;
+
+  /// True once the host has answered the §10.1 proposal for the open game
+  /// either way, so a declined proposal is not re-offered on every rebuild.
+  bool _paceProposalAnswered = false;
 
   /// An editor claim older than this is considered stale: any admin device may
   /// take over the single-writer role (90 seconds of silence).
@@ -596,8 +983,11 @@ class AppProvider extends ChangeNotifier {
   /// identity (`action-target-revision+1`) instead of bypassing replay
   /// protection entirely. Returns the new revision and the persistence key
   /// (the caller stores the latter as `lastIdempotencyKey`).
-  (int?, String) _claimIdempotency(String idempotencyKey,
-      {required String action, String target = ''}) {
+  (int?, String) _claimIdempotency(
+    String idempotencyKey, {
+    required String action,
+    String target = '',
+  }) {
     final g = _currentGame;
     if (g == null) return (null, '');
     final key = idempotencyKey.isNotEmpty
@@ -610,6 +1000,7 @@ class AppProvider extends ChangeNotifier {
   // ── Timer ──────────────────────────────────────────────────────────────────
   Timer? _ticker;
   Timer? _serverTimeRecalibration;
+  int _remindersTickCount = 0;
 
   /// Marks already announced per level (checklist 15-047/15-048) so the
   /// five-minute and one-minute warnings fire only once per level.
@@ -662,10 +1053,23 @@ class AppProvider extends ChangeNotifier {
   // ── Cash game ──────────────────────────────────────────────────────────────
   CashSession? _cashSession;
 
+  /// The session as it was before the last buy-in, top-up or cash-out, so the
+  /// toast's Undo (T125) can take it back.
+  CashSession? _cashUndoSnapshot;
+
   /// Completed cash sessions shown in history (checklist 16-002). Cloud-backed
   /// per group via [completedCashSessionsStream]; locally appended when the
   /// backend is unavailable.
   List<CashSession> _cashHistory = const [];
+
+  /// Games finished with no group selected — the "Solo" rows in History.
+  /// Owned by the user, so unlike [_cashHistory] this survives group switches.
+  List<CashSession> _soloHistory = const [];
+  List<LiveGame> _soloTournaments = const [];
+  List<ChatReport> _reports = const [];
+
+  /// Past nights the host imported into the current group (B12).
+  List<ImportedNight> _importedNights = const [];
 
   // ── Notifications ──────────────────────────────────────────────────────────
   /// Replaced by the live inbox stream once user data is subscribed; empty
@@ -674,8 +1078,52 @@ class AppProvider extends ChangeNotifier {
 
   // ── Voice & misc ───────────────────────────────────────────────────────────
   bool _voiceEnabled = true;
+  double _voiceVolume = 1.0;
 
-  bool _showAppTour = true;
+  /// Rule 12 haptics: short vibration on level change on host phone.
+  /// Setting, default on (T107). Pure client-side, persisted per user.
+  bool _hapticsEnabled = true;
+  bool get hapticsEnabled => _hapticsEnabled;
+  void setHapticsEnabled(bool value) {
+    if (_hapticsEnabled == value) return;
+    _hapticsEnabled = value;
+    _persistPref('hapticsEnabled', value);
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Visual-twin sequence counters (Rule 15, client-side only).
+  /// Incremented on level change / warnings; UI listens via notifyListeners
+  /// and pulses clock seconds / flashes level label. Never sound alone.
+  int _levelFlashSeq = 0;
+  int get levelFlashSeq => _levelFlashSeq;
+  int _clockPulseSeq = 0;
+  int get clockPulseSeq => _clockPulseSeq;
+  void bumpLevelFlash() {
+    _levelFlashSeq++;
+    if (!_disposed) notifyListeners();
+  }
+
+  void bumpClockPulse() {
+    _clockPulseSeq++;
+    if (!_disposed) notifyListeners();
+  }
+
+  /// D9 consent (§F2 DATA, A4 decision D9): "Keep my game history to improve
+  /// structures". Off unless the user turns it on — the sign-up checkbox is
+  /// unchecked by default (§A4/D9), so the stored default has to match.
+  bool _keepHistoryForStructures = false;
+
+  /// Measured outcomes of completed nights — the Structuring Framework §14
+  /// calibration loop. Device-local: these are this host's own nights, they
+  /// feed this host's own forecasts, and keeping them off Firestore avoids a
+  /// rules change for data nobody else reads.
+  ///
+  /// Only written when [_keepHistoryForStructures] is on (D9).
+  final List<CalibrationRecord> _calibrationHistory = [];
+
+  /// Enough nights to satisfy §F1's eight-game window several times over
+  /// without the list growing without bound.
+  static const int _maxCalibrationRecords = 24;
 
   // Audio Master (checklist 15-041/15-042/15-043, User Flow §7.4): the chosen
   // speaking device now lives on the GAME (`LiveGame.audioMasterDeviceId`) and
@@ -714,19 +1162,101 @@ class AppProvider extends ChangeNotifier {
   /// Maximum message length (checklist 08-009).
   static const int maxChatMessageLength = 1000;
 
+  /// What §G2.3 row 6's throttle says when it refuses a message (spec §22).
+  ///
+  /// Named rather than inlined at the refusal because it is also what the UI
+  /// shows and what the tests assert, and a hand-copied literal in either place
+  /// drifts — it already had drifted once, on the dash.
+  static const String chatThrottleMessage =
+      'You are sending messages too quickly — wait a moment and try again.';
+
   // ── Admin verdict (shared by every domain; the class body needs it too) ────
   /// True when the signed-in user administers the current group (owner or a
   /// member row flagged `isAdmin`). Resilient to the transient empty-group
   /// window via [_adminVerdictByGroup].
+  /// What the signed-in user is, for the tournament in front of them (§28).
+  Actor get currentActor => Permissions.actorFor(
+    user: _user,
+    group: _currentGroup,
+    game: _currentGame,
+    isGuestSession: hasGuestSession,
+  );
+
+  /// Whether the signed-in user may run the CURRENT tournament — an admin
+  /// anywhere, or an organizer assigned to this one (§3, §28).
+  ///
+  /// This is what the live controls should ask, rather than `isAdmin`: an
+  /// organizer exists precisely so the host can hand over a night without
+  /// handing over the group.
+  bool get canRunCurrentGame =>
+      Permissions.can(Capability.runThisTournament, currentActor);
+
+  /// Whether the signed-in user may see this tournament's private money.
+  /// §28's one conditional cell: an organizer, but only for their own game.
+  bool get canSeePrivateFinancials =>
+      Permissions.can(Capability.viewPrivateFinancials, currentActor);
+
+  /// True when the signed-in user is an assigned organizer for the active game.
+  bool get isCurrentGameOrganizer =>
+      _currentGame != null &&
+      _user != null &&
+      _currentGame!.isOrganizer(_user!.id);
+
+  /// Structure edits require host authority (§3, §12).
+  bool get canEditStructure => isAdmin;
+
+  /// Assigns or removes a tournament organizer (§3).
+  ///
+  /// Admin only — §28 puts organizer management alongside the other
+  /// group-level rights an organizer does not get, so an organizer cannot
+  /// appoint another.
+  void setTournamentOrganizer(String userId, {required bool assigned}) {
+    final game = _currentGame;
+    if (game == null || !isAdmin) return;
+    if (game.isOrganizer(userId) == assigned) return;
+
+    // D7: a guest can never be an organizer. §32 fixes guests as
+    // event-scoped, and an organizer must be assignable, auditable and
+    // accountable across check-in, seating and money — which needs an account,
+    // not a name in a slot.
+    final member = _currentGroup.members.any((m) => m.id == userId);
+    if (assigned && !member) {
+      lastRsvpError =
+          'Only a group member can run a tournament. Ask them to join first.';
+      if (!_disposed) notifyListeners();
+      return;
+    }
+
+    _pushUndo();
+    _currentGame = game.copyWith(
+      organizerIds: assigned
+          ? [...game.organizerIds, userId]
+          : game.organizerIds.where((id) => id != userId).toList(),
+    );
+    final name =
+        _currentGroup.members.where((m) => m.id == userId).firstOrNull?.name ??
+        userId;
+    addAuditRecord(
+      assigned ? 'organizer_assigned' : 'organizer_removed',
+      assigned
+          ? '$name was made organizer of this tournament.'
+          : '$name is no longer organizer of this tournament.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
   bool get isAdmin {
     final user = _user;
     if (user == null) return false;
     final group = _currentGroup;
     final gid = _currentGroupId ?? group.id;
     final resolvable =
-        group.id.isNotEmpty && (group.ownerId.isNotEmpty || group.members.isNotEmpty);
+        group.id.isNotEmpty &&
+        (group.ownerId.isNotEmpty || group.members.isNotEmpty);
     if (resolvable) {
-      final verdict = group.ownerId == user.id ||
+      final verdict =
+          group.ownerId == user.id ||
           group.members.any((m) => m.id == user.id && m.isAdmin);
       if (gid.isNotEmpty) _adminVerdictByGroup[gid] = verdict;
       return verdict;
@@ -739,19 +1269,77 @@ class AppProvider extends ChangeNotifier {
     return false;
   }
 
+  /// Whether the signed-in user runs the table: the group host, or a member
+  /// the host has made co-host.
+  ///
+  /// "Admin" is not a role here — the glossary fixes it as host or co-host —
+  /// and D15 gives the co-host the operational half of the night: bust, rebuy,
+  /// pause, approve check-ins, run the clock. So "may I run this game" is not
+  /// [isAdmin]: asking that alone shuts the co-host out of screens C6 and
+  /// C-ops explicitly open to them.
+  bool get isHostOrCoHost => isAdmin || isCoAdmin;
+
+  @visibleForTesting
+  void setUserForTesting(AppUser? user) {
+    _user = user;
+    if (!_disposed) notifyListeners();
+  }
+
+  @visibleForTesting
+  void setCurrentGroupForTesting(Group group) {
+    _currentGroup = group;
+    _currentGroupId = group.id;
+    // A test hands over a complete bundle, so it counts as loaded: otherwise
+    // every hub screen renders its bundle-loading state forever in tests.
+    _bundleLoaded = true;
+    if (!_disposed) {
+      notifyListeners();
+    }
+  }
+
+  @visibleForTesting
+  void setGroupsForTesting(List<Group> groups, {String? currentGroupId}) {
+    _groups = List<Group>.of(groups);
+    final selectedId = currentGroupId ?? groups.firstOrNull?.id;
+    _currentGroupId = selectedId;
+    _currentGroup =
+        groups.where((group) => group.id == selectedId).firstOrNull ??
+        AppProvider._kEmptyGroup;
+    _bundleLoaded = selectedId != null;
+    if (!_disposed) notifyListeners();
+  }
+
+  @visibleForTesting
+  void setCurrentGameForTesting(LiveGame? game) {
+    _currentGame = game;
+    if (!_disposed) notifyListeners();
+  }
+
+  @visibleForTesting
+  void setCashSessionForTesting(CashSession? session) {
+    _cashSession = session;
+    if (!_disposed) notifyListeners();
+  }
+
   /// Application-level UI state (no business logic / backend).
   AppProvider({String? initialColorTheme, String? initialThemePreference}) {
-    if (initialColorTheme != null) _colorTheme = initialColorTheme;
-    if (initialThemePreference != null) _themePreference = initialThemePreference;
+    if (initialColorTheme != null) {
+      _colorTheme = initialColorTheme;
+    }
+    if (initialThemePreference != null) {
+      _themePreference = initialThemePreference;
+    }
     _currentGame = null;
     AppProviderTimer(this)._startTick();
     AppProviderUserData(this)._loadRecovery();
+    _hydratePendingSettlements();
     _initConnectivity();
     // Firebase may be unavailable (widget tests run before initializeApp);
     // degrade gracefully by marking auth resolved so route guards open up.
     try {
       _authSub = _repo.authStateChanges().listen(
-          (u) => AppProviderAuth(this)._onAuthStateChanged(u));
+        (u) => AppProviderAuth(this)._onAuthStateChanged(u),
+      );
     } catch (_) {
       _backendUp = false;
       _authReady = true;
@@ -807,10 +1395,13 @@ class AppProvider extends ChangeNotifier {
     super.notifyListeners();
     if (_isTickUpdate) return;
     _lastSync = DateTime.now();
+    _syncTabLeader();
     AppProviderCloudSync(this)._syncGameToCloud();
     AppProviderCloudSync(this)._ensureRequestsSubscription();
     final game = _currentGame;
-    if (game == null) {
+    if (game == null ||
+        game.status == LiveGameStatus.completed ||
+        game.status == LiveGameStatus.cancelled) {
       RecoveryService.clearGame();
     } else if (isAdmin) {
       // Crash-resume snapshots belong to the ADMIN only — they are the device
@@ -836,6 +1427,7 @@ class AppProvider extends ChangeNotifier {
     _serverTimeRecalibration?.cancel();
     _authSub?.cancel();
     _connectivitySub?.cancel();
+    _tabLeader?.dispose();
     AppProviderUserData(this)._teardownUserData();
     super.dispose();
   }
@@ -856,5 +1448,6 @@ class GuestCheckInResult {
   /// True when the guest now owns a booking on the slot ([booked] just made
   /// one; [confirmed] reused the one already under their name).
   bool get ok =>
-      status == GuestCheckInStatus.booked || status == GuestCheckInStatus.confirmed;
+      status == GuestCheckInStatus.booked ||
+      status == GuestCheckInStatus.confirmed;
 }

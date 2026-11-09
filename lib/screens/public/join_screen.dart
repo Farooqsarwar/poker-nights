@@ -11,8 +11,14 @@ import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/backgrounds.dart';
+import '../../widgets/app_divider.dart';
+import '../../widgets/app_eyebrow.dart';
 import '../../widgets/brand_lockup.dart';
+import '../../widgets/code_input.dart';
+import '../../widgets/form_screen_header.dart';
+import '../../widgets/onboarding_scaffold.dart';
+import '../../widgets/app_toast.dart';
+import '../../widgets/prompt_link.dart';
 
 /// Unified join screen: enter an invite **code**, paste an invite **link**, or
 /// scan a **QR code** — for games *and* groups, as a guest *or* signed in.
@@ -108,7 +114,8 @@ class _JoinScreenState extends State<JoinScreen> {
           final ok = await app.joinGroup(res.code);
           if (!mounted) return;
           if (ok) {
-            context.go(RoutePaths.members);
+            AppToast.show(context, "You're in");
+            context.go(RoutePaths.home);
           } else {
             _fail("Couldn't join that group — the code may have changed.");
           }
@@ -158,82 +165,35 @@ class _JoinScreenState extends State<JoinScreen> {
       (a) => a.isAuthenticated && !a.isGuest,
     );
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: FeltBackground(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.xxl,
-              vertical: AppSpacing.xl,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: _BackLink(onTap: _back),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    const Center(child: PokerNightLogo(size: 64)),
-                    const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      'Join a game or group',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.display(size: AppFontSizes.xxl),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Enter an invite code, paste an invite link, or scan a QR '
-                      'code from your admin.',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    AppCard(
-                      padding: const EdgeInsets.all(AppSpacing.xl),
-                      child: _groupSignInCode != null
-                          ? _buildSignInToJoin()
-                          : _buildInput(),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    if (!hasAccount && _groupSignInCode == null)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'Have an account? ',
-                            style: AppTypography.bodySm.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                          InkWell(
-                            onTap: () => context.go(RoutePaths.login),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                              child: Text(
-                                'Sign in',
-                                style: AppTypography.bodySm.copyWith(
-                                  color: AppColors.primary,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-            ),
+    return OnboardingScaffold(
+      onBack: _back,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const FormScreenHeader(
+            centered: true,
+            titleSize: 24,
+            leading: PokerNightLogo(size: 52),
+            title: 'Join a game or group',
+            subtitle:
+                'Enter an invite code, paste an invite link, or scan a QR '
+                'code from your host.',
           ),
-        ),
+          const SizedBox(height: AppSpacing.xl),
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: _groupSignInCode != null
+                ? _buildSignInToJoin()
+                : _buildInput(),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (!hasAccount && _groupSignInCode == null)
+            PromptLink(
+              prompt: 'Have an account? ',
+              action: 'Sign in',
+              onTap: () => context.go(RoutePaths.login),
+            ),
+        ],
       ),
     );
   }
@@ -242,94 +202,61 @@ class _JoinScreenState extends State<JoinScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Invite code or link',
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.mutedForeground,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        TextField(
+        const AppEyebrow('Invite code or link', muted: true),
+        const SizedBox(height: AppSpacing.sm),
+        CodeInput(
           controller: _controller,
+          semanticLabel: 'Invite code or link',
           autofocus: widget.initialCode == null,
           enabled: !_busy,
-          textCapitalization: TextCapitalization.characters,
-          textAlign: TextAlign.center,
+          hasError: _error != null,
+          inputFormatters: [LengthLimitingTextInputFormatter(200)],
           onChanged: (_) {
             if (_error != null) setState(() => _error = null);
           },
           onSubmitted: _resolve,
-          inputFormatters: [LengthLimitingTextInputFormatter(200)],
-          style: AppTypography.monoLg.copyWith(letterSpacing: 2),
-          decoration: InputDecoration(
-            counterText: '',
-            hintText: 'CODE',
-            hintStyle: AppTypography.monoLg.copyWith(
-              color: AppColors.onSurfaceHint,
-              letterSpacing: 2,
-            ),
-            isDense: true,
-            filled: true,
-            fillColor: AppColors.background,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 14,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              borderSide: BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              borderSide: BorderSide(color: AppColors.ring),
-            ),
-          ),
         ),
         if (_error != null) ...[
           const SizedBox(height: AppSpacing.sm),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.destructiveText,
+              ),
+            ),
           ),
         ],
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.md),
         AppButton(
           fullWidth: true,
           size: AppButtonSize.lg,
           loading: _busy,
-          onPressed: () => _resolve(_controller.text),
+          onPressed: _busy ? null : () => _resolve(_controller.text),
           child: const Text('Continue'),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        Row(
-          children: [
-            Expanded(child: Divider(color: AppColors.border)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              child: Text(
-                'OR',
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ),
-            Expanded(child: Divider(color: AppColors.border)),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.lg),
+        const AppDivider(label: 'OR', space: AppSpacing.xl),
         AppButton(
           fullWidth: true,
           size: AppButtonSize.lg,
           variant: AppButtonVariant.secondary,
           onPressed: _busy ? null : _scan,
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.qr_code_scanner, size: 18),
-              SizedBox(width: AppSpacing.sm),
-              Text('Scan QR code'),
-            ],
+          // The icon and label together want 220px; a 320px phone leaves the
+          // button 164px inside its own padding. scaleDown shrinks the pair
+          // to fit rather than clipping the label to "Scan QR c…", and does
+          // nothing at any width where the label already fits.
+          child: const FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.qr_code_scanner, size: 18),
+                SizedBox(width: AppSpacing.sm),
+                Text('Scan QR code'),
+              ],
+            ),
           ),
         ),
       ],
@@ -340,19 +267,14 @@ class _JoinScreenState extends State<JoinScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Icon(Icons.groups_outlined, color: AppColors.primary, size: 20),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                'Group invite',
-                style: AppTypography.bodyLg.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
+        const AppEyebrow('Group invite'),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Sign in to join this group',
+          style: AppTypography.display(
+            size: AppFontSizes.lg,
+            weight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
@@ -378,15 +300,19 @@ class _JoinScreenState extends State<JoinScreen> {
           onPressed: () => _goSignIn(RoutePaths.register),
           child: const Text('Create free account'),
         ),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: AppSpacing.xs),
         Center(
           child: InkWell(
             onTap: () => setState(() => _groupSignInCode = null),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.xs),
+              padding: const EdgeInsets.symmetric(
+                vertical: 12,
+                horizontal: 8,
+              ),
               child: Text(
                 'Use a different code',
-                style: AppTypography.bodyXs.copyWith(
+                style: AppTypography.bodySm.copyWith(
                   color: AppColors.mutedForeground,
                 ),
               ),
@@ -394,36 +320,6 @@ class _JoinScreenState extends State<JoinScreen> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _BackLink extends StatelessWidget {
-  const _BackLink({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.arrow_back, size: 16, color: AppColors.mutedForeground),
-            const SizedBox(width: 6),
-            Text(
-              'Back',
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -480,7 +376,16 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
             child: Text(
               'Point your camera at the invite QR code',
               textAlign: TextAlign.center,
-              style: AppTypography.bodySm.copyWith(color: Colors.white70),
+              // This sits over the live camera feed, not over a themed
+              // surface, so it cannot use a palette colour — the backdrop is
+              // whatever the room looks like. Full white plus a drop shadow
+              // instead of white70: 70% white vanishes against a bright wall.
+              style: AppTypography.bodySm.copyWith(
+                color: Colors.white,
+                shadows: const [
+                  Shadow(blurRadius: 4, color: Colors.black87),
+                ],
+              ),
             ),
           ),
         ],

@@ -1,0 +1,11 @@
+# Node
+node_modules/
+
+# Per-run artifacts (screens, traces, reports) — never committed
+.reports/
+test-results/
+probe/out/
+
+# Saved browser profiles / signed-in state for the two QA accounts.
+# These are real production credentials-equivalent — never committed.
+.auth/

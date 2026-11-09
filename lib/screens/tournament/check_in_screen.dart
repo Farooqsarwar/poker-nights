@@ -20,6 +20,21 @@ import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/event_day_checklist.dart';
+import '../../widgets/journey_progress.dart';
+import '../../models/payment_record.dart';
+import '../../models/live_game.dart';
+import '../../utils/formatters.dart';
+import '../../widgets/dummy_payment_sheet.dart';
+
+/// Spec C4/C4p. A 24-hour clock time, "19:50", for the moment the check-in
+/// window opens. Derived from the parsed [GameSettings.scheduledStart] rather
+/// than from the raw configured string, so a host who typed "8:00 PM" is not
+/// told the door opens at "08:00".
+String _clockTime(DateTime dt) {
+  final h = dt.hour.toString().padLeft(2, '0');
+  final m = dt.minute.toString().padLeft(2, '0');
+  return '$h:$m';
+}
 
 enum SeatingMode { random, manual, keepGuests, separateGuests }
 
@@ -52,11 +67,27 @@ class _CheckInScreenState extends State<CheckInScreen> {
   SeatingMode _seatingMode = SeatingMode.random;
   bool _seatingModeInitialized = false;
 
+  /// Addendum section 3's free hosting limit. Read once; the notice below is
+  /// a visible limit and an upgrade path, not enforcement -- section 7 puts
+  /// real Premium authorization on a server that does not exist yet.
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
   /// The checked-in count the split prompt was last shown/dismissed for, so
   /// it doesn't re-open every rebuild once the admin has responded to it at
   /// this count.
   int? _splitPromptRespondedAtCount;
   bool _splitPromptShowing = false;
+
+  /// True while [AppProvider.startTournament] is in flight.
+  ///
+  /// Starting freezes the head-count and starts the clock — the single most
+  /// consequential action in the app, and the one the host is most likely to
+  /// tap twice, because they are standing at a table with everyone waiting.
+  bool _starting = false;
 
   /// Once seating is generated the count naturally sits at/above the
   /// threshold on every rebuild; only prompt before that first generation.
@@ -107,8 +138,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 child: AppButton(
                   onPressed: () {
                     _splitPromptRespondedAtCount = checkedInCount;
-                    app.generateSeating(_seatingMode.tableMode);
-                    Navigator.of(context).pop();
+                    if (checkedInCount >= 2) {
+                                  app.generateSeating(_seatingMode.tableMode);
+                                  Navigator.of(context).pop();
+                                }
                   },
                   child: const Text('Generate seating'),
                 ),
@@ -136,7 +169,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
             children: [
               Text(
                 'Register someone who showed up without an RSVP or a guest slot. '
-                'This is an admin override \u2014 the normal guest invite flow is bypassed. '
+                'This is a host override \u2014 the normal guest invite flow is bypassed. '
                 'They are checked in immediately and seated with the next seating generation.',
                 style: AppTypography.bodySm.copyWith(
                   color: AppColors.mutedForeground,
@@ -148,7 +181,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
               // this banner makes the timing visible to the admin.
               Builder(builder: (ctx) {
                 final app = ctx.read<AppProvider>();
-                if (!app.lateRegistrationOpen) {
+                final g = app.currentGame;
+                if (g != null && g.registrationClosed) {
                   return const AppAlertBanner(
                     type: AppAlertType.error,
                     message:
@@ -158,10 +192,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 return const AppAlertBanner(
                   type: AppAlertType.warning,
                   message:
-                      'Admin override: this skips the normal guest slot flow.',
+                      'Host override: this skips the normal guest slot flow.',
                 );
               }),
-              const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.lg),
               AppTextField(
                 controller: controller,
                 label: 'Name',
@@ -180,15 +214,21 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
-                    child: AppButton(
-                      onPressed: name.isEmpty || !app.lateRegistrationOpen
-                          ? null
-                          : () {
-                              app.addWalkInPlayer(name);
-                              Navigator.of(context).pop();
-                            },
-                      child: const Text('Check in'),
-                    ),
+                    child: Builder(builder: (btnCtx) {
+                      final a = btnCtx.read<AppProvider>();
+                      final g = a.currentGame;
+                      final closed =
+                          g == null || g.registrationClosed;
+                      return AppButton(
+                        onPressed: name.isEmpty || closed
+                            ? null
+                            : () {
+                                app.addWalkInPlayer(name);
+                                Navigator.of(context).pop();
+                              },
+                        child: const Text('Check in'),
+                      );
+                    }),
                   ),
                 ],
               ),
@@ -203,11 +243,11 @@ class _CheckInScreenState extends State<CheckInScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
-    final isAdmin = app.isAdmin;
+    final canRunClock = app.canRunCurrentGame;
 
-    // Seating setup is admin-only. Players see their seat from the invitation
+    // Seating setup is host/co-host-only. Players see their seat from the invitation
     // screen, never this setup UI (client feedback 07-018).
-    if (!isAdmin) {
+    if (!canRunClock) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) context.go(RoutePaths.invitation);
       });
@@ -226,10 +266,15 @@ class _CheckInScreenState extends State<CheckInScreen> {
       _seatingModeInitialized = true;
       _seatingMode = app.effectiveTableSettings.randomizeByDefault
           ? SeatingMode.random
-          : SeatingMode.manual;
+          : (app.isPremium ? SeatingMode.manual : SeatingMode.random);
     }
 
     final players = game.players;
+    // Spec C4/C4p — resolved once here so the banner, the countdown and the
+    // provider share one answer. `DateTime.now()` is read per build and the
+    // screen rebuilds on any provider write, so the banner cannot claim a
+    // window is shut after it opened without something prompting a frame.
+    final checkIn = game.checkInWindowAt(DateTime.now());
     final checkedIn = players.where((p) => p.checkedIn && p.confirmed).toList();
     final notCheckedIn = players
         .where((p) => !p.checkedIn && !p.isGuest)
@@ -243,13 +288,6 @@ class _CheckInScreenState extends State<CheckInScreen> {
     final confirmedGuests = players
         .where((p) => p.isGuest && p.confirmed)
         .toList();
-    // Every guest who asked for a seat must be accepted or declined before the
-    // tournament can start (admin RSVP review gate).
-    final pendingGuestRequests = players
-        .where((p) => p.isGuest && !p.confirmed && p.name.trim().isNotEmpty)
-        .toList();
-    final canStart =
-        checkedIn.length >= 2 && pendingGuestRequests.isEmpty;
     final seatedYet = checkedIn.any((p) => p.table > 0 && p.seat > 0);
     final seatingConfirmed = game.seatingConfirmed;
     // Event-day preparation checklist (user-flow spec §4.6): admin-only and
@@ -278,6 +316,12 @@ class _CheckInScreenState extends State<CheckInScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          JourneyProgress(
+            game: game,
+            currentRoute: RoutePaths.checkIn,
+            onStepTap: (route) => context.go(route),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
               AppBackButton(onTap: () => context.go(RoutePaths.invitation)),
@@ -303,6 +347,87 @@ class _CheckInScreenState extends State<CheckInScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          if (game.settings.earlyArrivalBonusEnabled) ...[
+            AppCard(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.md,
+              ),
+              child: Text(
+                'Early arrival bonus: checked in and approved before the scheduled start earns +${(((game.settings.earlyArrivalBonusPctOverride ?? 0.125) * 100).toStringAsFixed(1))}% chips.',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+          // Spec C4/C4p. The host is not the one opening the door — the window
+          // opens by itself 10 minutes before the start — so this says which
+          // side of it the room is on, and counts down, instead of leaving a
+          // host who arrived early wondering why nobody can check in yet.
+          if (checkIn.opensAt != null) ...[
+            AppCard(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.md,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    checkIn.isOpen
+                        ? Icons.lock_open_outlined
+                        : Icons.lock_outline,
+                    size: 20,
+                    color: checkIn.isOpen
+                        ? AppColors.successText
+                        : AppColors.mutedForeground,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          checkIn.isOpen
+                              ? 'Check-in is open'
+                              : 'Check-in opens at ${_clockTime(checkIn.opensAt!)}',
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: checkIn.isOpen
+                                ? AppColors.successText
+                                : AppColors.foreground,
+                          ),
+                        ),
+                        Text(
+                          checkIn.isOpen
+                              ? 'Members can check themselves in now.'
+                              : '10 minutes before the start, automatically.',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!checkIn.isOpen) ...[
+                    const SizedBox(width: AppSpacing.md),
+                    // Small red text, per the screen conventions.
+                    ExcludeSemantics(
+                      child: Text(
+                        Formatters.time(checkIn.secondsUntilOpen),
+                        style: AppTypography.monoSm.copyWith(
+                          color: AppColors.redText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // Event-day preparation (user-flow spec §4.6) — always the first
           // card so the admin never has to remember the sequence. We are on
           // the check-in screen itself, so step 2 has no open action.
@@ -326,32 +451,113 @@ class _CheckInScreenState extends State<CheckInScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _InlineStat(
-                  label: 'Checked in',
-                  value: '${checkedIn.length}/${players.length}',
-                  color: AppColors.success,
+                Expanded(
+                  child: _InlineStat(
+                    label: 'Checked in',
+                    value: '${checkedIn.length}/${players.length}',
+                    color: AppColors.success,
+                  ),
                 ),
                 Container(width: 1, height: 24, color: AppColors.border),
-                _InlineStat(
-                  label: 'Pending',
-                  value: '${pendingRequests.length}',
-                  color: AppColors.warning,
+                Expanded(
+                  child: _InlineStat(
+                    label: 'Pending',
+                    value: '${pendingRequests.length}',
+                    color: AppColors.warning,
+                  ),
                 ),
                 Container(width: 1, height: 24, color: AppColors.border),
-                _InlineStat(
-                  label: 'Not arrived',
-                  value: '${notCheckedIn.length}',
-                  color: AppColors.mutedForeground,
+                Expanded(
+                  child: _InlineStat(
+                    label: 'Not arrived',
+                    value: '${notCheckedIn.length}',
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: AppSpacing.lg),
+          // Section 6 -- the four head-count concepts, and the lock that makes
+          // physical preparation safe. Chips get counted into stacks against a
+          // number; once that has happened, a late RSVP must not quietly move
+          // it. Locking freezes the figure the structure is built from, and
+          // any subsequent drift is REPORTED rather than applied.
+          _HeadcountCard(
+            planned: app.plannedHeadcount(game),
+            locked: game.settings.lockedExpectedPlayers,
+            drift: app.lockedHeadcountDrift(game),
+            checkedIn: checkedIn.length,
+            onLock: () => app.lockExpectedPlayers(),
+            onUnlock: app.unlockExpectedPlayers,
+          ),
+          // Addendum section 3: free hosting covers one table, up to nine
+          // players. Surfaced HERE as well as at creation, because this is
+          // where the count actually crosses the line -- a host who set up for
+          // eight and had two more turn up finds out at the door, not after
+          // starting.
+          //
+          // A notice, not a block. Section 3's monetization principle keeps
+          // core tournament operation free, and refusing to check somebody in
+          // at the table would be a worse product than telling the host their
+          // night now needs two tables.
+          // Read live rather than cached: the user can upgrade from the
+          // button below this gate, and on returning the gate must be
+          // gone. A tier snapshotted in initState would still say Free.
+          if (app.hostingBlockedReason(checkedIn.length)
+              case final blocked?) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.workspace_premium,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      blocked,
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.foreground,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  AppButton(
+                    size: AppButtonSize.sm,
+                    onPressed: () => context.push(RoutePaths.upgrade),
+                    child: const Text('See Premium'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           if (pendingRequests.isNotEmpty) ...[
             AppAlertBanner(
               type: AppAlertType.warning,
               message:
                   '${pendingRequests.length} player${pendingRequests.length > 1 ? 's' : ''} waiting for confirmation',
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Align(
+              alignment: Alignment.centerRight,
+              child: AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => app.confirmAllPendingRequests(),
+                child: const Text('Confirm all'),
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
           ],
@@ -371,30 +577,28 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     ),
                   ),
                 ),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  child: Container(
-                    color: AppColors.card,
-                    child: Column(
-                      children: [
-                        for (final g in pendingRequests)
-                          _PendingGuestRow(
-                            key: ValueKey('pending-${g.id}'),
-                            guest: g,
-                            inviter: g.isGuest
-                                ? players
-                                      .where((p) => p.id == g.inviterId)
-                                      .firstOrNull
-                                : null,
-                            onConfirm: () => g.isGuest
-                                ? app.confirmGuest(g.id)
-                                : app.checkInPlayer(g.id),
-                            onReject: () => g.isGuest
-                                ? app.rejectGuest(g.id)
-                                : app.cancelCheckIn(g.id),
-                          ),
-                      ],
-                    ),
+                AppCard(
+                  padding: EdgeInsets.zero,
+                  borderColor: AppColors.warning.withValues(alpha: 0.3),
+                  child: Column(
+                    children: [
+                      for (final g in pendingRequests)
+                        _PendingGuestRow(
+                          key: ValueKey('pending-${g.id}'),
+                          guest: g,
+                          inviter: g.isGuest
+                              ? players
+                                    .where((p) => p.id == g.inviterId)
+                                    .firstOrNull
+                              : null,
+                          onConfirm: () => g.isGuest
+                              ? app.confirmGuest(g.id)
+                              : app.checkInPlayer(g.id),
+                          onReject: () => g.isGuest
+                              ? app.rejectGuest(g.id)
+                              : app.cancelCheckIn(g.id),
+                        ),
+                    ],
                   ),
                 ),
               ],
@@ -416,23 +620,21 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   ),
                 ),
               ),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                child: Container(
-                  color: AppColors.card,
-                  child: Column(
-                    children: [
-                      for (final p in players.where((p) => !p.isGuest))
-                        Container(
-                          key: ValueKey('player-${p.id}'),
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppSpacing.sm,
-                            horizontal: AppSpacing.md,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border(bottom: BorderSide(color: AppColors.border)),
-                          ),
-                          child: Row(
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    for (final p in players.where((p) => !p.isGuest))
+                      Container(
+                        key: ValueKey('player-${p.id}'),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.sm,
+                          horizontal: AppSpacing.md,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border(bottom: BorderSide(color: AppColors.border)),
+                        ),
+                        child: Row(
                             children: [
                               AppAvatar(name: p.name, size: AppAvatarSize.sm),
                               const SizedBox(width: AppSpacing.md),
@@ -462,11 +664,21 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                   variant: AppButtonVariant.secondary,
                                   onPressed: game.checkInClosed
                                       ? null
-                                      : () => app.checkInPlayer(p.id),
+                                      : () => _acceptWithBuyIn(
+                                            context,
+                                            app,
+                                            game,
+                                            p,
+                                          ),
                                   child: Text(
                                     game.checkInClosed
                                         ? 'Check-in closed'
-                                        : 'Accept check-in',
+                                        : game.hasPaid(
+                                            p.id,
+                                            PaymentPurpose.buyIn,
+                                          )
+                                            ? 'Accept check-in'
+                                            : 'Take buy-in',
                                   ),
                                 )
                               else if (p.id == app.user?.id)
@@ -495,7 +707,6 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     ],
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -569,13 +780,16 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   crossAxisSpacing: AppSpacing.sm,
                   childAspectRatio: 2.4,
                   children: [
-                    for (final mode in SeatingMode.values)
+                    // D4: seating and TDA balancing are part of the free
+                    // tournament engine — never Premium-gated.
+                    // Spec O6: Manual seating is not shown until O6 is approved.
+                    for (final mode in SeatingMode.values.where((m) => m != SeatingMode.manual || app.isPremium))
                       _SeatingOption(
                         label: mode.label,
                         active: _seatingMode == mode,
                         onTap: () {
                           setState(() => _seatingMode = mode);
-                          app.generateSeating(mode.tableMode);
+                          if (checkedIn.length >= 2) app.generateSeating(mode.tableMode);
                         },
                       ),
                   ],
@@ -634,7 +848,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                         crossAxisCount: 3,
                                         mainAxisSpacing: AppSpacing.sm,
                                         crossAxisSpacing: AppSpacing.sm,
-                                        childAspectRatio: 1.6,
+                                        // Taller than square: label + name (+ guest
+                                        // line) must fit at 320px without a
+                                        // bottom overflow.
+                                        childAspectRatio: 1.1,
                                       ),
                                   itemCount: byTable[table]!.length,
                                   itemBuilder: (context, i) {
@@ -661,6 +878,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                         ),
                                       ),
                                       child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Text(
                                             isDealer
@@ -677,7 +896,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                                       : null,
                                                 ),
                                           ),
-                                          const SizedBox(height: 2),
+                                          const SizedBox(height: AppSpacing.xxs),
                                           Text(
                                             p.name,
                                             style: AppTypography.bodySm
@@ -735,7 +954,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     Expanded(
                       child: AppButton(
                         variant: AppButtonVariant.secondary,
-                        onPressed: game.rebuysClosed
+                        onPressed: game.registrationClosed
                             ? null
                             : () => _showWalkInModal(context, app),
                         child: const Text('Walk-in'),
@@ -743,7 +962,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     ),
                   ],
                 ),
-                if (game.rebuysClosed) ...[
+                if (game.registrationClosed) ...[
                   const SizedBox(height: AppSpacing.sm),
                   AppAlertBanner(
                     type: AppAlertType.warning,
@@ -793,7 +1012,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     'Seating has been generated but not yet confirmed.',
                     textAlign: TextAlign.center,
                     style: AppTypography.bodySm.copyWith(
-                      color: AppColors.warning,
+                      color: AppColors.warningText,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -833,7 +1052,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     child: Text(
                       'Seating confirmed. You can start the game.',
                       style: AppTypography.bodySm.copyWith(
-                        color: AppColors.success,
+                        color: AppColors.successText,
                       ),
                     ),
                   ),
@@ -860,13 +1079,36 @@ class _CheckInScreenState extends State<CheckInScreen> {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: AppButton(
-                  onPressed: canStart && seatingConfirmed
-                      ? () {
-                          app.updateEventSettings(
-                            game.settings.copyWith(players: checkedIn.length),
-                          );
-                          app.startTimer();
-                          context.go(RoutePaths.adminDashboard);
+                  // The real start action: [AppProvider.startBlockedReason]
+                  // is the single precondition gate, [startTournament] freezes
+                  // the head-count and starts the timer, then the host lands
+                  // on the live dashboard so they are not left staring at the
+                  // check-in desk.
+                  loading: _starting,
+                  onPressed: app.startBlockedReason == null
+                      ? () async {
+                          if (_starting) return;
+                          setState(() => _starting = true);
+                          final started = await app.startTournament();
+                          if (!mounted) return;
+                          setState(() => _starting = false);
+                          if (!context.mounted) return;
+                          if (started) {
+                            context.go(RoutePaths.hostDashboard);
+                          } else {
+                            // The structure regenerated for the final head-
+                            // count can't be dealt from this chip case: stay
+                            // here (never open the dashboard on a placeholder
+                            // ladder) and point at the card that explains it.
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Can’t start: the chip case can’t '
+                                  'fund this night. Open Structure to fix it.',
+                                ),
+                              ),
+                            );
+                          }
                         }
                       : null,
                   child: FittedBox(
@@ -875,15 +1117,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          pendingGuestRequests.isNotEmpty
-                              ? 'Review ${pendingGuestRequests.length} guest request${pendingGuestRequests.length == 1 ? '' : 's'} first'
-                              : !canStart
-                              ? 'Need at least 2 checked in'
-                              : !seatingConfirmed
-                              ? 'Confirm seating first'
-                              : 'Start with ${checkedIn.length} players',
+                          app.startBlockedReason ??
+                              'Start with ${checkedIn.length} players',
                         ),
-                        if (canStart && seatingConfirmed) ...[
+                        if (app.startBlockedReason == null) ...[
                           const SizedBox(width: 6),
                           Icon(
                             Icons.arrow_forward,
@@ -919,17 +1156,24 @@ class _InlineStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
           value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: AppTypography.monoXl.copyWith(
             fontWeight: FontWeight.w700,
             color: color,
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: AppSpacing.xxs),
         Text(
           label.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: AppTypography.bodyXs.copyWith(
             color: AppColors.mutedForeground,
             letterSpacing: 1.0,
@@ -998,7 +1242,7 @@ class _PendingGuestRow extends StatelessWidget {
             tooltip: 'Confirm',
           ),
           IconButton(
-            icon: Icon(Icons.cancel_outlined, color: AppColors.destructive),
+            icon: Icon(Icons.cancel_outlined, color: AppColors.destructiveText),
             onPressed: onReject,
             tooltip: 'Reject',
           ),
@@ -1041,6 +1285,148 @@ class _SeatingOption extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
+      ),
+    );
+  }
+}
+
+
+/// Accepts a check-in, collecting the buy-in first if it is still owed.
+///
+/// QA case PN-DPAY-001 and section 14: money is collected, then the player is
+/// official. Confirming first and collecting after would let a host start a
+/// tournament whose prize pool does not match who is sitting at the table.
+///
+/// A player who has already paid — cash at the door, recorded earlier, or a
+/// re-confirmation — skips straight through rather than being asked twice.
+/// A declined or cancelled payment leaves them pending, which is the correct
+/// state: present, not yet settled.
+void _acceptWithBuyIn(
+  BuildContext context,
+  AppProvider app,
+  LiveGame game,
+  Player player,
+) {
+  if (game.hasPaid(player.id, PaymentPurpose.buyIn)) {
+    app.checkInPlayer(player.id);
+    return;
+  }
+  showDummyPaymentSheet(
+    context: context,
+    playerId: player.id,
+    playerName: player.name,
+    purpose: PaymentPurpose.buyIn,
+    onSettled: (record) {
+      if (record?.status == PaymentStatus.paid) app.checkInPlayer(player.id);
+    },
+  );
+}
+
+/// Section 6's head-count panel: what we are preparing for, whether it is
+/// frozen, and how far RSVPs have drifted since it was.
+class _HeadcountCard extends StatelessWidget {
+  const _HeadcountCard({
+    required this.planned,
+    required this.locked,
+    required this.drift,
+    required this.checkedIn,
+    required this.onLock,
+    required this.onUnlock,
+  });
+
+  final int planned;
+  final int? locked;
+  final int? drift;
+  final int checkedIn;
+  final VoidCallback onLock;
+  final VoidCallback onUnlock;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLocked = locked != null;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isLocked ? Icons.lock_outline : Icons.lock_open_outlined,
+                size: 16,
+                color: isLocked
+                    ? AppColors.primary
+                    : AppColors.mutedForeground,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  isLocked
+                      ? 'Preparing for $locked players'
+                      : 'Preparing for $planned players',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              AppButton(
+                size: AppButtonSize.sm,
+                variant: isLocked
+                    ? AppButtonVariant.secondary
+                    : AppButtonVariant.primary,
+                onPressed: isLocked ? onUnlock : onLock,
+                child: Text(isLocked ? 'Unlock' : 'Lock for prep'),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            isLocked
+                ? 'Locked. Late RSVP changes will not move this number or '
+                      'rebuild the structure.'
+                : 'Following RSVPs. Lock it once you have counted chips into '
+                      'stacks.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          // Drift is surfaced, never applied -- that is the whole point of
+          // the lock. The host decides whether to re-lock.
+          if (isLocked && drift != null && drift != 0) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Text(
+                drift! > 0
+                    ? 'RSVPs have grown by $drift since you locked. Unlock and '
+                          'lock again to prepare for the larger field.'
+                    : 'RSVPs have dropped by ${-drift!} since you locked. The '
+                          'preparation is unchanged.',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.foreground,
+                ),
+              ),
+            ),
+          ],
+          if (checkedIn > 0) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              // Section 6: the START CTA uses actual checked-in, not this.
+              '$checkedIn checked in so far — the start button uses that '
+              'count, not the prepared one.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

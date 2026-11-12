@@ -263,11 +263,14 @@ class StructureFeasibilityCard extends StatelessWidget {
   }
 
   String _overrunNote() {
-    final over = structure.paceOverByMins;
+    // The structure's own finish time is the number the host sees above, so
+    // quote that rather than a separate solver figure that can disagree.
     final pace = structure.pace?.label ?? 'this pace';
-    return over > 0
-        ? 'At $pace the levels run about ${_hhmm(over)} past the time you '
-            'set. Pick a later finish, a faster pace, or fewer chips in play.'
+    final finish = structure.expectedFinishMins;
+    return finish > 0
+        ? 'At $pace this structure takes about ${_hhmm(finish)}, which is past '
+            'the time you set. Pick a later finish, a faster pace, or fewer '
+            'chips in play.'
         : 'At $pace the levels run past the time you set.';
   }
 

@@ -316,6 +316,7 @@ class TournamentParams {
     this.forceStack,
     this.targetDepthBB,
     this.blindFamily = BlindFamily.niceSpec,
+    this.colorUpBreakMins = kColorUpBreakMins,
   });
 
   final int players;
@@ -430,12 +431,16 @@ class TournamentParams {
   /// Host-chosen starting depth in big blinds (F2, client pt 13). When set it
   /// replaces the pace-derived STYLE depth target; pace stays the level-length
   /// axis only. Expected 50–200 in steps of 25.
-  // OWNER-DECISION: depth values (conflict register, pt 13) — turbo 75 / deep
+  // OWNER-DECISION: depth values (conflict register, pt 13) — turbo 50 / deep
   // 150 are not in the spec's DEPTH_BAND (turbo [50,70], deep aim 160).
   final int? targetDepthBB;
 
   /// §F1.6 blind-value family (T3). Default [BlindFamily.niceSpec].
   final BlindFamily blindFamily;
+
+  /// Length of the short break placed before a level that retires a chip
+  /// colour, so the exchange is done in the room's own time (T10). 0 = none.
+  final int colorUpBreakMins;
 
   double get effectiveExpectedRebuyRate =>
       math.max(0, expectedRebuyRate ?? kExpectedRebuyRate);
@@ -598,6 +603,7 @@ class TournamentParams {
     int? forceStack,
     int? targetDepthBB,
     BlindFamily? blindFamily,
+    int? colorUpBreakMins,
   }) =>
       TournamentParams(
         players: players ?? this.players,
@@ -649,6 +655,7 @@ class TournamentParams {
         forceStack: forceStack ?? this.forceStack,
         targetDepthBB: targetDepthBB ?? this.targetDepthBB,
         blindFamily: blindFamily ?? this.blindFamily,
+        colorUpBreakMins: colorUpBreakMins ?? this.colorUpBreakMins,
       );
 }
 
@@ -698,6 +705,11 @@ const List<int> kBreakDurationPresets = [5, 10, 15, 20];
 /// Section 8 of the 10 September specification said 1 or 2; the v11 addendum
 /// raised it to 3.
 const int kMaxScheduledBreaks = 3;
+
+/// Default colour-up break (T10): five minutes, before the level that no
+/// longer needs a chip colour. Separate from the regular 10-minute break and
+/// the add-on break at the rebuy close.
+const int kColorUpBreakMins = 5;
 
 /// How deep the tournament starts, in the v11 addendum's own vocabulary.
 ///

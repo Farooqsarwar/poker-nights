@@ -2779,6 +2779,12 @@ class TournamentEngine {
     // A formal chip race (10-048) is not the default; remainders are rounded
     // up in the player's favour instead.
     final colorUpInstructions = <String>[];
+    // Levels (1-based) from which a chip colour is no longer needed: the
+    // colour-up exchange has to happen BEFORE them, so each gets a short break.
+    final colorUpRetireLevels = <int>[];
+    void buildColorUp() {
+    colorUpInstructions.clear();
+    colorUpRetireLevels.clear();
     if (sortedChips.length >= 2) {
       for (var i = 0; i < sortedChips.length - 1; i++) {
         final chip = sortedChips[i];
@@ -2805,6 +2811,7 @@ class TournamentEngine {
         }
 
         if (retireLevelIdx <= 0) continue;
+        colorUpRetireLevels.add(levels[retireLevelIdx].level);
 
         int gcd(int a, int b) {
           while (b != 0) {
@@ -2822,7 +2829,8 @@ class TournamentEngine {
         // DECISION: Color-up exchanges must multiply out exactly (fixes Dani B2 / M5).
         colorUpInstructions.add(
           'Level ${levels[retireLevelIdx].level}: exchange $fromCount × ${chip.value} ${chip.color} '
-          'chips for $toCount × ${next.value} ${next.color}',
+          'chips for $toCount × ${next.value} ${next.color}'
+          '${params.colorUpBreakMins > 0 ? ' during the ${params.colorUpBreakMins}-minute break before it' : ''}',
         );
       }
       if (colorUpInstructions.isNotEmpty) {
@@ -2832,6 +2840,8 @@ class TournamentEngine {
         );
       }
     }
+    }
+    buildColorUp();
 
     final grossEligible =
         params.buyIn * params.players +
@@ -2868,7 +2878,7 @@ class TournamentEngine {
     // is the post-rebuy hold -- so the two are summed separately rather than
     // conflated. §F1.2 scopes it to the rebuy and re-entry formats.
     final settlementPause = settlementPauseFor(params.effectiveFormat);
-    final expectedFinishMins =
+    var expectedFinishMins =
         plannedMins + settlementPause + scheduledBreakMins;
 
     // Resolve break placement now that the level count is known. A break
@@ -2939,12 +2949,38 @@ class TournamentEngine {
       }
     }
 
-    final resolvedBreaks = _placeBreaks(
+    // Antes may have moved in the pass above, and a chip is retired only when
+    // no later blind OR ante needs it, so work the schedule out from the final
+    // ladder.
+    buildColorUp();
+
+    final placedBreaks = _placeBreaks(
       requested: params.breaks,
       plannedLevels: plannedLevels,
       rebuysEnabled: params.rebuys || params.reEntry,
       rebuysCloseLevel: optimisedRebuyClose,
     );
+    // T10: a short break just before the level where a chip colour stops being
+    // needed, so the exchange happens in the room's own time. A level that
+    // already has a break (add-on, host's own) is reused, not doubled.
+    final colorUpBreakMins = params.colorUpBreakMins;
+    final resolvedBreaks = [...placedBreaks];
+    var colorUpExtraMins = 0;
+    if (colorUpBreakMins > 0) {
+      final seen = <int>{for (final b in placedBreaks) b.afterLevel};
+      for (final lvl in colorUpRetireLevels.toSet().toList()..sort()) {
+        final after = lvl - 1;
+        if (after < 1 || after >= plannedLevels) continue;
+        if (seen.add(after)) {
+          resolvedBreaks.add(
+            ScheduledBreak(afterLevel: after, durationMins: colorUpBreakMins),
+          );
+          colorUpExtraMins += colorUpBreakMins;
+        }
+      }
+      resolvedBreaks.sort((x, y) => x.afterLevel - y.afterLevel);
+    }
+    expectedFinishMins += colorUpExtraMins;
 
     // Addendum section 2 — say, in plain language, what depth was chosen and
     // why. A warning is not an explanation.

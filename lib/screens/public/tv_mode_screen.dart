@@ -421,6 +421,10 @@ class _TVLayoutState extends State<_TVLayout> {
                                   ),
                                 ),
                               ),
+                              if (game.rebuysClosed ||
+                                  game.payoutTableRevealed ||
+                                  game.status == LiveGameStatus.completed)
+                                _PrizePoolStrip(game: game, scale: s),
                               Consumer<AppProvider>(
                                 builder: (_, app, x) {
                                   final lastSync = app.lastGameUpdate;
@@ -891,11 +895,6 @@ class _RotatingPanelState extends State<_RotatingPanel> with SingleTickerProvide
                   game: widget.game,
                   scale: widget.scale,
                 ),
-                2 => _AnnouncementsPanel(
-                  key: const ValueKey(2),
-                  game: widget.game,
-                  scale: widget.scale,
-                ),
                 _ => _UpcomingPanel(
                   key: const ValueKey(3),
                   game: widget.game,
@@ -1159,43 +1158,6 @@ class _UpcomingPanel extends StatelessWidget {
   }
 }
 
-class _AnnouncementsPanel extends StatelessWidget {
-  const _AnnouncementsPanel({super.key, required this.game, this.scale = 1.0});
-
-  final LiveGame game;
-  final double scale;
-
-  @override
-  Widget build(BuildContext context) {
-    final announcements = game.announcements.toList().reversed.take(8).toList();
-    if (announcements.isEmpty) {
-      return Center(
-        child: Text(
-          'No announcements',
-          style: AppTypography.mono(
-            size: 14 * scale,
-            color: AppColors.mutedForeground,
-          ),
-        ),
-      );
-    }
-    return ListView(
-      children: [
-        for (final a in announcements)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(
-              a.text,
-              style: AppTypography.mono(
-                size: 12 * scale,
-                color: AppColors.foreground,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
 
 /// The TV's own display controls (§3 "Advanced TV/display customization",
 /// §8's readability bar).
@@ -1311,8 +1273,8 @@ class _TvSettingsSheetState extends State<_TvSettingsSheet> {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Announcements always show — they are there because the host '
-            'needed to tell the room something.',
+            'Announcements are not shown on the display. The clock and the '
+            'prize pool stay in front.',
             style: AppTypography.bodyXs.copyWith(
               color: AppColors.mutedForeground,
             ),
@@ -1424,4 +1386,49 @@ class _TVPrizePoolBar extends StatelessWidget {
     3 => 'rd',
     _ => 'th',
   };
+}
+
+/// T7: once the rebuy window has closed the prize pool sits permanently at
+/// the bottom of the scoreboard, so it no longer has to wait for its turn in
+/// the rotating panel.
+class _PrizePoolStrip extends StatelessWidget {
+  const _PrizePoolStrip({required this.game, this.scale = 1.0});
+
+  final LiveGame game;
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(
+            game.status == LiveGameStatus.completed
+                ? 'FINAL PRIZE POOL'
+                : 'PRIZE POOL',
+            key: const Key('tv-prize-strip-label'),
+            style: AppTypography.mono(
+              size: 14 * scale,
+              letterSpacing: 2,
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Text(
+            Formatters.prize(game.structure.prizePool),
+            key: const Key('tv-prize-strip-amount'),
+            style: AppTypography.mono(
+              size: 32 * scale,
+              weight: FontWeight.w500,
+              color: AppColors.foreground,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

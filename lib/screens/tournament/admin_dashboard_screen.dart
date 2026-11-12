@@ -1127,18 +1127,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: AppButton(
-                            size: AppButtonSize.lg,
-                            variant: AppButtonVariant.secondary,
-                            onPressed: app.forceEvaluateSpeedRecommendation,
-                            child: const AppIconLabel(
-                              label: 'Recalculate',
-                              icon: Icons.timer_outlined,
+                        // T12: Recalculate only exists once there is something
+                        // to go around - a level the host edited by hand.
+                        if (app.manuallyEditedFutureLevels() > 0) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: AppButton(
+                              key: const Key('dash-recalculate'),
+                              size: AppButtonSize.lg,
+                              variant: AppButtonVariant.secondary,
+                              onPressed: () => _recalculateAroundEdits(app),
+                              child: const AppIconLabel(
+                                label: 'Recalculate',
+                                icon: Icons.timer_outlined,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
@@ -1621,12 +1626,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       SpeedRecommendation.slowDown,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  _buildQuickToolButton(
-                    icon: Icons.timer_outlined,
-                    label: 'Recalculate',
-                    onTap: app.forceEvaluateSpeedRecommendation,
-                  ),
+                  if (app.manuallyEditedFutureLevels() > 0) ...[
+                    const SizedBox(width: 8),
+                    _buildQuickToolButton(
+                      icon: Icons.timer_outlined,
+                      label: 'Recalculate',
+                      onTap: () => _recalculateAroundEdits(app),
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 8),
@@ -2117,6 +2124,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         },
       ),
     );
+  }
+
+  /// T12: rebuild the levels after the current one around the host's own
+  /// edits. Levels already played and the edited levels stay exactly as they
+  /// are; the host sees how many edits are kept before anything moves.
+  Future<void> _recalculateAroundEdits(AppProvider app) async {
+    final kept = app.manuallyEditedFutureLevels();
+    if (kept == 0) return;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Recalculate around your edits?'),
+        content: Text(
+          'The $kept level${kept == 1 ? '' : 's'} you edited by hand '
+          '${kept == 1 ? 'stays' : 'stay'} as ${kept == 1 ? 'it is' : 'they are'}, '
+          'and so do the levels already played. The other levels after the '
+          'current one are rebuilt to fit around '
+          '${kept == 1 ? 'it' : 'them'}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            key: const Key('recalculate-confirm'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Recalculate'),
+          ),
+        ],
+      ),
+    );
+    if (go == true) app.recalculateStructure();
   }
 
   Widget _buildQuickToolButton({

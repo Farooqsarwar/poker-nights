@@ -450,9 +450,8 @@ class _StructureEditorState extends State<StructureEditor> {
 /// Local editable copy of one future level, owning its field controllers so
 /// edits survive rebuilds.
 class _EditableLevel {
-  _EditableLevel({required BlindLevel level, this.breakDurationMins})
-    : level = level,
-      sbValue = level.sb,
+  _EditableLevel({required this.level, this.breakDurationMins})
+    : sbValue = level.sb,
       bbValue = level.bb,
       durationMins = _snapDuration(level.durationMins);
 

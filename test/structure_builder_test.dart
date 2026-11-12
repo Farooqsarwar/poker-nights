@@ -340,7 +340,7 @@ void main() {
       final c = _ctl();
       expect(c.depthBB, 100);
       c.setType(TournamentType.turbo);
-      expect(c.depthBB, 75);
+      expect(c.depthBB, 50);
       c.setType(TournamentType.deep);
       expect(c.depthBB, 150);
       c.useCustomDepth();

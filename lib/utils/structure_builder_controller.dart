@@ -26,10 +26,10 @@ extension TournamentTypeX on TournamentType {
   };
 
   // OWNER-DECISION: depth values per type (conflict register, pt 13) — turbo
-  // 75 / normal 100 / deep 150, the same values the engine's `targetDepthBB`
+  // 50 / normal 100 / deep 150, the same values the engine's `targetDepthBB`
   // marker documents.
   int get depthBB => switch (this) {
-    TournamentType.turbo => 75,
+    TournamentType.turbo => 50,
     TournamentType.normal => 100,
     TournamentType.deep => 150,
   };

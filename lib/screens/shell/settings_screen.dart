@@ -14,6 +14,7 @@ import '../../widgets/app_avatar.dart';
 import '../../widgets/app_tag.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/game_preferences_card.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/app_slider.dart';
 import '../../widgets/app_back_button.dart';
@@ -514,6 +515,19 @@ class SettingsScreen extends StatelessWidget {
           // ink." There is nothing to choose between, so the APPEARANCE
           // section and its theme grid are gone rather than reduced to a
           // single-option picker.
+
+          // GAME PREFERENCES (#23): every default a new game starts from.
+          Text(
+            'GAME PREFERENCES',
+            style: AppTypography.bodyXs.copyWith(
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceHint,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const GamePreferencesCard(),
+          const SizedBox(height: 24),
 
           // ACCOUNT Section
           Text(

@@ -182,6 +182,11 @@ void main() {
                       koEnabled: false,
                       koAmount: 0,
                       organizerPct: 0,
+                      breaks: rebuy
+                          ? const [
+                              ScheduledBreak(afterLevel: 0, durationMins: 10),
+                            ]
+                          : const [],
                       format: rebuy
                           ? TournamentFormat.rebuy
                           : TournamentFormat.freezeOut,
@@ -279,15 +284,13 @@ void main() {
                     }
 
                     if (rebuy) {
-                      final add = s.breaks
-                          .where((b) => b.afterLevel > 0)
-                          .toList();
-                      if (add.isNotEmpty &&
-                          add.first.afterLevel != s.rebuysCloseLevel) {
+                      final addOnBreak = s.breakAfter(s.rebuysCloseLevel);
+                      if (addOnBreak == null || addOnBreak.durationMins != 10) {
                         counts['addonBreakWrong'] =
                             counts['addonBreakWrong']! + 1;
                         samples['addonBreakWrong'] ??=
-                            '$tag break@${add.first.afterLevel} close=${s.rebuysCloseLevel}';
+                            '$tag close=${s.rebuysCloseLevel} '
+                            'break=${addOnBreak?.durationMins}';
                       }
                       final firstAnte = lv.indexWhere((l) => (l.ante ?? 0) > 0);
                       if (ante &&

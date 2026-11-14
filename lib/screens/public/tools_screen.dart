@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
@@ -11,6 +12,8 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
 import '../../models/tournament.dart';
+import '../../models/tournament_preset.dart';
+import '../../providers/app_provider.dart';
 import '../../utils/clock_sequence.dart';
 import '../../utils/formatters.dart';
 import '../../utils/icm.dart';
@@ -480,6 +483,27 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
   @override
   void initState() {
     super.initState();
+    TournamentPreset? preset;
+    try {
+      preset = context.read<AppProvider>().defaultGamePreset;
+    } on ProviderNotFoundException {
+      // DECISION: the public tool also runs without an account/provider, so
+      // that entry point keeps the shipped defaults when no provider exists.
+    }
+    final format =
+        preset?.format ??
+        (preset?.reEntry == true
+            ? TournamentFormat.reEntry
+            : preset?.rebuys == false
+            ? TournamentFormat.freezeOut
+            : TournamentFormat.rebuy);
+    final depth =
+        preset?.targetDepthBB ??
+        switch (preset?.pace) {
+          PaceMode.turbo => TournamentType.turbo.depthBB,
+          PaceMode.deep => TournamentType.deep.depthBB,
+          _ => TournamentType.normal.depthBB,
+        };
     _c = StructureBuilderController(
       mode: BuilderMode.tool,
       chipSet:
@@ -488,10 +512,27 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
           kToolChipSet,
       // §F1.14: no chip case, so the engine runs against a never-binding bank.
       syntheticBank: widget.chipBankOverride == null,
-      players: 9,
-      durationHours: 4,
-      format: TournamentFormat.rebuy,
-      anteEnabled: false,
+      players: preset?.expectedPlayersOverride ?? 9,
+      durationHours: preset?.durationHours ?? 4,
+      buyIn: preset?.buyIn ?? 20,
+      depthBB: depth,
+      levelMins: preset?.levelDurationMins ?? preset?.pace?.levelMinutes ?? 20,
+      format: format,
+      rebuyLimit: preset?.rebuyLimit,
+      rebuyLimitTouched: preset != null,
+      addOn: preset?.addOn ?? true,
+      anteEnabled: preset?.anteEnabled ?? false,
+      anteStyle: preset?.anteStyle ?? AnteStyle.bigBlind,
+      bonusPct: preset?.earlyArrivalBonusEnabled == true
+          ? ((preset?.earlyArrivalBonusPctOverride ?? kEarlyArrivalBonusPct) *
+                    100)
+                .round()
+          : 0,
+      expectedRebuyRate: preset?.expectedRebuyRate,
+      breaks: preset?.breaks ?? const [],
+      colorUpBreakMins: preset?.colorUpBreakMins ?? kColorUpBreakMins,
+      rebuyClose: preset?.rebuysCloseLevel ?? 0,
+      rebuyCloseChosen: preset?.rebuyCloseChosenByOrganizer ?? false,
       startMinutes: _startMinutes,
     );
   }

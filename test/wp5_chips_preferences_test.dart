@@ -13,6 +13,7 @@ import 'package:poker_night/models/user.dart';
 import 'package:poker_night/providers/app_provider.dart';
 import 'package:poker_night/screens/tournament/create_tournament_screen.dart';
 import 'package:poker_night/screens/tournament/quick_start_screen.dart';
+import 'package:poker_night/screens/public/tools_screen.dart';
 import 'package:poker_night/services/payment_service.dart';
 import 'package:poker_night/services/recovery_service.dart';
 import 'package:poker_night/utils/model_codec.dart';
@@ -374,6 +375,32 @@ void main() {
         find.byKey(const Key('opt-buyin')),
       );
       expect(buyIn.initialValue, '44');
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.dispose();
+    });
+
+    testWidgets('selected default seeds the free blind tool', (tester) async {
+      final app = _provider();
+      final selected = _preset(
+        'selected-tool',
+        buyIn: 44,
+        targetDepthBB: 150,
+      ).copyWith(colorUpBreakMins: 0);
+      app.savePreset(selected);
+      app.setDefaultGamePreset(selected.id);
+
+      await _mount(tester, const ToolBlindsScreen(), app: app);
+      final builder = tester.widget<StructureBuilder>(
+        find.byType(StructureBuilder),
+      );
+      expect(builder.controller.buyIn, 44);
+      expect(builder.controller.durationHours, 3.5);
+      expect(builder.controller.depthBB, 150);
+      expect(builder.controller.format, TournamentFormat.rebuy);
+      expect(builder.controller.anteEnabled, isTrue);
+      expect(builder.controller.bonusPct, 15);
+      expect(builder.controller.params.colorUpBreakMins, 0);
+
       await tester.pumpWidget(const SizedBox.shrink());
       app.dispose();
     });

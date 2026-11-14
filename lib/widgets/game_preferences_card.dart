@@ -39,7 +39,7 @@ class GamePreferencesCard extends StatelessWidget {
         : (p.anteStyle == AnteStyle.individual ? 'Individual ante' : 'Big blind ante');
     final bonus = p.earlyArrivalBonusEnabled
         ? (p.earlyArrivalBonusPctOverride != null
-              ? '${p.earlyArrivalBonusPctOverride}% extra chips'
+              ? '${_percent(p.earlyArrivalBonusPctOverride!)}% extra chips'
               : 'On')
         : 'Off';
     final close = p.rebuys
@@ -63,6 +63,10 @@ class GamePreferencesCard extends StatelessWidget {
     PaceMode.deep => 'Deep',
     _ => 'Normal',
   };
+
+  static String _percent(double fraction) => (fraction * 100)
+      .toStringAsFixed(1)
+      .replaceFirst(RegExp(r'\.0$'), '');
 
   @override
   Widget build(BuildContext context) {
@@ -101,6 +105,7 @@ class GamePreferencesCard extends StatelessWidget {
             title: 'Currency',
             value: currency,
             keyName: 'pref-currency',
+            onTap: () => _chooseCurrency(context, app),
             last: true,
           ),
         ],
@@ -218,6 +223,49 @@ class GamePreferencesCard extends StatelessWidget {
                 context.push(RoutePaths.presets);
               },
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _chooseCurrency(BuildContext context, AppProvider app) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.card,
+      builder: (sheet) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text(
+              'Currency',
+              style: AppTypography.bodyLg.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.foreground,
+              ),
+            ),
+            const SizedBox(height: 12),
+            for (final option in const [
+              ('None', ''),
+              ('Euro', '€'),
+              ('US dollar', r'$'),
+              ('Pound sterling', '£'),
+            ])
+              ListTile(
+                key: Key('pref-currency-${option.$1}'),
+                title: Text(
+                  option.$1,
+                  style: TextStyle(color: AppColors.foreground),
+                ),
+                trailing: app.currencySymbol == option.$2
+                    ? Icon(Icons.check, color: AppColors.primary)
+                    : null,
+                onTap: () {
+                  app.setCurrencySymbol(option.$2);
+                  Navigator.of(sheet).pop();
+                },
+              ),
           ],
         ),
       ),

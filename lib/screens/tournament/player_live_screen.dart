@@ -12,6 +12,7 @@ import '../../providers/app_provider.dart';
 import '../../widgets/structure_audit_banner.dart';
 
 import '../../utils/formatters.dart';
+import '../../utils/tv_cast.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_badge.dart';
@@ -302,7 +303,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       AppButton(
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.ghost,
-                        onPressed: () => context.push(RoutePaths.tvMode),
+                        onPressed: () => openTvDisplay(game.tvCode),
                         child: const AppIconLabel(
                           label: 'Cast',
                           icon: Icons.cast,

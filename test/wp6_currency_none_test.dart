@@ -78,7 +78,11 @@ Player _player(int index) => Player(
   active: true,
 );
 
-LiveGame _game({LiveGameStatus status = LiveGameStatus.running}) => LiveGame(
+LiveGame _game({
+  LiveGameStatus status = LiveGameStatus.running,
+  int currentLevel = 3,
+  bool settlementConfirmed = true,
+}) => LiveGame(
   id: 'game-1',
   groupId: 'group-1',
   settings: _settings,
@@ -86,7 +90,7 @@ LiveGame _game({LiveGameStatus status = LiveGameStatus.running}) => LiveGame(
   status: status,
   publicCode: 'ABC123',
   tvCode: 'TV1234',
-  currentLevel: 3,
+  currentLevel: currentLevel,
   timerRunning: false,
   secondsRemaining: 600,
   players: [_player(1), _player(2), _player(3)],
@@ -95,7 +99,7 @@ LiveGame _game({LiveGameStatus status = LiveGameStatus.running}) => LiveGame(
   totalChipsInPlay: 15000,
   pendingGuests: const [],
   finishOrder: const ['p3', 'p2', 'p1'],
-  settlementConfirmed: true,
+  settlementConfirmed: settlementConfirmed,
 );
 
 Group _group(LiveGame game) => Group(
@@ -151,6 +155,46 @@ void main() {
         .map((widget) => widget.data ?? widget.textSpan?.toPlainText() ?? '')
         .join(' ');
     expect(_containsCurrencySymbol(visibleCopy), isFalse);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    app.dispose();
+    tester.view.reset();
+  });
+
+  testWidgets('TV prize pool appears once only after play has closed rebuys', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+
+    Future<AppProvider> pumpGame(LiveGame game) async {
+      final app = AppProvider()..setCurrentGameForTesting(game);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppProvider>.value(
+          value: app,
+          child: const MaterialApp(home: TVModeScreen()),
+        ),
+      );
+      await tester.pump();
+      return app;
+    }
+
+    var app = await pumpGame(_game(status: LiveGameStatus.ready));
+    expect(find.byKey(const Key('tv-prize-strip-amount')), findsNothing);
+
+    final readyApp = app;
+    app = await pumpGame(
+      _game(currentLevel: 1, settlementConfirmed: false),
+    );
+    readyApp.dispose();
+    expect(find.byKey(const Key('tv-prize-strip-amount')), findsNothing);
+
+    final openApp = app;
+    app = await pumpGame(_game());
+    openApp.dispose();
+    expect(find.byKey(const Key('tv-prize-strip-label')), findsOneWidget);
+    expect(find.byKey(const Key('tv-prize-strip-amount')), findsOneWidget);
+    expect(find.text('1,234'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     app.dispose();

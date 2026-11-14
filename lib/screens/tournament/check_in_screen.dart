@@ -24,6 +24,7 @@ import '../../widgets/journey_progress.dart';
 import '../../models/payment_record.dart';
 import '../../models/live_game.dart';
 import '../../utils/formatters.dart';
+import '../../utils/tv_cast.dart';
 import '../../widgets/dummy_payment_sheet.dart';
 
 /// Spec C4/C4p. A 24-hour clock time, "19:50", for the moment the check-in
@@ -435,7 +436,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
             EventDayChecklist(
               game: game,
               onOpenCheckIn: null,
-              onOpenTvMode: () => context.go(RoutePaths.tvMode),
+              onOpenTvMode: () => openTvDisplay(game.tvCode),
               onTestVoice: () {
                 VoiceService.instance.speak('Voice test.');
               },
@@ -972,7 +973,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 const SizedBox(height: AppSpacing.sm),
                 AppButton(
                   variant: AppButtonVariant.ghost,
-                  onPressed: () => context.go(RoutePaths.tvMode),
+                  onPressed: () => openTvDisplay(game.tvCode),
                   child: const AppIconLabel(
                     label: 'Show assignment on TV',
                     icon: Icons.tv_outlined,

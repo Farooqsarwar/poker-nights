@@ -17,6 +17,7 @@ import '../../widgets/premium_gate.dart';
 import '../../services/entitlements.dart';
 import '../../responsive/responsive.dart';
 import '../../utils/formatters.dart';
+import '../../utils/tv_cast.dart';
 import '../../utils/payout_bridge.dart';
 import '../../utils/payouts_engine.dart';
 import '../../widgets/app_alert_banner.dart';
@@ -609,7 +610,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
-                      onPressed: () => context.push(RoutePaths.tvMode),
+                      onPressed: () => openTvDisplay(game.tvCode),
                       child: const AppIconLabel(
                         label: 'Cast',
                         icon: Icons.cast,
@@ -1671,7 +1672,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   _buildQuickToolButton(
                     icon: Icons.cast,
                     label: 'Cast',
-                    onTap: () => context.push(RoutePaths.tvMode),
+                    onTap: () => openTvDisplay(game.tvCode),
                   ),
                 ],
               ),
@@ -2607,7 +2608,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   onTap: () {
                     Navigator.pop(ctx);
-                    context.push(RoutePaths.tvMode);
+                    openTvDisplay(game.tvCode);
                   },
                 ),
                 ListTile(

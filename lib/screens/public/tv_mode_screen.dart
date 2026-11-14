@@ -421,10 +421,6 @@ class _TVLayoutState extends State<_TVLayout> {
                                   ),
                                 ),
                               ),
-                              if (game.rebuysClosed ||
-                                  game.payoutTableRevealed ||
-                                  game.status == LiveGameStatus.completed)
-                                _PrizePoolStrip(game: game, scale: s),
                               Consumer<AppProvider>(
                                 builder: (_, app, x) {
                                   final lastSync = app.lastGameUpdate;
@@ -511,19 +507,22 @@ class _TVLayoutState extends State<_TVLayout> {
               },
             ),
           ),
-          // T7: Prize pool shown at the bottom after rebuy close / settlement confirmed.
-          if (game.payoutTableRevealed && game.structure.prizes.isNotEmpty)
-            _buildPrizePoolBar(game),
+          // DECISION: keep one shared strip outside the responsive layouts so
+          // desktop and phone show the same value in exactly one place.
+          if (_showPrizePool(game)) _PrizePoolStrip(game: game),
         ],
         ),
       ),
     );
   }
 
-  // T7: Prize pool shown at the bottom after rebuy close / settlement confirmed.
-  Widget _buildPrizePoolBar(LiveGame game) {
-    return _TVPrizePoolBar(game: game);
-  }
+  bool _showPrizePool(LiveGame game) =>
+      game.rebuysClosed &&
+      game.status != LiveGameStatus.draft &&
+      game.status != LiveGameStatus.published &&
+      game.status != LiveGameStatus.checkin &&
+      game.status != LiveGameStatus.ready &&
+      game.status != LiveGameStatus.cancelled;
 
   String _formatLastSync(DateTime dt) {
     final diff = DateTime.now().difference(dt);
@@ -771,7 +770,7 @@ class _RotatingPanel extends StatefulWidget {
 class _RotatingPanelState extends State<_RotatingPanel> with SingleTickerProviderStateMixin {
   static const _titles = [
     'LEADERBOARD',
-    'PRIZE POOL',
+    'PAYOUTS',
     'ANNOUNCEMENTS',
     'UPCOMING',
   ];
@@ -1000,28 +999,6 @@ class _PayoutsPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            Formatters.prize(game.structure.prizePool),
-            textAlign: TextAlign.center,
-            style: AppTypography.mono(
-              size: 42 * scale,
-              weight: FontWeight.w300,
-              color: AppColors.foreground,
-            ),
-          ),
-          Text(
-            game.status == LiveGameStatus.completed
-                ? 'FINAL PRIZE POOL'
-                : game.prizePoolLabel.toUpperCase(),
-            textAlign: TextAlign.center,
-            style: AppTypography.mono(
-              size: 12 * scale,
-              letterSpacing: 2,
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
           if (game.payoutTableRevealed) ...[
             Divider(height: 1, color: AppColors.border),
             const SizedBox(height: AppSpacing.sm),
@@ -1262,7 +1239,7 @@ class _TvSettingsSheetState extends State<_TvSettingsSheet> {
             onChanged: (v) => _set(_d.copyWith(showLeaderboard: v)),
           ),
           _PanelToggle(
-            label: 'Prize pool',
+            label: 'Payouts',
             value: _d.showPayouts,
             onChanged: (v) => _set(_d.copyWith(showPayouts: v)),
           ),
@@ -1335,67 +1312,13 @@ class _PanelToggle extends StatelessWidget {
 }
 
 
-/// T7: Prize pool strip at the bottom of TV mode after rebuy close.
-class _TVPrizePoolBar extends StatelessWidget {
-  const _TVPrizePoolBar({required this.game});
-
-  final LiveGame game;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'PRIZE POOL: ${Formatters.prize(game.structure.prizes.fold<int>(0, (sum, p) => sum + p.amount))}  ·  ',
-              style: AppTypography.monoSm.copyWith(
-                fontWeight: FontWeight.w700,
-                color: AppColors.foreground,
-              ),
-            ),
-            for (var i = 0; i < game.structure.prizes.length && i < 4; i++) ...[
-              if (i > 0) const SizedBox(width: AppSpacing.md),
-              Text(
-                '${i + 1}${_ordinal(i + 1)}: ${Formatters.prize(game.structure.prizes[i].amount)}',
-                style: AppTypography.monoXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _ordinal(int n) => switch (n) {
-    1 => 'st',
-    2 => 'nd',
-    3 => 'rd',
-    _ => 'th',
-  };
-}
-
 /// T7: once the rebuy window has closed the prize pool sits permanently at
 /// the bottom of the scoreboard, so it no longer has to wait for its turn in
 /// the rotating panel.
 class _PrizePoolStrip extends StatelessWidget {
-  const _PrizePoolStrip({required this.game, this.scale = 1.0});
+  const _PrizePoolStrip({required this.game});
 
   final LiveGame game;
-  final double scale;
 
   @override
   Widget build(BuildContext context) {
@@ -1412,7 +1335,7 @@ class _PrizePoolStrip extends StatelessWidget {
                 : 'PRIZE POOL',
             key: const Key('tv-prize-strip-label'),
             style: AppTypography.mono(
-              size: 14 * scale,
+              size: 14,
               letterSpacing: 2,
               color: AppColors.mutedForeground,
             ),
@@ -1422,7 +1345,7 @@ class _PrizePoolStrip extends StatelessWidget {
             Formatters.prize(game.structure.prizePool),
             key: const Key('tv-prize-strip-amount'),
             style: AppTypography.mono(
-              size: 32 * scale,
+              size: 32,
               weight: FontWeight.w500,
               color: AppColors.foreground,
             ),

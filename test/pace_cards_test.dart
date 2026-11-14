@@ -224,6 +224,7 @@ void main() {
       bool feasible = true,
       bool fits = true,
       int overBy = 0,
+      int expectedFinishMins = 240,
       int? maxPlayers,
       String? note,
     }) =>
@@ -236,7 +237,7 @@ void main() {
           addOnChipPlan: const [],
           levels: const [],
           levelDuration: 20,
-          expectedFinishMins: 240,
+          expectedFinishMins: expectedFinishMins,
           prizes: const [],
           prizePool: 0,
           organizerAmount: 0,
@@ -299,9 +300,67 @@ void main() {
       );
       expect(find.text('This structure runs past your finish time'),
           findsOneWidget);
-      expect(find.textContaining('1h30'), findsOneWidget);
+      expect(find.textContaining('4h'), findsOneWidget);
       // The chip-case buttons belong to the blocking case only.
       expect(find.text('Play a freeze-out'), findsNothing);
+    });
+
+    testWidgets('overrun copy quotes the structure finish in three scenarios',
+        (tester) async {
+      final chips = TournamentEngine.getPreset('Home Set (4 colour)');
+      TournamentParams params({bool hostClose = false}) => TournamentParams(
+            players: 9,
+            durationHours: 4,
+            buyIn: 20,
+            chipSet: chips,
+            rebuys: hostClose,
+            rebuysCloseLevel: hostClose ? 4 : 0,
+            rebuyCloseChosenByOrganizer: hostClose,
+            addOn: hostClose,
+            anteEnabled: true,
+            anteAfterLevel: 6,
+            koEnabled: false,
+            koAmount: 0,
+            organizerPct: 0,
+            pace: PaceMode.regular,
+          );
+
+      String hhmm(int minutes) {
+        final h = minutes ~/ 60;
+        final m = minutes % 60;
+        if (h == 0) return '$m min';
+        return m == 0 ? '${h}h' : '${h}h${m.toString().padLeft(2, '0')}';
+      }
+
+      for (final generated in [
+        TournamentEngine.generate(params()),
+        TournamentEngine.generate(params(hostClose: true)),
+      ]) {
+        expect(generated.breaks, isNotEmpty);
+        final overrun = generated.copyWith(fits: false, paceOverByMins: 30);
+        await pump(
+          tester,
+          StructureFeasibilityCard(structure: overrun, players: 9),
+        );
+        expect(
+          find.textContaining(hhmm(generated.expectedFinishMins)),
+          findsOneWidget,
+        );
+      }
+
+      await pump(
+        tester,
+        StructureFeasibilityCard(
+          structure: structure(
+            fits: false,
+            overBy: 30,
+            expectedFinishMins: 0,
+          ),
+          players: 9,
+        ),
+      );
+      expect(find.textContaining('levels run past the time you set'),
+          findsOneWidget);
     });
 
     testWidgets('offers the field reduction only when the engine sized it',

@@ -23,10 +23,10 @@ void main() {
       sources.where((source) => source == '/assets/**/*.@(ttf|otf|png)'),
       hasLength(1),
     );
-    expect(sources.indexOf('/canvaskit/**'), lessThan(sources.indexOf('**')));
+    expect(sources.indexOf('/canvaskit/**'), greaterThan(sources.indexOf('**')));
     expect(
       sources.indexOf('/assets/**/*.@(ttf|otf|png)'),
-      lessThan(sources.indexOf('**')),
+      greaterThan(sources.indexOf('**')),
     );
 
     String cacheControl(String source) {

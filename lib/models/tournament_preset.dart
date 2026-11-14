@@ -24,6 +24,7 @@ class TournamentPreset {
     this.addOnOvertime = false,
     this.addOnCloseLevel = 6,
     this.breaks = const [],
+    this.colorUpBreakMins = kColorUpBreakMins,
     required this.durationHours,
     required this.anteEnabled,
     required this.anteAfterLevel,
@@ -86,6 +87,7 @@ class TournamentPreset {
     addOnOvertime: settings.addOnOvertime,
     addOnCloseLevel: settings.addOnCloseLevel,
     breaks: settings.breaks,
+    colorUpBreakMins: settings.colorUpBreakMins,
     durationHours: settings.durationHours,
     anteEnabled: settings.anteEnabled,
     anteAfterLevel: settings.anteAfterLevel,
@@ -147,6 +149,7 @@ class TournamentPreset {
 
   /// Scheduled breaks remembered with the preset (section 8).
   final List<ScheduledBreak> breaks;
+  final int colorUpBreakMins;
 
   final double durationHours;
   final bool anteEnabled;
@@ -212,6 +215,7 @@ class TournamentPreset {
     addOnOvertime: addOnOvertime,
     addOnCloseLevel: addOnCloseLevel,
     breaks: List.of(breaks),
+    colorUpBreakMins: colorUpBreakMins,
     durationHours: durationHours,
     anteEnabled: anteEnabled,
     anteAfterLevel: anteAfterLevel,
@@ -287,6 +291,7 @@ class TournamentPreset {
     bool? addOnOvertime,
     int? addOnCloseLevel,
     List<ScheduledBreak>? breaks,
+    int? colorUpBreakMins,
     double? durationHours,
     bool? anteEnabled,
     int? anteAfterLevel,
@@ -345,6 +350,7 @@ class TournamentPreset {
       addOnOvertime: addOnOvertime ?? this.addOnOvertime,
       addOnCloseLevel: addOnCloseLevel ?? this.addOnCloseLevel,
       breaks: breaks ?? this.breaks,
+      colorUpBreakMins: colorUpBreakMins ?? this.colorUpBreakMins,
       durationHours: durationHours ?? this.durationHours,
       anteEnabled: anteEnabled ?? this.anteEnabled,
       anteAfterLevel: anteAfterLevel ?? this.anteAfterLevel,

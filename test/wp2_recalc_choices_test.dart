@@ -190,4 +190,44 @@ void main() {
       app.dispose();
     });
   });
+
+  group('dashboard Recalculate preserves live state', () {
+    test('played, running and manually edited future levels stay exact', () {
+      final original = _game(_settings(close: 6, chosen: true));
+      final changed = [
+        for (final level in original.structure.levels)
+          if (level.level <= 3)
+            level.copyWith(
+              durationMins: level.durationMins + 1,
+              manuallyEdited: true,
+            )
+          else if (level.level == 5)
+            level.copyWith(durationMins: 27, manuallyEdited: true)
+          else
+            level,
+      ];
+      final live = original.copyWith(
+        status: LiveGameStatus.running,
+        currentLevel: 3,
+        secondsRemaining: 321,
+        structure: original.structure.copyWith(levels: changed),
+      );
+      final before = live.structure.levels;
+      final app = _provider(live);
+
+      expect(app.manuallyEditedFutureLevels(), 1);
+      app.recalculateStructure();
+      final after = app.currentGame!;
+
+      expect(after.structure.levels.take(3), before.take(3));
+      expect(after.structure.levels[4], before[4]);
+      expect(after.secondsRemaining, 321);
+      expect(after.currentLevel, 3);
+      expect(after.structure.breaks, isNotEmpty,
+          reason: 'replacing levels must not discard colour-up breaks');
+      expect(after.structure.colorUpInstructions, isNotEmpty);
+      expect(after.structure.plannedLevels, greaterThan(0));
+      app.dispose();
+    });
+  });
 }

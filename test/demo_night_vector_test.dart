@@ -57,6 +57,8 @@ void main() {
         addOnTakeUpRate: 0.7,
         earlyArrivalBonusEnabled: true,
         earlyArrivalBonusPctOverride: 0.125,
+        // Keep the pre-WP11 worked vector byte-for-byte comparable.
+        colorUpBreakMins: 0,
       );
 
   group('§F1.15 — the demo night, exactly as specified', () {

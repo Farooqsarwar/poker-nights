@@ -977,22 +977,7 @@ extension AppProviderTournament on AppProvider {
     TournamentStructure s,
     List<BlindLevel> levels,
   ) {
-    return TournamentStructure(
-      startingStack: s.startingStack,
-      chipPlan: s.chipPlan,
-      rebuyStack: s.rebuyStack,
-      rebuyChipPlan: s.rebuyChipPlan,
-      addOnStack: s.addOnStack,
-      addOnChipPlan: s.addOnChipPlan,
-      levels: levels,
-      levelDuration: s.levelDuration,
-      expectedFinishMins: s.expectedFinishMins,
-      prizes: s.prizes,
-      prizePool: s.prizePool,
-      organizerAmount: s.organizerAmount,
-      colorUpInstructions: s.colorUpInstructions,
-      warnings: s.warnings,
-    );
+    return s.copyWith(levels: levels);
   }
 
   /// Regenerates the whole structure for the actual confirmed attendance
@@ -1115,6 +1100,7 @@ extension AppProviderTournament on AppProvider {
         rebuyCost: s.rebuyCost,
         addOnCost: s.addOnCost,
         breaks: s.breaks,
+        colorUpBreakMins: s.colorUpBreakMins,
         expectedRebuys: s.expectedRebuys,
         rebuyLimit: s.rebuyLimit,
         expectedReEntries: s.expectedReEntries,
@@ -1441,6 +1427,7 @@ extension AppProviderTournament on AppProvider {
         rebuyCost: s.rebuyCost,
         addOnCost: s.addOnCost,
         breaks: s.breaks,
+        colorUpBreakMins: s.colorUpBreakMins,
         expectedRebuys: s.expectedRebuys,
         rebuyLimit: s.rebuyLimit,
         expectedRebuyRate: s.expectedRebuyRate,
@@ -1692,6 +1679,7 @@ extension AppProviderTournament on AppProvider {
         rebuyCost: newSettings.rebuyCost,
         addOnCost: newSettings.addOnCost,
         breaks: newSettings.breaks,
+        colorUpBreakMins: newSettings.colorUpBreakMins,
         expectedRebuys: newSettings.expectedRebuys,
         rebuyLimit: newSettings.rebuyLimit,
         expectedReEntries: newSettings.expectedReEntries,
@@ -1763,6 +1751,21 @@ extension AppProviderTournament on AppProvider {
       );
     }
 
+    if (game.stacksLocked) {
+      // DECISION: Recalculate may reshape only future play. Completed rows and
+      // the running row are historical/live state and therefore stay exact.
+      final frozen = min(
+        game.currentLevel,
+        min(game.structure.levels.length, structure.levels.length),
+      );
+      structure = structure.copyWith(
+        levels: [
+          ...game.structure.levels.take(frozen),
+          ...structure.levels.skip(frozen),
+        ],
+      );
+    }
+
     final newLevel = game.currentLevel.clamp(1, structure.levels.length);
     // §11.4: same rule as [generateFinalStructure] — this path (recalculate,
     // the T-minus-10 recalculation, and the firm regeneration `startTimer`
@@ -1777,7 +1780,9 @@ extension AppProviderTournament on AppProvider {
       settings: newSettings,
       structure: structure,
       currentLevel: newLevel,
-      secondsRemaining: structure.levels[newLevel - 1].durationMins * 60,
+      secondsRemaining: game.stacksLocked
+          ? game.secondsRemaining
+          : structure.levels[newLevel - 1].durationMins * 60,
       speedRecommendation: null,
       clearSpeedRecommendation: true,
       shootoutStage: shootoutStage,

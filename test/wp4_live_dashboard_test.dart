@@ -159,6 +159,7 @@ Future<void> _unmount(
   await tester.pumpWidget(const SizedBox.shrink());
   router.dispose();
   app.dispose();
+  await tester.pump(const Duration(milliseconds: 1));
   tester.view.resetPhysicalSize();
   tester.view.resetDevicePixelRatio();
 }
@@ -288,6 +289,72 @@ void main() {
     expect(app.currentGame!.activePlayers, hasLength(4));
     expect(app.currentGame!.activePlayers.last.name, 'Walk-in');
     expect(app.currentGame!.totalChipsInPlay, 20000);
+  });
+
+  testWidgets('Recalculate is gated and Cancel leaves edits untouched', (
+    tester,
+  ) async {
+    final edited = _structure.copyWith(
+      levels: [
+        _structure.levels[0],
+        _structure.levels[1].copyWith(manuallyEdited: true),
+        _structure.levels[2],
+      ],
+    );
+    final app = _provider(_game().copyWith(structure: edited));
+    final router = await _mount(
+      tester,
+      app,
+      size: const Size(1200, 1800),
+    );
+    final before = List<BlindLevel>.from(app.currentGame!.structure.levels);
+
+    expect(find.byKey(const Key('dash-recalculate')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('dash-recalculate')));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.textContaining('The 1 level you edited by hand stays as it is'),
+        findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(app.currentGame!.structure.levels, before);
+
+    await tester.tap(find.byKey(const Key('dash-recalculate')));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.tap(find.byKey(const Key('recalculate-confirm')));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(app.currentGame!.structure.levels[1], before[1]);
+
+    await _unmount(tester, app, router);
+  });
+
+  testWidgets('mobile Recalculate uses plural copy and hides with no edits', (
+    tester,
+  ) async {
+    final plainApp = _provider(_game());
+    var router = await _mount(tester, plainApp);
+    expect(find.text('Recalculate'), findsNothing);
+    await _unmount(tester, plainApp, router);
+
+    final edited = _structure.copyWith(
+      levels: [
+        _structure.levels[0],
+        _structure.levels[1].copyWith(manuallyEdited: true),
+        _structure.levels[2].copyWith(manuallyEdited: true),
+      ],
+    );
+    final app = _provider(_game().copyWith(structure: edited));
+    router = await _mount(tester, app);
+    expect(find.text('Recalculate'), findsOneWidget);
+    await tester.tap(find.text('Recalculate'));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(
+      find.textContaining('The 2 levels you edited by hand stay as they are'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pump(const Duration(milliseconds: 350));
+
+    await _unmount(tester, app, router);
   });
 
   testWidgets('Pause and Next stay directly below the compact scoreboard', (

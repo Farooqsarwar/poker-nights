@@ -387,6 +387,7 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
   'expectedPlayersOverride': s.expectedPlayersOverride,
   'lockedExpectedPlayers': s.lockedExpectedPlayers,
   'breaks': s.breaks.map(scheduledBreakToMap).toList(),
+  'colorUpBreakMins': s.colorUpBreakMins,
   'expectedRebuys': s.expectedRebuys,
   'expectedRebuyRate': s.expectedRebuyRate,
   'forceStack': s.forceStack,
@@ -476,6 +477,9 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
   breaks: _mapList(
     m['breaks'] as List? ?? const [],
   ).map(scheduledBreakFromMap).toList(),
+  // Games written before WP11 use the shipped five-minute default.
+  colorUpBreakMins:
+      (m['colorUpBreakMins'] as num?)?.toInt() ?? kColorUpBreakMins,
   // All absent on anything written before the host could override them,
   // and null is exactly "use the engine default" — so an old document
   // regenerates to the same structure it always did.
@@ -1029,6 +1033,7 @@ Map<String, dynamic> tournamentPresetToMap(TournamentPreset p) => {
   'addOnOvertime': p.addOnOvertime,
   'addOnCloseLevel': p.addOnCloseLevel,
   'breaks': p.breaks.map(scheduledBreakToMap).toList(),
+  'colorUpBreakMins': p.colorUpBreakMins,
   'durationHours': p.durationHours,
   'anteEnabled': p.anteEnabled,
   'anteAfterLevel': p.anteAfterLevel,
@@ -1100,6 +1105,8 @@ TournamentPreset tournamentPresetFromMap(
   breaks: _mapList(
     m['breaks'] as List? ?? const [],
   ).map(scheduledBreakFromMap).toList(),
+  colorUpBreakMins:
+      (m['colorUpBreakMins'] as num?)?.toInt() ?? kColorUpBreakMins,
   durationHours: (m['durationHours'] as num?)?.toDouble() ?? 3,
   anteEnabled: (m['anteEnabled'] as bool?) ?? false,
   anteAfterLevel: (m['anteAfterLevel'] as num?)?.toInt() ?? 0,

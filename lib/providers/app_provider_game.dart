@@ -600,6 +600,7 @@ extension AppProviderGame on AppProvider {
             rebuyCost: s.rebuyCost,
             addOnCost: s.addOnCost,
             breaks: s.breaks,
+            colorUpBreakMins: s.colorUpBreakMins,
             expectedRebuys: s.expectedRebuys,
             rebuyLimit: s.rebuyLimit,
             expectedRebuyRate: s.expectedRebuyRate,

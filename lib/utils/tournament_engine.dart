@@ -2783,63 +2783,63 @@ class TournamentEngine {
     // colour-up exchange has to happen BEFORE them, so each gets a short break.
     final colorUpRetireLevels = <int>[];
     void buildColorUp() {
-    colorUpInstructions.clear();
-    colorUpRetireLevels.clear();
-    if (sortedChips.length >= 2) {
-      for (var i = 0; i < sortedChips.length - 1; i++) {
-        final chip = sortedChips[i];
-        final next = sortedChips[i + 1];
-        if (chip.value <= 0 || next.value <= 0) continue;
+      colorUpInstructions.clear();
+      colorUpRetireLevels.clear();
+      if (sortedChips.length >= 2) {
+        for (var i = 0; i < sortedChips.length - 1; i++) {
+          final chip = sortedChips[i];
+          final next = sortedChips[i + 1];
+          if (chip.value <= 0 || next.value <= 0) continue;
 
-        // A chip is retired only when no later blind or ante needs it (fixes Dani B2 / M5).
-        var retireLevelIdx = -1;
-        for (var l = 1; l < levels.length; l++) {
-          var neededLater = false;
-          for (var j = l; j < levels.length; j++) {
-            final lvl = levels[j];
-            if (lvl.sb % next.value != 0 ||
-                lvl.bb % next.value != 0 ||
-                ((lvl.ante ?? 0) > 0 && lvl.ante! % next.value != 0)) {
-              neededLater = true;
+          // A chip is retired only when no later blind or ante needs it (fixes Dani B2 / M5).
+          var retireLevelIdx = -1;
+          for (var l = 1; l < levels.length; l++) {
+            var neededLater = false;
+            for (var j = l; j < levels.length; j++) {
+              final lvl = levels[j];
+              if (lvl.sb % next.value != 0 ||
+                  lvl.bb % next.value != 0 ||
+                  ((lvl.ante ?? 0) > 0 && lvl.ante! % next.value != 0)) {
+                neededLater = true;
+                break;
+              }
+            }
+            if (!neededLater) {
+              retireLevelIdx = l;
               break;
             }
           }
-          if (!neededLater) {
-            retireLevelIdx = l;
-            break;
+
+          if (retireLevelIdx <= 0) continue;
+          colorUpRetireLevels.add(levels[retireLevelIdx].level);
+
+          int gcd(int a, int b) {
+            while (b != 0) {
+              final t = b;
+              b = a % b;
+              a = t;
+            }
+            return a;
           }
+
+          final g = gcd(chip.value, next.value);
+          final fromCount = next.value ~/ g;
+          final toCount = chip.value ~/ g;
+
+          // DECISION: Color-up exchanges must multiply out exactly (fixes Dani B2 / M5).
+          colorUpInstructions.add(
+            'Level ${levels[retireLevelIdx].level}: exchange $fromCount × ${chip.value} ${chip.color} '
+            'chips for $toCount × ${next.value} ${next.color}'
+            '${params.colorUpBreakMins > 0 ? ' during the ${params.colorUpBreakMins}-minute break before it' : ''}',
+          );
         }
-
-        if (retireLevelIdx <= 0) continue;
-        colorUpRetireLevels.add(levels[retireLevelIdx].level);
-
-        int gcd(int a, int b) {
-          while (b != 0) {
-            final t = b;
-            b = a % b;
-            a = t;
-          }
-          return a;
+        if (colorUpInstructions.isNotEmpty) {
+          colorUpInstructions.add(
+            'Remaining low-value chips at the final colour-up are rounded up in '
+            'the player\'s favour, adding the small increase to total chips in play.',
+          );
         }
-
-        final g = gcd(chip.value, next.value);
-        final fromCount = next.value ~/ g;
-        final toCount = chip.value ~/ g;
-
-        // DECISION: Color-up exchanges must multiply out exactly (fixes Dani B2 / M5).
-        colorUpInstructions.add(
-          'Level ${levels[retireLevelIdx].level}: exchange $fromCount × ${chip.value} ${chip.color} '
-          'chips for $toCount × ${next.value} ${next.color}'
-          '${params.colorUpBreakMins > 0 ? ' during the ${params.colorUpBreakMins}-minute break before it' : ''}',
-        );
       }
-      if (colorUpInstructions.isNotEmpty) {
-        colorUpInstructions.add(
-          'Remaining low-value chips at the final colour-up are rounded up in '
-          'the player\'s favour, adding the small increase to total chips in play.',
-        );
-      }
-    }
     }
     buildColorUp();
 

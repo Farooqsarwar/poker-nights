@@ -127,6 +127,7 @@ abstract final class StructureVerification {
           rebuyCost: s.rebuyCost,
           addOnCost: s.addOnCost,
           breaks: s.breaks,
+          colorUpBreakMins: s.colorUpBreakMins,
           // Generation inputs, so they belong in the recomputation. Unlike the
           // organizer cut above these are not private — they are printed on
           // the structure sheet every player can see — and leaving them out

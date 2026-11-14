@@ -42,6 +42,8 @@ void main() {
     koAmount: 0,
     organizerPct: 10,
     breaks: breaks,
+    // This suite isolates host-scheduled breaks from WP11 colour-up breaks.
+    colorUpBreakMins: 0,
   );
 
   group('§29 gate — OFF means no scheduled break', () {
@@ -185,6 +187,7 @@ void main() {
           koAmount: 0,
           organizerPct: 10,
           breaks: const [ScheduledBreak(afterLevel: 0, durationMins: 10)],
+          colorUpBreakMins: 0,
         ),
       );
       expect(s.rebuysCloseLevel, 4);
@@ -229,6 +232,7 @@ void main() {
             koEnabled: false,
             koAmount: 0,
             organizerPct: 10,
+            colorUpBreakMins: 0,
           ),
         );
         expect(s.rebuysCloseLevel, level);

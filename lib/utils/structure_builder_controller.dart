@@ -130,6 +130,7 @@ class StructureBuilderController extends ChangeNotifier {
     int? forceStack,
     List<LevelPin> pins = const [],
     List<ScheduledBreak> breaks = const [],
+    int colorUpBreakMins = kColorUpBreakMins,
     BuilderOptions? options,
     int rebuyClose = 0,
     bool rebuyCloseChosen = false,
@@ -152,6 +153,7 @@ class StructureBuilderController extends ChangeNotifier {
        _pins = List.of(pins),
        _appliedPins = List.of(pins),
        _breaks = breaks,
+       _colorUpBreakMins = colorUpBreakMins,
        options = options ?? BuilderOptions(),
        _rebuyClose = rebuyClose,
        _rebuyCloseChosen = rebuyCloseChosen {
@@ -211,6 +213,7 @@ class StructureBuilderController extends ChangeNotifier {
       forceStack: s.forceStack,
       pins: s.levelPins,
       breaks: s.breaks,
+      colorUpBreakMins: s.colorUpBreakMins,
       options: BuilderOptions(
         koEnabled: s.koEnabled,
         koAmount: s.koAmount,
@@ -271,6 +274,7 @@ class StructureBuilderController extends ChangeNotifier {
   List<LevelPin> _pins;
   List<LevelPin> _appliedPins;
   final List<ScheduledBreak> _breaks;
+  final int _colorUpBreakMins;
   int _rebuyClose;
   bool _rebuyCloseChosen;
 
@@ -543,6 +547,7 @@ class StructureBuilderController extends ChangeNotifier {
       anteEnabled: _anteEnabled,
       anteAfterLevel: 6,
       breaks: breaks,
+      colorUpBreakMins: _colorUpBreakMins,
       anteStyle: _anteStyle,
       koEnabled: options.koEnabled,
       koAmount: options.koAmount,
@@ -801,6 +806,7 @@ class StructureBuilderController extends ChangeNotifier {
           clearForceStack: _forceStack == null,
           levelPins: List.of(_pins),
           breaks: p.breaks,
+          colorUpBreakMins: p.colorUpBreakMins,
           earlyArrivalBonusEnabled: _bonusPct > 0,
           earlyArrivalBonusPctOverride: _bonusPct > 0 ? _bonusPct / 100 : null,
           clearEarlyArrivalBonusPctOverride: _bonusPct == 0,

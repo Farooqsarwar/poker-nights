@@ -33,6 +33,8 @@ TournamentParams _params({
   koEnabled: koAmount > 0,
   koAmount: koAmount,
   organizerPct: organizerPct,
+  // PN-041 is the pre-WP11 engine sweep; colour-up timing has its own gate.
+  colorUpBreakMins: 0,
 );
 
 /// Every combination the acceptance run sweeps: three shipped presets across

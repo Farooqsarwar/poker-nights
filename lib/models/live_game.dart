@@ -73,6 +73,7 @@ class GameSettings {
     this.expectedPlayersOverride,
     this.lockedExpectedPlayers,
     this.breaks = const [],
+    this.colorUpBreakMins = kColorUpBreakMins,
     this.expectedRebuys,
     this.expectedRebuyRate,
     this.forceStack,
@@ -175,6 +176,10 @@ class GameSettings {
   /// breaks existed behaved. The engine places the default when the organizer
   /// turns breaks on without choosing a position.
   final List<ScheduledBreak> breaks;
+
+  /// Minutes reserved for each automatic colour-up. Stored with the settings
+  /// so a reload or another device regenerates the same schedule.
+  final int colorUpBreakMins;
 
   /// The expected count FROZEN for physical preparation (specification
   /// section 6).
@@ -407,6 +412,7 @@ class GameSettings {
     int? lockedExpectedPlayers,
     bool clearLockedExpectedPlayers = false,
     List<ScheduledBreak>? breaks,
+    int? colorUpBreakMins,
     int? expectedRebuys,
     double? expectedRebuyRate,
     int? forceStack,
@@ -500,6 +506,7 @@ class GameSettings {
           ? null
           : (lockedExpectedPlayers ?? this.lockedExpectedPlayers),
       breaks: breaks ?? this.breaks,
+      colorUpBreakMins: colorUpBreakMins ?? this.colorUpBreakMins,
       expectedRebuys: clearGenerationOverrides || clearBuilderOverrides
           ? null
           : expectedRebuys ?? this.expectedRebuys,

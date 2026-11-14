@@ -4,16 +4,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('web boot layer, CanvasKit preload and cache rules stay wired', () {
+  test('web boot layer and cache rules stay wired without double download', () {
     final index = File('web/index.html').readAsStringSync();
     expect(index, contains('id="pn-boot"'));
-    expect(
-      index,
-      contains(
-        '<link rel="preload" href="canvaskit/canvaskit.wasm" '
-        'as="fetch" type="application/wasm" crossorigin>',
-      ),
-    );
+    expect(index, isNot(contains('rel="preload" href="canvaskit/')));
     expect(index, contains('addEventListener("flutter-first-frame"'));
     expect(index, contains('el.remove()'));
 

@@ -500,13 +500,11 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: _chips.length,
-      // `onReorderItem` (the non-deprecated form) already reports `newIndex`
-      // with the dragged item's removal accounted for, so a downward drag
-      // lands on the slot it was released over and the index is used as-is.
-      // The old `onReorder` gave the pre-removal index and needed a manual
-      // `- 1` here, which is why this callback was the one that had it.
-      onReorderItem: (oldIndex, newIndex) {
+      // LOCAL ONLY: Flutter 3.38.9 requires `onReorder`; CI's 3.44.7 uses
+      // `onReorderItem`. Never commit this compatibility workaround.
+      onReorder: (oldIndex, newIndex) {
         setState(() {
+          if (oldIndex < newIndex) newIndex -= 1;
           final chip = _chips.removeAt(oldIndex);
           _chips.insert(newIndex, chip);
           _reRecommend();

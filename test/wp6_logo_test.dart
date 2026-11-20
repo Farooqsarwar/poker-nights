@@ -63,6 +63,14 @@ void main() {
       expect(image.fit, BoxFit.contain);
       expect(image.width, size);
       expect(image.height, size);
+      expect(
+        find.descendant(
+          of: find.byType(PokerNightLogo),
+          matching: find.byType(ClipOval),
+        ),
+        findsNothing,
+        reason: 'The complete mark remains visible at $size px',
+      );
     }
   });
 

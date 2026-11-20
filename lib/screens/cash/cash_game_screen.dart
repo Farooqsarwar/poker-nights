@@ -54,6 +54,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
   final _customSb = TextEditingController(text: '1');
   final _customBb = TextEditingController(text: '2');
   final _whoIsPlaying = TextEditingController();
+  final List<_CashPlayerDraft> _playerSetups = [];
   bool _setMinMax = false;
   bool _trackSettlement = true;
   String? _selectedChipSetId;
@@ -77,6 +78,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
     _buyIn.addListener(_refreshBreakdown);
     _minBuyIn.addListener(_refreshBreakdown);
     _chipValue.addListener(_refreshBreakdown);
+    _whoIsPlaying.addListener(_syncPlayerSetups);
   }
 
   void _refreshBreakdown() {
@@ -99,12 +101,53 @@ class _CashGameScreenState extends State<CashGameScreen> {
     _customSb.dispose();
     _customBb.dispose();
     _whoIsPlaying.dispose();
+    for (final player in _playerSetups) {
+      player.dispose();
+    }
     super.dispose();
   }
+
+  void _syncPlayerSetups() {
+    final names = _whoIsPlaying.text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .take(10)
+        .toList();
+    final next = <_CashPlayerDraft>[];
+    for (var i = 0; i < names.length; i++) {
+      if (i < _playerSetups.length && _playerSetups[i].name == names[i]) {
+        next.add(_playerSetups[i]);
+      } else {
+        next.add(
+          _CashPlayerDraft(
+            name: names[i],
+            buyIn: _setMinMax ? _minBuyIn.text : _buyIn.text,
+            onChanged: _refreshBreakdown,
+          ),
+        );
+      }
+    }
+    for (final old in _playerSetups) {
+      if (!next.contains(old)) old.dispose();
+    }
+    if (!mounted) return;
+    setState(() {
+      _playerSetups
+        ..clear()
+        ..addAll(next);
+    });
+  }
+
   static String _num(double v) =>
       v == v.roundToDouble() ? v.round().toString() : v.toString();
 
-  void _applyBlinds(int index, double sb, double bb, {bool syncControllers = true}) {
+  void _applyBlinds(
+    int index,
+    double sb,
+    double bb, {
+    bool syncControllers = true,
+  }) {
     setState(() {
       _selectedBlindIndex = index;
       _sb = sb;
@@ -176,16 +219,27 @@ class _CashGameScreenState extends State<CashGameScreen> {
     final today =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-    final rawNames = _whoIsPlaying.text.trim();
-    final names = rawNames.isEmpty
-        ? <String>[]
-        : rawNames
-            .split(',')
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty)
-            .toList();
+    final playerSetups = <CashPlayerSetup>[];
+    for (final player in _playerSetups) {
+      final buyIn = num.tryParse(player.buyIn.text.trim())?.toDouble();
+      final rebuy = num.tryParse(player.rebuy.text.trim())?.toDouble() ?? 0;
+      if (buyIn == null || buyIn < minBuy || buyIn > maxBuy) {
+        _toast(
+          '${player.name}: starting buy-in must be between '
+          '${_num(minBuy)} and ${_num(maxBuy)}.',
+        );
+        return;
+      }
+      if (rebuy < 0) {
+        _toast('${player.name}: rebuy cannot be negative.');
+        return;
+      }
+      playerSetups.add(
+        CashPlayerSetup(name: player.name, buyIn: buyIn, rebuy: rebuy),
+      );
+    }
 
-    app.startCashGame(
+    app.startCashGameWithSetups(
       CashSessionSettings(
         name: _name.text.trim().isEmpty ? 'Cash game' : _name.text.trim(),
         date: today,
@@ -199,7 +253,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
         trackSettlement: _trackSettlement,
         chipSetId: _selectedChipSetId ?? app.defaultChipSetId,
       ),
-      names,
+      playerSetups,
     );
     if (context.mounted) {
       context.go(RoutePaths.cashGameLive);
@@ -212,17 +266,15 @@ class _CashGameScreenState extends State<CashGameScreen> {
     final set = id == null
         ? null
         : app.savedChipSets.where((c) => c.id == id).firstOrNull;
-    final chips = List<ChipColor>.of(
-      set?.chips ?? MockData.defaultChipSet,
-    )..sort((a, b) => b.value.compareTo(a.value));
+    final chips = List<ChipColor>.of(set?.chips ?? MockData.defaultChipSet)
+      ..sort((a, b) => b.value.compareTo(a.value));
     return chips.where((c) => c.value > 0).toList();
   }
 
   /// Fewest-chip breakdown of one min buy-in, so the host knows what to hand
   /// each player. Rebuilds live as buy-in, chip value or set changes.
   Widget _buildBreakdownCard(AppProvider app) {
-    final buyIn =
-        num.tryParse(_minBuyIn.text.trim())?.toDouble() ?? 0;
+    final buyIn = num.tryParse(_minBuyIn.text.trim())?.toDouble() ?? 0;
     final unit = num.tryParse(_chipValue.text.trim())?.toDouble() ?? 0;
     final chips = _breakdownChips(app);
     String body;
@@ -241,7 +293,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
       body = parts.isEmpty
           ? 'Buy-in is smaller than the smallest chip — lower the chip value.'
           : 'Per min buy-in: ${parts.join(' + ')}'
-              '${rest > 0 ? ' (+$rest unit${rest == 1 ? '' : 's'} short — add a smaller chip)' : ''}';
+                '${rest > 0 ? ' (+$rest unit${rest == 1 ? '' : 's'} short — add a smaller chip)' : ''}';
     }
     return Container(
       padding: const EdgeInsets.all(16),
@@ -255,9 +307,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
         children: [
           Text(
             'Chip breakdown',
-            style: AppTypography.bodySm.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           Text(
@@ -281,8 +331,8 @@ class _CashGameScreenState extends State<CashGameScreen> {
         : '${set.name} · ${set.chips.length} colours';
   }
 
-  void _chooseChipSet(BuildContext context, AppProvider app) {
-    showModalBottomSheet<void>(
+  Future<void> _chooseChipSet(BuildContext context, AppProvider app) async {
+    final manageChipSets = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: AppColors.card,
       shape: RoundedRectangleBorder(
@@ -312,8 +362,13 @@ class _CashGameScreenState extends State<CashGameScreen> {
                   ),
                   // DECISION: C1 - Show every chip value and count in the dialog
                   subtitle: Text(
-                    MockData.defaultChipSet.map((c) => '${c.value} (${c.quantity})').join(', '),
-                    style: TextStyle(color: AppColors.mutedForeground, fontSize: 12),
+                    MockData.defaultChipSet
+                        .map((c) => '${c.value} (${c.quantity})')
+                        .join(', '),
+                    style: TextStyle(
+                      color: AppColors.mutedForeground,
+                      fontSize: 12,
+                    ),
                   ),
                   trailing: _selectedChipSetId == null
                       ? Icon(Icons.check, color: AppColors.primary)
@@ -334,8 +389,13 @@ class _CashGameScreenState extends State<CashGameScreen> {
                     ),
                     // DECISION: C1 - Show every chip value and count in the dialog
                     subtitle: Text(
-                      set.chips.map((c) => '${c.value} (${c.quantity})').join(', '),
-                      style: TextStyle(color: AppColors.mutedForeground, fontSize: 12),
+                      set.chips
+                          .map((c) => '${c.value} (${c.quantity})')
+                          .join(', '),
+                      style: TextStyle(
+                        color: AppColors.mutedForeground,
+                        fontSize: 12,
+                      ),
                     ),
                     trailing: _selectedChipSetId == set.id
                         ? Icon(Icons.check, color: AppColors.primary)
@@ -348,12 +408,21 @@ class _CashGameScreenState extends State<CashGameScreen> {
                       Navigator.of(bottomSheetContext).pop();
                     },
                   ),
+                const Divider(height: 24),
+                TextButton.icon(
+                  onPressed: () => Navigator.of(bottomSheetContext).pop(true),
+                  icon: const Icon(Icons.tune),
+                  label: const Text('Manage chip sets and defaults'),
+                ),
               ],
             ),
           ),
         );
       },
     );
+    if (manageChipSets == true && mounted && context.mounted) {
+      context.push(RoutePaths.chipSets);
+    }
   }
 
   @override
@@ -436,8 +505,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
                 _buildStakeChip(
                   label: _blinds[i].$1,
                   selected: _selectedBlindIndex == i,
-                  onTap: () =>
-                      _applyBlinds(i, _blinds[i].$2, _blinds[i].$3),
+                  onTap: () => _applyBlinds(i, _blinds[i].$2, _blinds[i].$3),
                 ),
               _buildStakeChip(
                 label: 'Custom',
@@ -731,6 +799,90 @@ class _CashGameScreenState extends State<CashGameScreen> {
               ),
             ),
           ),
+          if (_playerSetups.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Starting amounts',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Set each player’s starting buy-in and any rebuy already taken. '
+              'Cash-game rebuys can be different amounts.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: 10),
+            for (var i = 0; i < _playerSetups.length; i++) ...[
+              Container(
+                key: Key('cash_player_setup_$i'),
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.borderSubtle),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _playerSetups[i].name,
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Starting buy-in',
+                                style: AppTypography.bodyXs,
+                              ),
+                              const SizedBox(height: 4),
+                              _buildBuyInField(
+                                controller: _playerSetups[i].buyIn,
+                                prefix: symbol,
+                                fieldKey: Key('cash_player_buyin_$i'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Rebuy', style: AppTypography.bodyXs),
+                              const SizedBox(height: 4),
+                              _buildBuyInField(
+                                controller: _playerSetups[i].rebuy,
+                                prefix: symbol,
+                                fieldKey: Key('cash_player_rebuy_$i'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            Text(
+              'Starting money in: ${Formatters.prize(_playerSetups.fold<double>(0, (sum, p) => sum + (num.tryParse(p.buyIn.text)?.toDouble() ?? 0) + (num.tryParse(p.rebuy.text)?.toDouble() ?? 0)).round())}',
+              key: const Key('cash_starting_money_in'),
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ],
           const SizedBox(height: 24),
 
           // Start session button
@@ -772,15 +924,18 @@ class _CashGameScreenState extends State<CashGameScreen> {
     final chip25Str = chip25Val == chip25Val.roundToDouble()
         ? chip25Val.round().toString()
         : chip25Val.toStringAsFixed(2);
-    final unitStr = unit == unit.roundToDouble() ? unit.round().toString() : unit.toString();
-    final buyStr = buy == buy.roundToDouble() ? buy.round().toString() : buy.toString();
+    final unitStr = unit == unit.roundToDouble()
+        ? unit.round().toString()
+        : unit.toString();
+    final buyStr = buy == buy.roundToDouble()
+        ? buy.round().toString()
+        : buy.toString();
 
-    final example = 'Example: At 1 chip = $sym$unitStr, a 25 chip is $sym$chip25Str; buy-in $sym$buyStr = $chipsCount chips.';
+    final example =
+        'Example: At 1 chip = $sym$unitStr, a 25 chip is $sym$chip25Str; buy-in $sym$buyStr = $chipsCount chips.';
     return Text(
       example,
-      style: AppTypography.bodyXs.copyWith(
-        color: AppColors.mutedForeground,
-      ),
+      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
     );
   }
 
@@ -794,40 +949,44 @@ class _CashGameScreenState extends State<CashGameScreen> {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppColors.card,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? AppColors.primary : AppColors.borderSubtle,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primary : AppColors.card,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? AppColors.primary : AppColors.borderSubtle,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: AppColors.primarySoftBorder,
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: AppColors.primarySoftBorder,
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? AppColors.primaryForeground : AppColors.foreground,
-            fontSize: 13,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected
+                  ? AppColors.primaryForeground
+                  : AppColors.foreground,
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
           ),
         ),
       ),
-    ));
+    );
   }
 
   static Widget _buildBuyInField({
     required TextEditingController controller,
     required String prefix,
+    Key? fieldKey,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -851,6 +1010,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
           ],
           Expanded(
             child: TextField(
+              key: fieldKey,
               controller: controller,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
@@ -875,6 +1035,27 @@ class _CashGameScreenState extends State<CashGameScreen> {
         ],
       ),
     );
+  }
+}
+
+class _CashPlayerDraft {
+  _CashPlayerDraft({
+    required this.name,
+    required String buyIn,
+    required VoidCallback onChanged,
+  }) : buyIn = TextEditingController(text: buyIn),
+       rebuy = TextEditingController(text: '0') {
+    this.buyIn.addListener(onChanged);
+    rebuy.addListener(onChanged);
+  }
+
+  final String name;
+  final TextEditingController buyIn;
+  final TextEditingController rebuy;
+
+  void dispose() {
+    buyIn.dispose();
+    rebuy.dispose();
   }
 }
 
@@ -916,7 +1097,9 @@ class _StakeStepper extends StatelessWidget {
               children: [
                 TextField(
                   controller: controller,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   textAlign: TextAlign.center,
                   onChanged: onChanged,
                   style: TextStyle(

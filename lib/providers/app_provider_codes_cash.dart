@@ -38,7 +38,9 @@ extension AppProviderCodesCash on AppProvider {
   /// readable by design).
   Future<JoinCodeResolution> resolveJoinCode(String input) async {
     final code = extractJoinCode(input);
-    if (code.isEmpty) return const JoinCodeResolution(JoinCodeKind.notFound, '');
+    if (code.isEmpty) {
+      return const JoinCodeResolution(JoinCodeKind.notFound, '');
+    }
     if (!_backendUp) return JoinCodeResolution(JoinCodeKind.error, code);
     if (!_consumeCodeLookupSlot()) {
       return JoinCodeResolution(JoinCodeKind.rateLimited, code);
@@ -63,8 +65,9 @@ extension AppProviderCodesCash on AppProvider {
 
   bool _consumeCodeLookupSlot() {
     final now = DateTime.now();
-    _codeLookupTimes
-        .removeWhere((t) => now.difference(t) > const Duration(minutes: 1));
+    _codeLookupTimes.removeWhere(
+      (t) => now.difference(t) > const Duration(minutes: 1),
+    );
     if (_codeLookupTimes.length >= 10) return false;
     _codeLookupTimes.add(now);
     return true;
@@ -85,16 +88,17 @@ extension AppProviderCodesCash on AppProvider {
       _lookupSub?.cancel();
       if (hit.kind == 'game' && _isGameAuthority) {
         // Admins can follow the raw document.
-        _lookupSub =
-            _repo.gameDocSnapshots(hit.gid, hit.gameId).listen((snap) {
+        _lookupSub = _repo.gameDocSnapshots(hit.gid, hit.gameId).listen((snap) {
           final data = snap.data();
           if (!snap.exists || data == null) return;
           try {
             _clearUndoStack();
-            final remote =
-                liveGameFromFirestoreDoc(Map<String, dynamic>.from(data));
-            _currentGame =
-                _withPendingCheckInOverlay(_withOwnRsvpOverlay(remote));
+            final remote = liveGameFromFirestoreDoc(
+              Map<String, dynamic>.from(data),
+            );
+            _currentGame = _withPendingCheckInOverlay(
+              _withOwnRsvpOverlay(remote),
+            );
             _lastSavedGame = remote;
             if (!_disposed) notifyListeners();
           } catch (e) {
@@ -103,24 +107,26 @@ extension AppProviderCodesCash on AppProvider {
         }, onError: (Object e) => debugPrint('lookup stream error: $e'));
       } else {
         // Guests / TVs / Members (F-001 Fix): sanitized projection feed.
-        final projectionKey = hit.kind == 'tv' ? 'tv' : (hit.kind == 'game' ? 'player' : 'guest');
+        final projectionKey = hit.kind == 'tv'
+            ? 'tv'
+            : (hit.kind == 'game' ? 'player' : 'guest');
         _lookupSub = _repo.publicGameStream(hit.gameId).listen((doc) {
           final payload = doc[projectionKey] as Map<String, dynamic>?;
           if (payload == null) return;
           try {
             _clearUndoStack();
-            _currentGame = _withPendingCheckInOverlay(_withOwnRsvpOverlay(
-              liveGameFromMap(Map<String, dynamic>.from(payload as Map)),
-            ));
+            _currentGame = _withPendingCheckInOverlay(
+              _withOwnRsvpOverlay(
+                liveGameFromMap(Map<String, dynamic>.from(payload as Map)),
+              ),
+            );
             if (!_disposed) notifyListeners();
           } catch (e) {
             debugPrint('projection decode failed: $e');
           }
         }, onError: (Object e) => debugPrint('public stream error: $e'));
       }
-      return hit.kind == 'tv'
-          ? CodeLookupResult.tv
-          : CodeLookupResult.game;
+      return hit.kind == 'tv' ? CodeLookupResult.tv : CodeLookupResult.game;
     } catch (e) {
       debugPrint('enterGameCode failed: $e');
       return CodeLookupResult.notFound;
@@ -134,7 +140,8 @@ extension AppProviderCodesCash on AppProvider {
   /// Games finished with no group selected, newest first (History tags them
   /// "Solo").
   List<CashSession> get soloHistory {
-    return [..._soloHistory]..sort((a, b) => b.startTime.compareTo(a.startTime));
+    return [..._soloHistory]
+      ..sort((a, b) => b.startTime.compareTo(a.startTime));
   }
 
   /// Tournaments finished with no group selected, newest first (History tags them "Solo").
@@ -143,35 +150,57 @@ extension AppProviderCodesCash on AppProvider {
   bool get canUndoCashAction => _cashUndoSnapshot != null;
 
   void startCashGame(CashSessionSettings settings, List<String> playerNames) {
+    startCashGameWithSetups(settings, [
+      for (final name in playerNames)
+        CashPlayerSetup(name: name, buyIn: settings.minBuyIn),
+    ]);
+  }
+
+  /// Starts a session with the amounts the host entered for each player.
+  /// Buy-ins/rebuys are money; chip value is a physical-chip conversion only.
+  void startCashGameWithSetups(
+    CashSessionSettings settings,
+    List<CashPlayerSetup> playerSetups,
+  ) {
     _cashUndoSnapshot = null;
     final now = DateTime.now();
     final initialTx = <CashTransaction>[];
-    final players = List.generate(
-      playerNames.length,
-      (i) {
-        final pid = 'cp-${now.millisecondsSinceEpoch}-$i';
-        final name = playerNames[i];
-        final val = settings.minBuyIn * settings.chipValue;
+    final players = List.generate(playerSetups.length, (i) {
+      final pid = 'cp-${now.millisecondsSinceEpoch}-$i';
+      final setup = playerSetups[i];
+      final name = setup.name;
+      initialTx.add(
+        CashTransaction(
+          id: 'tx-${now.millisecondsSinceEpoch}-$i',
+          playerId: pid,
+          playerName: name,
+          type: 'buyIn',
+          amount: setup.buyIn,
+          timestamp: now,
+        ),
+      );
+      if (setup.rebuy > 0) {
         initialTx.add(
           CashTransaction(
-            id: 'tx-${now.millisecondsSinceEpoch}-$i',
+            id: 'tx-${now.millisecondsSinceEpoch}-$i-rebuy',
             playerId: pid,
             playerName: name,
-            type: 'buyIn',
-            amount: settings.minBuyIn,
+            type: 'topUp',
+            amount: setup.rebuy,
             timestamp: now,
           ),
         );
-        return CashPlayer(
-          id: pid,
-          name: name,
-          stack: val,
-          totalBuyIns: val,
-          buyInCount: 1,
-          cashedOut: 0,
-        );
-      },
-    );
+      }
+      final totalIn = setup.buyIn + setup.rebuy;
+      return CashPlayer(
+        id: pid,
+        name: name,
+        stack: totalIn,
+        totalBuyIns: totalIn,
+        buyInCount: setup.rebuy > 0 ? 2 : 1,
+        cashedOut: 0,
+      );
+    });
 
     _cashSession = CashSession(
       id: 'cash-${now.millisecondsSinceEpoch}',
@@ -202,11 +231,13 @@ extension AppProviderCodesCash on AppProvider {
     if (amount < min) return 'Minimum buy-in is ${_cashNum(min)}.';
     if (amount > max) return 'Maximum buy-in is ${_cashNum(max)}.';
     _cashUndoSnapshot = session;
-    // Chips are typed; the ledger keeps money (chips x chip value, D1).
-    final value = amount * session.settings.chipValue;
+    // Every live action is entered in money. Chip value is used only by the
+    // setup screen to describe the physical chip handout.
+    final value = amount;
     final now = DateTime.now();
     if (isNew) {
-      final newPid = 'cp-${now.millisecondsSinceEpoch}-${Random().nextInt(9999)}';
+      final newPid =
+          'cp-${now.millisecondsSinceEpoch}-${Random().nextInt(9999)}';
       final tx = CashTransaction(
         id: 'tx-${now.millisecondsSinceEpoch}',
         playerId: newPid,
@@ -230,7 +261,12 @@ extension AppProviderCodesCash on AppProvider {
         transactions: [tx, ...session.transactions],
       );
     } else {
-      final playerName = session.players.where((p) => p.id == playerIdOrName).firstOrNull?.name ?? 'Player';
+      final playerName =
+          session.players
+              .where((p) => p.id == playerIdOrName)
+              .firstOrNull
+              ?.name ??
+          'Player';
       final tx = CashTransaction(
         id: 'tx-${now.millisecondsSinceEpoch}',
         playerId: playerIdOrName,
@@ -275,7 +311,7 @@ extension AppProviderCodesCash on AppProvider {
       return 'That player is not seated.';
     }
     _cashUndoSnapshot = session;
-    final value = amount * session.settings.chipValue;
+    final value = amount;
     final now = DateTime.now();
     final tx = CashTransaction(
       id: 'tx-${now.millisecondsSinceEpoch}',
@@ -313,13 +349,13 @@ extension AppProviderCodesCash on AppProvider {
 
   /// D2: ending early "asks: Cash out everyone still seated at their current
   /// stack?" -- this is the yes. Returns the first refusal, if any.
-  String? cashOutAllSeated() { // Fixed undo
+  String? cashOutAllSeated() {
+    // Fixed undo
     final session = _cashSession;
     if (session == null) return null;
     for (final p in session.players.where((p) => !p.hasCashedOut).toList()) {
       final current = _cashSession!.players.firstWhere((x) => x.id == p.id);
-      final chips = current.stack / session.settings.chipValue;
-      final error = cashCashOut(p.id, chips);
+      final error = cashCashOut(p.id, current.stack);
       if (error != null) {
         _cashSession = session;
         _cashUndoSnapshot = null;
@@ -356,7 +392,7 @@ extension AppProviderCodesCash on AppProvider {
     // the pre-cash-out one. Compared in whole cents: these are doubles
     // accumulated through repeated buy-ins and top-ups, and a raw `!= 0`
     // would read float noise as an open balance.
-    final value = amount * session.settings.chipValue;
+    final value = amount;
     var open = 0;
     for (final p in session.players) {
       final netCents = p.id == playerId
@@ -456,15 +492,17 @@ extension AppProviderCodesCash on AppProvider {
     }
     if (!_disposed) notifyListeners();
     if (_backendUp && gid == null && uid != null) {
-      unawaited(_repo
-          .saveSoloSession(uid, _cashSession!)
-          .catchError(
-              (Object e) => debugPrint('saveSoloSession failed: $e')));
+      unawaited(
+        _repo
+            .saveSoloSession(uid, _cashSession!)
+            .catchError((Object e) => debugPrint('saveSoloSession failed: $e')),
+      );
     } else if (_backendUp && gid != null && uid != null) {
-      unawaited(_repo
-          .saveCashSession(gid, _cashSession!)
-          .catchError(
-              (Object e) => debugPrint('saveCashSession failed: $e')));
+      unawaited(
+        _repo
+            .saveCashSession(gid, _cashSession!)
+            .catchError((Object e) => debugPrint('saveCashSession failed: $e')),
+      );
     }
     clearCashSession();
     return null;

@@ -61,7 +61,8 @@ class CashPlayer {
 
   /// Where this person stands: what they took out, plus what is still in front
   /// of them, minus what they put in -- across every stint of the session.
-  double get net => hasCashedOut ? cashedOut - totalBuyIns : stack - totalBuyIns;
+  double get net =>
+      hasCashedOut ? cashedOut - totalBuyIns : stack - totalBuyIns;
 
   CashPlayer copyWith({
     String? id,
@@ -82,6 +83,24 @@ class CashPlayer {
       hasCashedOut: hasCashedOut ?? this.hasCashedOut,
     );
   }
+}
+
+/// One player's amounts entered before a cash session starts.
+///
+/// Amounts are money, just like [CashPlayer.totalBuyIns] and
+/// [CashTransaction.amount]. [CashSessionSettings.chipValue] is only the
+/// conversion used to tell the host how many physical chips to hand out.
+// DECISION: Keep money ledger amounts independent of physical chip value.
+class CashPlayerSetup {
+  const CashPlayerSetup({
+    required this.name,
+    required this.buyIn,
+    this.rebuy = 0,
+  });
+
+  final String name;
+  final double buyIn;
+  final double rebuy;
 }
 
 /// Settings for a cash game session.

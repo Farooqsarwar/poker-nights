@@ -45,6 +45,62 @@ class _PresetsScreenState extends State<PresetsScreen> {
   // DECISION: Presets hub organized strictly in order: chip stacks -> tournament presets -> tournament styles (spec P1, P3 / S5).
   String _activeTab = 'stacks';
 
+  // DECISION: Chip stacks reuse saved tournament presets so they persist and
+  // share the existing free-tier limit and default-selection behavior.
+  void _editStackPreset(AppProvider app, [TournamentPreset? preset]) {
+    if (preset == null &&
+        app.premiumTier != PremiumTier.premium &&
+        app.userSavedPresetCount >= PremiumBoundary.freeMaxSavedPresets) {
+      _showPresetLimitPrompt(app);
+      return;
+    }
+    showAppModal(
+      context: context,
+      title: preset == null ? 'New chip stack' : 'Edit chip stack',
+      maxWidth: 480,
+      child: _StackPresetForm(
+        preset: preset,
+        onSave: ({required name, required stack, required openingBigBlind}) {
+          final depth = (stack / openingBigBlind).round().clamp(10, 500);
+          final saved = app.defaultGamePreset.copyWith(
+            id: preset?.id ?? 'stack-${DateTime.now().millisecondsSinceEpoch}',
+            name: name,
+            forceStack: stack,
+            targetDepthBB: depth,
+          );
+          app.savePreset(saved);
+          Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
+
+  void _useBuiltInStack(
+    AppProvider app, {
+    required String name,
+    required int stack,
+    required int depth,
+  }) {
+    final id = 'stack-built-in-$depth';
+    final preset = app.defaultGamePreset.copyWith(
+      id: id,
+      name: name,
+      forceStack: stack,
+      targetDepthBB: depth,
+    );
+    if (app.presetById(id) == null &&
+        app.premiumTier != PremiumTier.premium &&
+        app.userSavedPresetCount >= PremiumBoundary.freeMaxSavedPresets) {
+      _showPresetLimitPrompt(app);
+      return;
+    }
+    app.savePreset(preset);
+    app.setDefaultGamePreset(id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$name is now your default chip stack.')),
+    );
+  }
+
   void _editPreset(AppProvider app, TournamentPreset? preset) {
     // D4: 3 saved templates free, unlimited on Premium. Editing/using an
     // existing preset is never capped — only creating a new one past the
@@ -178,6 +234,12 @@ class _PresetsScreenState extends State<PresetsScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final presets = app.presets;
+    final stackPresets = presets
+        .where((preset) => preset.id.startsWith('stack-'))
+        .toList();
+    final gamePresets = presets
+        .where((preset) => !preset.id.startsWith('stack-'))
+        .toList();
 
     // D4: 3 saved templates free, unlimited on Premium — the library itself
     // is never gated. See _editPreset for where the free cap is enforced,
@@ -200,56 +262,74 @@ class _PresetsScreenState extends State<PresetsScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.xs,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          'Game presets',
-                          style: AppTypography.display(
-                            size: AppFontSizes.xxl,
-                            weight: FontWeight.w700,
-                          ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final heading = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        'Game presets',
+                        style: AppTypography.display(
+                          size: AppFontSizes.xxl,
+                          weight: FontWeight.w700,
                         ),
-                        AppTag(
-                          app.premiumTier == PremiumTier.premium
-                              ? 'UNLIMITED'
-                              : '${app.userSavedPresetCount}/3 FREE',
-                          tone: app.premiumTier == PremiumTier.premium
-                              ? AppTagTone.success
-                              : AppTagTone.neutral,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      app.premiumTier == PremiumTier.premium
-                          ? 'One-tap tournament setups · Unlimited on Premium'
-                          : 'Complete game preferences · 3 saved free '
-                                '(${app.userSavedPresetCount}/3 used)',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
                       ),
+                      AppTag(
+                        app.premiumTier == PremiumTier.premium
+                            ? 'UNLIMITED'
+                            : '${app.userSavedPresetCount}/3 FREE',
+                        tone: app.premiumTier == PremiumTier.premium
+                            ? AppTagTone.success
+                            : AppTagTone.neutral,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    app.premiumTier == PremiumTier.premium
+                        ? 'One-tap tournament setups · Unlimited on Premium'
+                        : 'Complete game preferences · 3 saved free '
+                              '(${app.userSavedPresetCount}/3 used)',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
                     ),
-                  ],
-                ),
-              ),
-              Padding(
+                  ),
+                ],
+              );
+              final createButton = Padding(
                 padding: const EdgeInsets.only(top: 4.0),
                 child: AppButton(
-                  onPressed: () => _editPreset(app, null),
-                  child: const Text('+ New'),
+                  onPressed: () => _activeTab == 'stacks'
+                      ? _editStackPreset(app)
+                      : _editPreset(app, null),
+                  child: Text(
+                    _activeTab == 'stacks' ? '+ New stack' : '+ New preset',
+                  ),
                 ),
-              ),
-            ],
+              );
+              if (constraints.maxWidth < 420) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    heading,
+                    const SizedBox(height: AppSpacing.sm),
+                    createButton,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: heading),
+                  createButton,
+                ],
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.md),
           AppTabs(
@@ -267,38 +347,123 @@ class _PresetsScreenState extends State<PresetsScreen> {
           if (_activeTab == 'stacks') ...[
             Text(
               'Starting chip stacks',
-              style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+              style: AppTypography.display(
+                size: AppFontSizes.lg,
+                weight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
               'Playable starting stack configurations calibrated for tournament depth.',
-              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
             _buildStackCard(
               title: 'Standard stack (100 BB)',
               depth: '100 big blinds',
-              blurb: '1,000 chips at 5/10 blinds. The recommended default for home tournaments.',
+              blurb:
+                  '1,000 chips at 5/10 blinds. The recommended default for home tournaments.',
               badge: 'RECOMMENDED',
+              onUse: () => _useBuiltInStack(
+                app,
+                name: 'Standard stack',
+                stack: 1000,
+                depth: 100,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             _buildStackCard(
               title: 'Deep stack (150 BB)',
               depth: '150 big blinds',
-              blurb: '1,500 chips at 5/10 blinds. Deeper play with extra room for post-flop strategy.',
+              blurb:
+                  '1,500 chips at 5/10 blinds. Deeper play with extra room for post-flop strategy.',
               badge: 'DEEP',
+              onUse: () => _useBuiltInStack(
+                app,
+                name: 'Deep stack',
+                stack: 1500,
+                depth: 150,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             _buildStackCard(
               title: 'Turbo stack (50 BB)',
               depth: '50 big blinds',
-              blurb: '500 chips at 5/10 blinds. Fast-paced action for quicker games.',
+              blurb:
+                  '500 chips at 5/10 blinds. Fast-paced action for quicker games.',
               badge: 'TURBO',
+              onUse: () => _useBuiltInStack(
+                app,
+                name: 'Turbo stack',
+                stack: 500,
+                depth: 50,
+              ),
             ),
+            if (stackPresets.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                'My chip stacks',
+                style: AppTypography.display(
+                  size: AppFontSizes.lg,
+                  weight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              for (final preset in stackPresets)
+                AppCard(
+                  margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              preset.name,
+                              style: AppTypography.bodySm.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              '${Formatters.chips(preset.forceStack ?? 0)} chips · '
+                              '${preset.targetDepthBB ?? 100} BB',
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (app.defaultGamePreset.id == preset.id)
+                        const AppTag('DEFAULT', tone: AppTagTone.success)
+                      else
+                        TextButton(
+                          onPressed: () => app.setDefaultGamePreset(preset.id),
+                          child: const Text('Use'),
+                        ),
+                      IconButton(
+                        tooltip: 'Edit stack',
+                        onPressed: () => _editStackPreset(app, preset),
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Delete stack',
+                        onPressed: () => _confirmDelete(preset, app),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
             const SizedBox(height: AppSpacing.lg),
             Text(
               'Available chip sets',
-              style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+              style: AppTypography.display(
+                size: AppFontSizes.lg,
+                weight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             for (final name in _chipSetNames(app))
@@ -307,20 +472,28 @@ class _PresetsScreenState extends State<PresetsScreen> {
                 margin: const EdgeInsets.only(bottom: AppSpacing.xs),
                 child: Row(
                   children: [
-                    Icon(Icons.casino_outlined, size: 20, color: AppColors.primary),
+                    Icon(
+                      Icons.casino_outlined,
+                      size: 20,
+                      color: AppColors.primary,
+                    ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
                         name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.xs),
                     Text(
                       '${_chipsFor(app, name).length} denominations',
-                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
@@ -329,218 +502,237 @@ class _PresetsScreenState extends State<PresetsScreen> {
 
           // 2. GENERAL TOURNAMENT PRESETS (P1/P3)
           if (_activeTab == 'presets') ...[
-            if (presets.isEmpty)
+            if (gamePresets.isEmpty)
               const AppEmptyState(
                 icon: Icons.list_alt_outlined,
                 title: 'No presets yet',
-                description: 'Save a tournament configuration to reuse it later.',
+                description:
+                    'Save a tournament configuration to reuse it later.',
               )
             else
               Column(
                 children: [
-                  for (final p in presets)
-                  Semantics(
-                    button: true,
-                    label: '${p.name}\nBuy-in ${Formatters.prize(p.buyIn)} ${_hours(p.durationHours)}h ${p.format?.label ?? (p.reEntry ? "Re-entry" : p.rebuys ? "Rebuy" : "Freeze-out")} ${p.pace != null ? "${p.pace!.label} pace" : "Regular pace"} ${p.targetDepthBB ?? 100} BB deep ${p.rebuys ? "Rebuys" : "No rebuys"} ${p.addOn ? "Add-on" : "No add-on"} ${p.anteEnabled ? "Ante L${p.anteAfterLevel}+" : "No ante"} ${p.chipSetName} ${p.chipSet.map((c) => c.color).join(" ")} ${app.defaultGamePreset.id == p.id ? "DEFAULT" : ""}',
-                    child: AppCard(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            final actions = <Widget>[
-                              if (app.defaultGamePreset.id == p.id)
-                                const AppTag(
-                                  'DEFAULT',
-                                  tone: AppTagTone.success,
-                                )
-                              else
-                                TextButton(
-                                  onPressed: () =>
-                                      app.setDefaultGamePreset(p.id),
-                                  child: const Text('Make default'),
-                                ),
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                tooltip: 'Edit',
-                                onPressed: () => _editPreset(app, p),
-                                icon: Icon(
-                                  Icons.edit_outlined,
-                                  size: 18,
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                tooltip: 'Delete',
-                                onPressed: p.id.startsWith('starter-')
-                                    ? null
-                                    : () => _confirmDelete(p, app),
-                                icon: Icon(
-                                  Icons.delete_outline,
-                                  size: 18,
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                            ];
-                            if (constraints.maxWidth < 420) {
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    p.name,
-                                    style: AppTypography.bodyLg.copyWith(
-                                      fontWeight: FontWeight.w600,
+                  for (final p in gamePresets)
+                    Semantics(
+                      button: true,
+                      label:
+                          '${p.name}\nBuy-in ${Formatters.prize(p.buyIn)} ${_hours(p.durationHours)}h ${p.format?.label ?? (p.reEntry
+                                  ? "Re-entry"
+                                  : p.rebuys
+                                  ? "Rebuy"
+                                  : "Freeze-out")} ${p.pace != null ? "${p.pace!.label} pace" : "Regular pace"} ${p.targetDepthBB ?? 100} BB deep ${p.rebuys ? "Rebuys" : "No rebuys"} ${p.addOn ? "Add-on" : "No add-on"} ${p.anteEnabled ? "Ante L${p.anteAfterLevel}+" : "No ante"} ${p.chipSetName} ${p.chipSet.map((c) => c.color).join(" ")} ${app.defaultGamePreset.id == p.id ? "DEFAULT" : ""}',
+                      child: AppCard(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final actions = <Widget>[
+                                  if (app.defaultGamePreset.id == p.id)
+                                    const AppTag(
+                                      'DEFAULT',
+                                      tone: AppTagTone.success,
+                                    )
+                                  else
+                                    TextButton(
+                                      onPressed: () =>
+                                          app.setDefaultGamePreset(p.id),
+                                      child: const Text('Make default'),
+                                    ),
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    tooltip: 'Edit',
+                                    onPressed: () => _editPreset(app, p),
+                                    icon: Icon(
+                                      Icons.edit_outlined,
+                                      size: 18,
+                                      color: AppColors.mutedForeground,
                                     ),
                                   ),
-                                  Wrap(
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    tooltip: 'Delete',
+                                    onPressed: p.id.startsWith('starter-')
+                                        ? null
+                                        : () => _confirmDelete(p, app),
+                                    icon: Icon(
+                                      Icons.delete_outline,
+                                      size: 18,
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                ];
+                                if (constraints.maxWidth < 420) {
+                                  return Column(
                                     crossAxisAlignment:
-                                        WrapCrossAlignment.center,
-                                    children: actions,
-                                  ),
-                                ],
-                              );
-                            }
-                            return Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    p.name,
-                                    style: AppTypography.bodyLg.copyWith(
-                                      fontWeight: FontWeight.w600,
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        p.name,
+                                        style: AppTypography.bodyLg.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Wrap(
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
+                                        children: actions,
+                                      ),
+                                    ],
+                                  );
+                                }
+                                return Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        p.name,
+                                        style: AppTypography.bodyLg.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    ...actions,
+                                  ],
+                                );
+                              },
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.xs,
+                              children: [
+                                _Tag(
+                                  text: 'Buy-in ${Formatters.prize(p.buyIn)}',
                                 ),
-                                ...actions,
+                                _Tag(text: '${_hours(p.durationHours)}h'),
+                                _Tag(
+                                  text:
+                                      p.format?.label ??
+                                      (p.reEntry
+                                          ? 'Re-entry'
+                                          : p.rebuys
+                                          ? 'Rebuy'
+                                          : 'Freeze-out'),
+                                ),
+                                if (p.pace != null)
+                                  _Tag(text: '${p.pace!.label} pace'),
+                                if (p.targetDepthBB != null)
+                                  _Tag(text: '${p.targetDepthBB} BB deep'),
+                                if (p.forceStack != null)
+                                  _Tag(text: '${p.forceStack} stack'),
+                                _Tag(
+                                  text: p.rebuys
+                                      ? 'Rebuys to L${p.rebuysCloseLevel}'
+                                      : 'No rebuys',
+                                ),
+                                _Tag(text: p.addOn ? 'Add-on' : 'No add-on'),
+                                _Tag(
+                                  text: p.koEnabled
+                                      ? 'KO ${Formatters.prize(p.koAmount)}'
+                                      : 'No KO',
+                                ),
+                                _Tag(
+                                  text: p.anteEnabled
+                                      ? 'Ante L${p.anteAfterLevel}+'
+                                      : 'No ante',
+                                ),
+                                _Tag(text: '${p.organizerPct}% org costs'),
+                                if (p.earlyArrivalBonusEnabled)
+                                  _Tag(
+                                    text:
+                                        '${((p.earlyArrivalBonusPctOverride ?? kEarlyArrivalBonusPct) * 100).round()}% on-time bonus',
+                                  ),
+                                if (p.forcePaidPlaces != null)
+                                  _Tag(text: '${p.forcePaidPlaces} paid'),
+                                if (p.tableSettingsOverride != null)
+                                  _Tag(
+                                    text:
+                                        '${p.tableSettingsOverride!.maxPerTable}/table',
+                                  ),
+                                _Tag(text: p.chipSetName),
                               ],
-                            );
-                          },
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Wrap(
-                          spacing: AppSpacing.sm,
-                          runSpacing: AppSpacing.xs,
-                          children: [
-                            _Tag(text: 'Buy-in ${Formatters.prize(p.buyIn)}'),
-                            _Tag(text: '${_hours(p.durationHours)}h'),
-                            _Tag(
-                              text:
-                                  p.format?.label ??
-                                  (p.reEntry
-                                      ? 'Re-entry'
-                                      : p.rebuys
-                                      ? 'Rebuy'
-                                      : 'Freeze-out'),
                             ),
-                            if (p.pace != null)
-                              _Tag(text: '${p.pace!.label} pace'),
-                            if (p.targetDepthBB != null)
-                              _Tag(text: '${p.targetDepthBB} BB deep'),
-                            if (p.forceStack != null)
-                              _Tag(text: '${p.forceStack} stack'),
-                            _Tag(
-                              text: p.rebuys
-                                  ? 'Rebuys to L${p.rebuysCloseLevel}'
-                                  : 'No rebuys',
+                            const SizedBox(height: AppSpacing.sm),
+                            Wrap(
+                              spacing: AppSpacing.xs,
+                              runSpacing: AppSpacing.xs,
+                              children: [
+                                for (final c in p.chipSet)
+                                  ChipToken(
+                                    colorName: c.color,
+                                    hex: c.colorValue,
+                                    value: c.value,
+                                    count: c.quantity,
+                                  ),
+                              ],
                             ),
-                            _Tag(text: p.addOn ? 'Add-on' : 'No add-on'),
-                            _Tag(
-                              text: p.koEnabled
-                                  ? 'KO ${Formatters.prize(p.koAmount)}'
-                                  : 'No KO',
-                            ),
-                            _Tag(
-                              text: p.anteEnabled
-                                  ? 'Ante L${p.anteAfterLevel}+'
-                                  : 'No ante',
-                            ),
-                            _Tag(text: '${p.organizerPct}% org costs'),
-                            if (p.earlyArrivalBonusEnabled)
-                              _Tag(
-                                text:
-                                    '${((p.earlyArrivalBonusPctOverride ?? kEarlyArrivalBonusPct) * 100).round()}% on-time bonus',
+                            const SizedBox(height: AppSpacing.md),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: AppButton(
+                                size: AppButtonSize.sm,
+                                onPressed: () => context.go(
+                                  '${RoutePaths.createTournament}?preset=${p.id}',
+                                ),
+                                child: const Text('Use preset'),
                               ),
-                            if (p.forcePaidPlaces != null)
-                              _Tag(text: '${p.forcePaidPlaces} paid'),
-                            if (p.tableSettingsOverride != null)
-                              _Tag(
-                                text:
-                                    '${p.tableSettingsOverride!.maxPerTable}/table',
-                              ),
-                            _Tag(text: p.chipSetName),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Wrap(
-                          spacing: AppSpacing.xs,
-                          runSpacing: AppSpacing.xs,
-                          children: [
-                            for (final c in p.chipSet)
-                              ChipToken(
-                                colorName: c.color,
-                                hex: c.colorValue,
-                                value: c.value,
-                                count: c.quantity,
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: AppButton(
-                            size: AppButtonSize.sm,
-                            onPressed: () => context.go(
-                              '${RoutePaths.createTournament}?preset=${p.id}',
-                            ),
-                            child: const Text('Use preset'),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                  ),
-              ],
-            ),
+                ],
+              ),
           ],
 
           // 3. TOURNAMENT STYLES (P1/P3)
           if (_activeTab == 'styles') ...[
             Text(
               'Tournament styles & formats',
-              style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+              style: AppTypography.display(
+                size: AppFontSizes.lg,
+                weight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
               'Structure templates based on standard tournament formats.',
-              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
             _buildStyleCard(
               title: 'Freezeout',
-              blurb: 'Single buy-in, single stack, no rebuys. When a player loses their chips they are out.',
+              blurb:
+                  'Single buy-in, single stack, no rebuys. When a player loses their chips they are out.',
               format: TournamentFormat.freezeOut,
               app: app,
             ),
             const SizedBox(height: AppSpacing.sm),
             _buildStyleCard(
               title: 'Rebuy & Add-on',
-              blurb: 'Unlimited rebuys through rebuy close, followed by an optional add-on during the break.',
+              blurb:
+                  'Unlimited rebuys through rebuy close, followed by an optional add-on during the break.',
               format: TournamentFormat.rebuy,
               app: app,
             ),
             const SizedBox(height: AppSpacing.sm),
             _buildStyleCard(
               title: 'Knockout / Bounty',
-              blurb: 'A portion of each buy-in forms a direct bounty awarded to the eliminator.',
-              format: TournamentFormat.freezeOut, isBounty: true,
+              blurb:
+                  'A portion of each buy-in forms a direct bounty awarded to the eliminator.',
+              format: TournamentFormat.freezeOut,
+              isBounty: true,
               app: app,
             ),
             const SizedBox(height: AppSpacing.sm),
             _buildStyleCard(
               title: 'Shootout',
-              blurb: 'Multi-table play where each table plays down to 1 winner before the final table.',
+              blurb:
+                  'Multi-table play where each table plays down to 1 winner before the final table.',
               format: TournamentFormat.shootout,
               app: app,
             ),
@@ -555,14 +747,17 @@ class _PresetsScreenState extends State<PresetsScreen> {
     required String depth,
     required String blurb,
     required String badge,
+    required VoidCallback onUse,
   }) {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.md),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: 2),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final badgeWidget = Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xs,
+              vertical: 2,
+            ),
             decoration: BoxDecoration(
               color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(AppRadius.xs),
@@ -575,19 +770,50 @@ class _PresetsScreenState extends State<PresetsScreen> {
                 color: AppColors.primaryText,
               ),
             ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
+          );
+          final detail = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                blurb,
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            ],
+          );
+          final action = TextButton(
+            onPressed: onUse,
+            child: const Text('Use stack'),
+          );
+          if (constraints.maxWidth < 360) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(blurb, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                badgeWidget,
+                const SizedBox(height: AppSpacing.xs),
+                detail,
+                Align(alignment: Alignment.centerLeft, child: action),
               ],
-            ),
-          ),
-        ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              badgeWidget,
+              const SizedBox(width: AppSpacing.md),
+              Expanded(child: detail),
+              action,
+            ],
+          );
+        },
       ),
     );
   }
@@ -604,15 +830,29 @@ class _PresetsScreenState extends State<PresetsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.military_tech_outlined, size: 22, color: AppColors.primary),
+          Icon(
+            Icons.military_tech_outlined,
+            size: 22,
+            color: AppColors.primary,
+          ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                Text(
+                  title,
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(blurb, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                Text(
+                  blurb,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
               ],
             ),
           ),
@@ -635,6 +875,124 @@ class _PresetsScreenState extends State<PresetsScreen> {
 
   static String _hours(double h) =>
       h == h.roundToDouble() ? '${h.round()}' : '$h';
+}
+
+class _StackPresetForm extends StatefulWidget {
+  const _StackPresetForm({required this.preset, required this.onSave});
+
+  final TournamentPreset? preset;
+  final void Function({
+    required String name,
+    required int stack,
+    required int openingBigBlind,
+  })
+  onSave;
+
+  @override
+  State<_StackPresetForm> createState() => _StackPresetFormState();
+}
+
+class _StackPresetFormState extends State<_StackPresetForm> {
+  late final TextEditingController _name;
+  late final TextEditingController _stack;
+  late final TextEditingController _openingBigBlind;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final preset = widget.preset;
+    final stack = preset?.forceStack ?? 1000;
+    final depth = preset?.targetDepthBB ?? 100;
+    _name = TextEditingController(text: preset?.name ?? 'My chip stack');
+    _stack = TextEditingController(text: '$stack');
+    _openingBigBlind = TextEditingController(
+      text: '${(stack / depth).round().clamp(1, stack)}',
+    );
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _stack.dispose();
+    _openingBigBlind.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final name = _name.text.trim();
+    final stack = int.tryParse(_stack.text.trim());
+    final opening = int.tryParse(_openingBigBlind.text.trim());
+    if (name.isEmpty || stack == null || stack <= 0) {
+      setState(() => _error = 'Enter a name and a positive starting stack.');
+      return;
+    }
+    if (opening == null || opening <= 0 || opening >= stack) {
+      setState(
+        () =>
+            _error = 'Opening big blind must be positive and below the stack.',
+      );
+      return;
+    }
+    widget.onSave(name: name, stack: stack, openingBigBlind: opening);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stack = int.tryParse(_stack.text) ?? 0;
+    final opening = int.tryParse(_openingBigBlind.text) ?? 0;
+    final depth = opening > 0 ? (stack / opening).round() : 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppTextField(
+          controller: _name,
+          label: 'Stack name',
+          placeholder: 'e.g. Friday 10K stack',
+          onChanged: (_) => setState(() => _error = null),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          controller: _stack,
+          label: 'Starting stack',
+          keyboardType: TextInputType.number,
+          onChanged: (_) => setState(() => _error = null),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          controller: _openingBigBlind,
+          label: 'Opening big blind',
+          keyboardType: TextInputType.number,
+          onChanged: (_) => setState(() => _error = null),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          depth > 0
+              ? 'Opening depth: $depth BB. The engine builds payable levels around this stack.'
+              : 'Enter the stack and opening big blind to calculate depth.',
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            _error!,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.destructiveText,
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          key: const Key('save-chip-stack'),
+          fullWidth: true,
+          onPressed: _save,
+          child: const Text('Save chip stack'),
+        ),
+      ],
+    );
+  }
 }
 
 class _Tag extends StatelessWidget {

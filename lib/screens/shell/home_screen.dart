@@ -37,6 +37,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _openJoin() => context.go(RoutePaths.join);
 
+  void _openNewGame(AppProvider app) {
+    // "New game" is deliberately different from returning to Configure:
+    // discard the abandoned form and seed a fresh one from saved defaults.
+    app.clearEventDraft();
+    context.push(RoutePaths.createTournament);
+  }
+
   static String _hhmm(DateTime dt) =>
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
@@ -47,15 +54,25 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   LiveGame? _repostCandidate(AppProvider app) {
-    final candidates = app.currentGroup.games
-        .where((g) => g.status == LiveGameStatus.completed)
-        .toList()
-      ..sort((a, b) => b.settings.scheduledStart == null
-          ? 1
-          : (a.settings.scheduledStart ?? DateTime.fromMillisecondsSinceEpoch(0))
-              .compareTo(b.settings.scheduledStart ?? DateTime.fromMillisecondsSinceEpoch(0)));
-    final hasOpen = app.currentGroup.games.any((g) =>
-        g.status != LiveGameStatus.completed && g.status != LiveGameStatus.cancelled);
+    final candidates =
+        app.currentGroup.games
+            .where((g) => g.status == LiveGameStatus.completed)
+            .toList()
+          ..sort(
+            (a, b) => b.settings.scheduledStart == null
+                ? 1
+                : (a.settings.scheduledStart ??
+                          DateTime.fromMillisecondsSinceEpoch(0))
+                      .compareTo(
+                        b.settings.scheduledStart ??
+                            DateTime.fromMillisecondsSinceEpoch(0),
+                      ),
+          );
+    final hasOpen = app.currentGroup.games.any(
+      (g) =>
+          g.status != LiveGameStatus.completed &&
+          g.status != LiveGameStatus.cancelled,
+    );
     if (candidates.isEmpty || hasOpen) return null;
     return candidates.first;
   }
@@ -161,8 +178,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: AppColors.card,
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(color: AppColors.borderSubtle),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          border: Border.all(
+                                            color: AppColors.borderSubtle,
+                                          ),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
@@ -172,7 +193,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                               height: 20,
                                               decoration: BoxDecoration(
                                                 color: AppColors.primary,
-                                                borderRadius: BorderRadius.circular(6),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
                                               ),
                                               alignment: Alignment.center,
                                               child: Text(
@@ -186,7 +208,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                             ),
                                             const SizedBox(width: 8),
                                             ConstrainedBox(
-                                              constraints: const BoxConstraints(maxWidth: 180),
+                                              constraints: const BoxConstraints(
+                                                maxWidth: 180,
+                                              ),
                                               child: Text(
                                                 group.name,
                                                 style: TextStyle(
@@ -224,13 +248,18 @@ class _HomeScreenState extends State<HomeScreen> {
                             const SizedBox(width: AppSpacing.sm),
                           ],
                           AppButton(
+                            key: const Key('new-game-desktop'),
                             variant: AppButtonVariant.secondary,
                             size: AppButtonSize.sm,
-                            onPressed: () => context.push(RoutePaths.createTournament),
+                            onPressed: () => _openNewGame(app),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.add, color: AppColors.primaryText, size: 14),
+                                Icon(
+                                  Icons.add,
+                                  color: AppColors.primaryText,
+                                  size: 14,
+                                ),
                                 const SizedBox(width: AppSpacing.xs),
                                 const Text('New game'),
                               ],
@@ -277,7 +306,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   AppButton(
                                     fullWidth: true,
                                     size: AppButtonSize.lg,
-                                    onPressed: () => context.go(RoutePaths.quick),
+                                    onPressed: () =>
+                                        context.go(RoutePaths.quick),
                                     child: const Text('Start a game now'),
                                   ),
                                 ],
@@ -312,7 +342,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                         child: AppButton(
                                           fullWidth: true,
                                           size: AppButtonSize.lg,
-                                          onPressed: () => openCreateGroupDialog(context),
+                                          onPressed: () =>
+                                              openCreateGroupDialog(context),
                                           child: const Text('Create a group'),
                                         ),
                                       ),
@@ -322,7 +353,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                           fullWidth: true,
                                           size: AppButtonSize.lg,
                                           variant: AppButtonVariant.secondary,
-                                          onPressed: () => context.go(RoutePaths.join),
+                                          onPressed: () =>
+                                              context.go(RoutePaths.join),
                                           child: const Text('Join a group'),
                                         ),
                                       ),
@@ -393,7 +425,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
                                 color: AppColors.primarySoft,
-                                borderRadius: BorderRadius.circular(AppRadius.md),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
                               ),
                               child: Icon(
                                 Icons.workspace_premium_rounded,
@@ -419,7 +453,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                         app.premiumTier == PremiumTier.premium
                                             ? 'ACTIVE'
                                             : 'PREMIUM',
-                                        tone: app.premiumTier == PremiumTier.premium
+                                        tone:
+                                            app.premiumTier ==
+                                                PremiumTier.premium
                                             ? AppTagTone.success
                                             : AppTagTone.primary,
                                       ),
@@ -467,17 +503,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                     message:
                                         'Remote cloud changes conflict with your local offline progress. Please choose which state to keep.',
                                     actionLabel: 'Review Conflict',
-                                    onAction: () => context.go(RoutePaths.hostDashboard),
+                                    onAction: () =>
+                                        context.go(RoutePaths.hostDashboard),
                                   ).animate().fadeIn(duration: 400.ms),
                                   const SizedBox(height: AppSpacing.lg),
-                                ] else if (app.restoredFromRecovery && activeGame != null) ...[
+                                ] else if (app.restoredFromRecovery &&
+                                    activeGame != null) ...[
                                   AppAlertBanner(
                                     type: AppAlertType.info,
                                     message:
                                         'An active tournament was found on this device'
                                         '${app.restoredAt != null ? ' — last saved ${_hhmm(app.restoredAt!)}' : ''}.',
                                     actionLabel: 'Review',
-                                    onAction: () => setState(() => _showRestoreModal = true),
+                                    onAction: () => setState(
+                                      () => _showRestoreModal = true,
+                                    ),
                                   ).animate().fadeIn(duration: 400.ms),
                                   const SizedBox(height: AppSpacing.lg),
                                 ],
@@ -491,11 +531,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                   const SizedBox(height: AppSpacing.lg),
                                   AppCard(
                                     child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
                                       children: [
                                         Expanded(
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               Text(
                                                 'Same as last time?',
@@ -505,12 +547,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   fontWeight: FontWeight.w700,
                                                 ),
                                               ),
-                                              const SizedBox(height: AppSpacing.xs),
+                                              const SizedBox(
+                                                height: AppSpacing.xs,
+                                              ),
                                               Text(
                                                 'Repost ${repost.settings.name} one week later.',
-                                                style: AppTypography.bodySm.copyWith(
-                                                  color: AppColors.mutedForeground,
-                                                ),
+                                                style: AppTypography.bodySm
+                                                    .copyWith(
+                                                      color: AppColors
+                                                          .mutedForeground,
+                                                    ),
                                               ),
                                             ],
                                           ),
@@ -548,7 +594,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   group: group,
                                   loading: app.groupBundleLoading,
                                   showJoin: _openJoin,
-                                  showCreate: () => openCreateGroupDialog(context),
+                                  showCreate: () =>
+                                      openCreateGroupDialog(context),
                                   isAdmin: app.isAdmin,
                                 ),
                                 const SizedBox(height: AppSpacing.xl),
@@ -561,10 +608,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: AppSpacing.sm),
-                                _GroupStats(group: group, app: app, isGrid: true),
+                                _GroupStats(
+                                  group: group,
+                                  app: app,
+                                  isGrid: true,
+                                ),
                                 if (app.notifications.any((n) => !n.read)) ...[
                                   const SizedBox(height: AppSpacing.xl),
-                                  _AlertsPreview(notifications: app.notifications),
+                                  _AlertsPreview(
+                                    notifications: app.notifications,
+                                  ),
                                 ],
                               ],
                             ),
@@ -596,7 +649,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             decoration: BoxDecoration(
                               color: AppColors.primarySoft,
                               shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.primarySoftBorder),
+                              border: Border.all(
+                                color: AppColors.primarySoftBorder,
+                              ),
                             ),
                             alignment: Alignment.center,
                             child: Text(
@@ -640,9 +695,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              user?.name.isNotEmpty == true
-                                  ? user!.name
-                                  : '',
+                              user?.name.isNotEmpty == true ? user!.name : '',
                               style: TextStyle(
                                 color: AppColors.foreground,
                                 fontSize: 17,
@@ -749,7 +802,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               alignment: Alignment.center,
                               child: Text(
-                                app.hasCurrentGroup ? _getInitials(group.name) : '♠',
+                                app.hasCurrentGroup
+                                    ? _getInitials(group.name)
+                                    : '♠',
                                 style: TextStyle(
                                   color: AppColors.foreground,
                                   fontSize: 13,
@@ -760,7 +815,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                app.hasCurrentGroup ? group.name : 'Select a group',
+                                app.hasCurrentGroup
+                                    ? group.name
+                                    : 'Select a group',
                                 style: TextStyle(
                                   color: AppColors.foreground,
                                   fontSize: 15,
@@ -789,14 +846,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         onAction: () => context.go(RoutePaths.hostDashboard),
                       ).animate().fadeIn(duration: 400.ms),
                       const SizedBox(height: AppSpacing.xl),
-                    ] else if (app.restoredFromRecovery && activeGame != null) ...[
+                    ] else if (app.restoredFromRecovery &&
+                        activeGame != null) ...[
                       AppAlertBanner(
                         type: AppAlertType.info,
                         message:
                             'An active tournament was found on this device'
                             '${app.restoredAt != null ? ' — last saved ${_hhmm(app.restoredAt!)}' : ''}.',
                         actionLabel: 'Review',
-                        onAction: () => setState(() => _showRestoreModal = true),
+                        onAction: () =>
+                            setState(() => _showRestoreModal = true),
                       ).animate().fadeIn(duration: 400.ms),
                       const SizedBox(height: AppSpacing.xl),
                     ],
@@ -864,14 +923,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Expanded(
                           child: AppButton(
+                            key: const Key('new-game-mobile'),
                             variant: AppButtonVariant.secondary,
                             size: AppButtonSize.lg,
                             fullWidth: true,
-                            onPressed: () => context.push(RoutePaths.createTournament),
+                            onPressed: () => _openNewGame(app),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.add, color: AppColors.primaryText, size: 18),
+                                Icon(
+                                  Icons.add,
+                                  color: AppColors.primaryText,
+                                  size: 18,
+                                ),
                                 const SizedBox(width: AppSpacing.sm),
                                 const Flexible(
                                   child: Text(
@@ -983,7 +1047,11 @@ class _HomeScreenState extends State<HomeScreen> {
 /// Group activity snapshot shown on Home — answers "how is the group doing?"
 /// with counts that already exist in the provider (IA §7).
 class _GroupStats extends StatelessWidget {
-  const _GroupStats({required this.group, required this.app, this.isGrid = false});
+  const _GroupStats({
+    required this.group,
+    required this.app,
+    this.isGrid = false,
+  });
 
   final Group group;
   final AppProvider app;
@@ -1041,10 +1109,7 @@ class _GroupStats extends StatelessWidget {
           _MetricCard(value: '$cash', label: 'cash\ngames'),
           const SizedBox(width: 8),
           // Money is white, not gold (no-gold rule, B4.9).
-          _MetricCard(
-            value: volumeStr,
-            label: 'volume',
-          ),
+          _MetricCard(value: volumeStr, label: 'volume'),
         ],
       ),
     );
@@ -1052,10 +1117,7 @@ class _GroupStats extends StatelessWidget {
 }
 
 class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.value,
-    required this.label,
-  });
+  const _MetricCard({required this.value, required this.label});
 
   final String value;
   final String label;
@@ -1192,7 +1254,10 @@ class _NextActionCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.md),
               AppButton(
                 size: AppButtonSize.sm,
-                onPressed: () => context.push(RoutePaths.createTournament),
+                onPressed: () {
+                  context.read<AppProvider>().clearEventDraft();
+                  context.push(RoutePaths.createTournament);
+                },
                 child: const Text('Schedule game'),
               ),
             ],
@@ -1236,9 +1301,7 @@ class _NextActionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.35),
-        ),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
         boxShadow: [
           BoxShadow(
             color: AppColors.primary.withValues(alpha: 0.2),
@@ -1344,8 +1407,7 @@ class _NextActionCard extends StatelessWidget {
                       group.tableSettings.copyWith(maxPerTable: 10),
                     );
                   },
-                  child:
-                      const Text('Seat 10 at one table instead (free)'),
+                  child: const Text('Seat 10 at one table instead (free)'),
                 ),
               ],
             ),
@@ -1439,7 +1501,10 @@ class _UpcomingGames extends StatelessWidget {
                   'The tables are empty. Create a tournament to get the action started.',
               action: isAdmin
                   ? AppButton(
-                      onPressed: () => context.push(RoutePaths.createTournament),
+                      onPressed: () {
+                        context.read<AppProvider>().clearEventDraft();
+                        context.push(RoutePaths.createTournament);
+                      },
                       child: const Text('Create First Game'),
                     )
                   : null,
@@ -1486,90 +1551,90 @@ class _GameRow extends StatelessWidget {
       onTap: onOpen,
       child: InkWell(
         onTap: onOpen,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.borderSubtle),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    bottomLeft: Radius.circular(16),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.borderSubtle),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      bottomLeft: Radius.circular(16),
+                    ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 14,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        game.settings.name,
-                        style: TextStyle(
-                          color: AppColors.foreground,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          game.settings.name,
+                          style: TextStyle(
+                            color: AppColors.foreground,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: 4),
+                        Text(
+                          '${game.settings.date} ${game.settings.time} · Buy-in ${Formatters.prize(game.settings.buyIn)} · $going going',
+                          style: TextStyle(
+                            color: AppColors.mutedForeground,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 14),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${game.settings.date} ${game.settings.time} · Buy-in ${Formatters.prize(game.settings.buyIn)} · $going going',
+                      decoration: BoxDecoration(
+                        color: AppColors.borderSubtle,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        'RSVP',
                         style: TextStyle(
                           color: AppColors.mutedForeground,
                           fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 14),
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.borderSubtle,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      'RSVP',
-                      style: TextStyle(
-                        color: AppColors.mutedForeground,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 }
@@ -2050,4 +2115,3 @@ class _ToolkitCard extends StatelessWidget {
     );
   }
 }
-

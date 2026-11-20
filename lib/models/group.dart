@@ -20,6 +20,7 @@ class Group {
     this.pinned = false,
     this.tableSettings = TableSettings.fallback,
     this.defaultChipSetId,
+    this.defaultGamePresetId,
     this.learningOptOut = false,
   });
 
@@ -45,6 +46,11 @@ class Group {
 
   /// Default chip set ID for games created in this group.
   final String? defaultChipSetId;
+
+  /// Optional group override for the owner's profile-level game preset.
+  /// Null means new games continue to use the owner's profile default.
+  // DECISION: Store a group preset reference and inherit the profile default when absent.
+  final String? defaultGamePresetId;
 
   /// Spec B9/H5: whether this group opts out of pace adaptation learning.
   final bool learningOptOut;
@@ -72,6 +78,8 @@ class Group {
     TableSettings? tableSettings,
     String? defaultChipSetId,
     bool clearDefaultChipSetId = false,
+    String? defaultGamePresetId,
+    bool clearDefaultGamePresetId = false,
     bool? learningOptOut,
   }) {
     return Group(
@@ -93,6 +101,9 @@ class Group {
       defaultChipSetId: clearDefaultChipSetId
           ? null
           : defaultChipSetId ?? this.defaultChipSetId,
+      defaultGamePresetId: clearDefaultGamePresetId
+          ? null
+          : defaultGamePresetId ?? this.defaultGamePresetId,
       learningOptOut: learningOptOut ?? this.learningOptOut,
     );
   }

@@ -33,23 +33,55 @@ class NavDrawer extends StatelessWidget {
     final groupSection = <_DrawerItem>[
       _DrawerItem(RoutePaths.home, 'Home', Icons.home_outlined, null),
       if (app.hasCurrentGroup && !app.isGuest) ...[
-        _DrawerItem(RoutePaths.group, 'Games', Icons.sports_esports_outlined, null),
-        _DrawerItem(RoutePaths.chat, 'Chat', Icons.chat_bubble_outline, app.unreadGroupChatCount(group.id)),
-        _DrawerItem(RoutePaths.members, 'Members', Icons.groups_outlined, group.members.length),
+        _DrawerItem(
+          RoutePaths.group,
+          'Games',
+          Icons.sports_esports_outlined,
+          null,
+        ),
+        _DrawerItem(
+          RoutePaths.chat,
+          'Chat',
+          Icons.chat_bubble_outline,
+          app.unreadGroupChatCount(group.id),
+        ),
+        _DrawerItem(
+          RoutePaths.members,
+          'Members',
+          Icons.groups_outlined,
+          group.members.length,
+        ),
       ],
     ];
-    // N1/T134: "MORE label; Polls (badge), History, Cash Game, Tools,
-    // Standings, Settings" - and T135 has the drawer and the Explore sheet
-    // agree, so the same six rows appear in both.
+    // Polls belong to the group hub. Keep the general destinations here.
     final moreSection = <_DrawerItem>[
-      _DrawerItem(RoutePaths.standings, 'Standings & Seasons', Icons.leaderboard_outlined, null),
+      _DrawerItem(
+        RoutePaths.standings,
+        'Standings & Seasons',
+        Icons.leaderboard_outlined,
+        null,
+      ),
       _DrawerItem(RoutePaths.presets, 'Presets', Icons.list_alt_outlined, null),
-      _DrawerItem(RoutePaths.polls, 'Polls', Icons.poll_outlined, null),
       _DrawerItem(RoutePaths.history, 'History', Icons.history, null),
-      _DrawerItem(RoutePaths.cashGame, 'Cash Game', Icons.payments_outlined, null),
+      _DrawerItem(
+        RoutePaths.cashGame,
+        'Cash Game',
+        Icons.payments_outlined,
+        null,
+      ),
       _DrawerItem(RoutePaths.tools, 'Tools', Icons.build_outlined, null),
-      _DrawerItem(RoutePaths.upgrade, 'Premium Features', Icons.workspace_premium_outlined, null),
-      _DrawerItem(RoutePaths.settings, 'Settings', Icons.settings_outlined, null),
+      _DrawerItem(
+        RoutePaths.upgrade,
+        'Premium Features',
+        Icons.workspace_premium_outlined,
+        null,
+      ),
+      _DrawerItem(
+        RoutePaths.settings,
+        'Settings',
+        Icons.settings_outlined,
+        null,
+      ),
     ];
 
     final panel = GlassSurface(
@@ -78,324 +110,325 @@ class NavDrawer extends StatelessWidget {
           children: [
             Container(
               width: double.infinity,
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: AppColors.border.withValues(alpha: Glass.borderOpacity),
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: AppColors.border.withValues(
+                      alpha: Glass.borderOpacity,
+                    ),
+                  ),
+                ),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primary.withValues(alpha: 0.04),
+                    Colors.transparent,
+                  ],
                 ),
               ),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.primary.withValues(alpha: 0.04),
-                  Colors.transparent,
-                ],
-              ),
+              child: const PokerNightBrand(logoSize: 32, fontSize: 22),
             ),
-            child: const PokerNightBrand(
-              logoSize: 32,
-              fontSize: 22,
-            ),
-          ),
-          if (user != null)
-            InkWell(
-              onTap: () {
-                app.closeDrawer();
-                if (app.isGuest) {
-                  context.go(RoutePaths.register);
-                } else {
-                  context.go(RoutePaths.profile);
-                }
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: Row(
-                  children: [
-                    AppAvatar(name: app.isGuest ? 'Guest' : user.name),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            app.isGuest ? 'Guest Host' : user.name,
-                            style: AppTypography.bodySm.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              Text(
-                                app.isGuest
-                                    ? 'No account · Tap to register'
-                                    : (app.isAdmin ? 'Host' : 'Player'),
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: app.isGuest
-                                      ? AppColors.primary
-                                      : AppColors.mutedForeground,
-                                ),
+            if (user != null)
+              InkWell(
+                onTap: () {
+                  app.closeDrawer();
+                  if (app.isGuest) {
+                    context.go(RoutePaths.register);
+                  } else {
+                    context.go(RoutePaths.profile);
+                  }
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Row(
+                    children: [
+                      AppAvatar(name: app.isGuest ? 'Guest' : user.name),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              app.isGuest ? 'Guest Host' : user.name,
+                              style: AppTypography.bodySm.copyWith(
+                                fontWeight: FontWeight.w600,
                               ),
-                              if (!app.isGuest) ...[
-                                const SizedBox(width: AppSpacing.xs),
-                                AppTag(
-                                  app.premiumTier == PremiumTier.premium
-                                      ? 'PREMIUM'
-                                      : 'FREE',
-                                  tone: app.premiumTier == PremiumTier.premium
-                                      ? AppTagTone.primary
-                                      : AppTagTone.neutral,
+                            ),
+                            Row(
+                              children: [
+                                Text(
+                                  app.isGuest
+                                      ? 'No account · Tap to register'
+                                      : (app.isAdmin ? 'Host' : 'Player'),
+                                  style: AppTypography.bodyXs.copyWith(
+                                    color: app.isGuest
+                                        ? AppColors.primary
+                                        : AppColors.mutedForeground,
+                                  ),
                                 ),
+                                if (!app.isGuest) ...[
+                                  const SizedBox(width: AppSpacing.xs),
+                                  AppTag(
+                                    app.premiumTier == PremiumTier.premium
+                                        ? 'PREMIUM'
+                                        : 'FREE',
+                                    tone: app.premiumTier == PremiumTier.premium
+                                        ? AppTagTone.primary
+                                        : AppTagTone.neutral,
+                                  ),
+                                ],
                               ],
-                            ],
-                          ),
-                        ],
+                            ),
+                          ],
+                        ),
                       ),
+                    ],
+                  ),
+                ),
+              ),
+            if (app.isGuest)
+              Container(
+                margin: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  0,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                ),
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Keep tonight\'s results',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Create an account to save your games permanently and start a recurring group.',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      onPressed: () {
+                        app.closeDrawer();
+                        context.go(RoutePaths.register);
+                      },
+                      child: const Text('Create account'),
                     ),
                   ],
                 ),
               ),
-            ),
-          if (app.isGuest)
-            Container(
-              margin: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                0,
-                AppSpacing.lg,
-                AppSpacing.md,
-              ),
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+            Divider(color: AppColors.border, height: 1),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(AppSpacing.sm),
                 children: [
-                  Text(
-                    'Keep tonight\'s results',
-                    style: AppTypography.bodySm.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
+                  // Current group — the single group selector (IA §10).
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xs,
+                      AppSpacing.xs,
+                      AppSpacing.xs,
+                      AppSpacing.sm,
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Create an account to save your games permanently and start a recurring group.',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  AppButton(
-                    size: AppButtonSize.sm,
-                    onPressed: () {
-                      app.closeDrawer();
-                      context.go(RoutePaths.register);
-                    },
-                    child: const Text('Create account'),
-                  ),
-                ],
-              ),
-            ),
-          Divider(color: AppColors.border, height: 1),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              children: [
-                // Current group — the single group selector (IA §10).
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.xs,
-                    AppSpacing.xs,
-                    AppSpacing.xs,
-                    AppSpacing.sm,
-                  ),
-                  child: Text(
-                    // Spec 3: users may belong to multiple groups, so the
-                    // navigation is plural. The heading names the section, not
-                    // the single group currently selected.
-                    'GROUPS',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                ),
-                InkWell(
-                  onTap: () {
-                    app.closeDrawer();
-                    if (!app.isGuest && app.hasCurrentGroup) {
-                      showGroupSwitcher(context);
-                    } else {
-                      openCreateGroupDialog(context);
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: app.hasCurrentGroup
-                          ? AppColors.primarySoft
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(
-                        color: app.hasCurrentGroup
-                            ? AppColors.primary.withValues(alpha: 0.5)
-                            : AppColors.border,
+                    child: Text(
+                      // Spec 3: users may belong to multiple groups, so the
+                      // navigation is plural. The heading names the section, not
+                      // the single group currently selected.
+                      'GROUPS',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.0,
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          groupIconMap[group.icon] ?? Icons.shield_outlined,
-                          size: 18,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                app.hasCurrentGroup ? group.name : 'No group',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.bodySm.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (app.hasCurrentGroup)
-                                Text(
-                                  '${group.members.length} members · Tap to switch',
-                                  style: AppTypography.bodyXs.copyWith(
-                                    color: AppColors.mutedForeground,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Icon(
-                          Icons.arrow_drop_down,
-                          size: 20,
-                          color: AppColors.mutedForeground,
-                        ),
-                      ],
-                    ),
                   ),
-                ),
-                // Primary navigation.
-                for (final item in groupSection)
-                  _DrawerTile(item: item, location: location, app: app),
-                Divider(color: AppColors.border, height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: AppSpacing.xs,
-                  ),
-                  child: Text(
-                    'MORE',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                ),
-                for (final item in moreSection)
-                  _DrawerTile(item: item, location: location, app: app),
-                Divider(color: AppColors.border, height: 24),
-                InkWell(
-                  onTap: () {
-                    app.closeDrawer();
-                    openCreateGroupDialog(context);
-                  },
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.group_add_outlined,
-                          size: 18,
-                          color: AppColors.primary,
+                  InkWell(
+                    onTap: () {
+                      app.closeDrawer();
+                      if (!app.isGuest && app.hasCurrentGroup) {
+                        showGroupSwitcher(context);
+                      } else {
+                        openCreateGroupDialog(context);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: app.hasCurrentGroup
+                            ? AppColors.primarySoft
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(
+                          color: app.hasCurrentGroup
+                              ? AppColors.primary.withValues(alpha: 0.5)
+                              : AppColors.border,
                         ),
-                        const SizedBox(width: AppSpacing.md),
-                        Text(
-                          'New Group',
-                          style: AppTypography.bodySm.copyWith(
-                            fontWeight: FontWeight.w500,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            groupIconMap[group.icon] ?? Icons.shield_outlined,
+                            size: 18,
                             color: AppColors.primary,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  app.hasCurrentGroup ? group.name : 'No group',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.bodySm.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                if (app.hasCurrentGroup)
+                                  Text(
+                                    '${group.members.length} members · Tap to switch',
+                                    style: AppTypography.bodyXs.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Icon(
+                            Icons.arrow_drop_down,
+                            size: 20,
+                            color: AppColors.mutedForeground,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                  color: AppColors.border.withValues(alpha: Glass.borderOpacity),
-                ),
-              ),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  AppColors.primary.withValues(alpha: 0.03),
+                  // Primary navigation.
+                  for (final item in groupSection)
+                    _DrawerTile(item: item, location: location, app: app),
+                  Divider(color: AppColors.border, height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    child: Text(
+                      'MORE',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ),
+                  for (final item in moreSection)
+                    _DrawerTile(item: item, location: location, app: app),
+                  Divider(color: AppColors.border, height: 24),
+                  InkWell(
+                    onTap: () {
+                      app.closeDrawer();
+                      openCreateGroupDialog(context);
+                    },
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.group_add_outlined,
+                            size: 18,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Text(
+                            'New Group',
+                            style: AppTypography.bodySm.copyWith(
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            child: Row(
-              children: [
-                InkWell(
-                  onTap: () {
-                    app.closeDrawer();
-                    app.logout();
-                  },
-                  child: Text(
-                    'Sign out',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: AppColors.border.withValues(
+                      alpha: Glass.borderOpacity,
                     ),
                   ),
                 ),
-                const Spacer(),
-                IconButton(
-                  tooltip: 'Close menu',
-                  onPressed: app.closeDrawer,
-                  icon: Icon(
-                    Icons.close,
-                    color: AppColors.mutedForeground,
-                    size: 20,
-                  ),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    AppColors.primary.withValues(alpha: 0.03),
+                  ],
                 ),
-              ],
+              ),
+              child: Row(
+                children: [
+                  InkWell(
+                    onTap: () {
+                      app.closeDrawer();
+                      app.logout();
+                    },
+                    child: Text(
+                      'Sign out',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: 'Close menu',
+                    onPressed: app.closeDrawer,
+                    icon: Icon(
+                      Icons.close,
+                      color: AppColors.mutedForeground,
+                      size: 20,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
 

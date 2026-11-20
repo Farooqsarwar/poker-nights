@@ -20,52 +20,68 @@ void main() {
   setUp(() => RecoveryService.enabled = false);
   tearDown(() => RecoveryService.enabled = true);
 
-  testWidgets('S5 (P1, P3): PresetsScreen organizes Presets Hub into chip stacks, tournament presets, and styles in order', (tester) async {
-    final app = AppProvider()..setUserForTesting(_host);
+  testWidgets(
+    'S5 (P1, P3): PresetsScreen organizes Presets Hub into chip stacks, tournament presets, and styles in order',
+    (tester) async {
+      final app = AppProvider()..setUserForTesting(_host);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ChangeNotifierProvider<AppProvider>.value(
-          value: app,
-          child: const Scaffold(
-            body: PresetsScreen(),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider<AppProvider>.value(
+            value: app,
+            child: const Scaffold(body: PresetsScreen()),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    // Verify tabs are present in exact order: Chip stacks -> Tournament presets -> Tournament styles
-    final tabsFinder = find.byType(AppTabs);
-    expect(tabsFinder, findsOneWidget);
+      // Verify tabs are present in exact order: Chip stacks -> Tournament presets -> Tournament styles
+      final tabsFinder = find.byType(AppTabs);
+      expect(tabsFinder, findsOneWidget);
 
-    final appTabs = tester.widget<AppTabs>(tabsFinder);
-    expect(appTabs.tabs.length, 3);
-    expect(appTabs.tabs[0].label, 'Chip stacks');
-    expect(appTabs.tabs[1].label, 'Tournament presets');
-    expect(appTabs.tabs[2].label, 'Tournament styles');
+      final appTabs = tester.widget<AppTabs>(tabsFinder);
+      expect(appTabs.tabs.length, 3);
+      expect(appTabs.tabs[0].label, 'Chip stacks');
+      expect(appTabs.tabs[1].label, 'Tournament presets');
+      expect(appTabs.tabs[2].label, 'Tournament styles');
 
-    // Default tab is 'Chip stacks': verify stack cards
-    expect(find.text('Starting chip stacks'), findsOneWidget);
-    expect(find.text('Standard stack (100 BB)'), findsOneWidget);
-    expect(find.text('Deep stack (150 BB)'), findsOneWidget);
-    expect(find.text('Turbo stack (50 BB)'), findsOneWidget);
+      // Default tab is 'Chip stacks': verify stack cards
+      expect(find.text('Starting chip stacks'), findsOneWidget);
+      expect(find.text('Standard stack (100 BB)'), findsOneWidget);
+      expect(find.text('Deep stack (150 BB)'), findsOneWidget);
+      expect(find.text('Turbo stack (50 BB)'), findsOneWidget);
 
-    // Switch to 'Tournament presets' tab
-    await tester.tap(find.text('Tournament presets'));
-    await tester.pumpAndSettle();
-    expect(find.text('+ New'), findsOneWidget);
+      // Chip stacks are functional, not only examples.
+      expect(find.text('+ New stack'), findsOneWidget);
+      await tester.tap(find.text('+ New stack'));
+      await tester.pumpAndSettle();
+      final fields = find.byType(TextField);
+      expect(fields, findsNWidgets(3));
+      await tester.enterText(fields.at(0), 'Friday 10K');
+      await tester.enterText(fields.at(1), '10000');
+      await tester.enterText(fields.at(2), '100');
+      await tester.tap(find.byKey(const Key('save-chip-stack')));
+      await tester.pumpAndSettle();
+      expect(find.text('My chip stacks'), findsOneWidget);
+      expect(find.text('Friday 10K'), findsOneWidget);
+      expect(find.text('10,000 chips · 100 BB'), findsOneWidget);
 
-    // Switch to 'Tournament styles' tab
-    await tester.tap(find.text('Tournament styles'));
-    await tester.pumpAndSettle();
-    expect(find.text('Tournament styles & formats'), findsOneWidget);
-    expect(find.text('Freezeout'), findsOneWidget);
-    expect(find.text('Rebuy & Add-on'), findsOneWidget);
-    expect(find.text('Knockout / Bounty'), findsOneWidget);
-    expect(find.text('Shootout'), findsOneWidget);
+      // Switch to 'Tournament presets' tab
+      await tester.tap(find.text('Tournament presets'));
+      await tester.pumpAndSettle();
+      expect(find.text('+ New preset'), findsOneWidget);
 
-    app.dispose();
-  });
+      // Switch to 'Tournament styles' tab
+      await tester.tap(find.text('Tournament styles'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tournament styles & formats'), findsOneWidget);
+      expect(find.text('Freezeout'), findsOneWidget);
+      expect(find.text('Rebuy & Add-on'), findsOneWidget);
+      expect(find.text('Knockout / Bounty'), findsOneWidget);
+      expect(find.text('Shootout'), findsOneWidget);
+
+      app.dispose();
+    },
+  );
 }

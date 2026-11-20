@@ -2,6 +2,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:poker_night/app/route_paths.dart';
 import 'package:poker_night/models/chip_color.dart';
 import 'package:poker_night/models/group.dart';
 import 'package:poker_night/models/live_game.dart';
@@ -14,6 +16,7 @@ import 'package:poker_night/providers/app_provider.dart';
 import 'package:poker_night/screens/tournament/create_tournament_screen.dart';
 import 'package:poker_night/screens/tournament/quick_start_screen.dart';
 import 'package:poker_night/screens/public/tools_screen.dart';
+import 'package:poker_night/screens/shell/home_screen.dart';
 import 'package:poker_night/services/payment_service.dart';
 import 'package:poker_night/services/recovery_service.dart';
 import 'package:poker_night/utils/model_codec.dart';
@@ -238,6 +241,47 @@ void main() {
   });
 
   group('unified game preferences', () {
+    testWidgets('New game discards the previous draft before opening setup', (
+      tester,
+    ) async {
+      final app = _provider();
+      app.saveEventDraft(_baseSettings().copyWith(buyIn: 52));
+      expect(app.eventDraftForCurrentGroup?.buyIn, 52);
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => const Scaffold(body: HomeScreen()),
+          ),
+          GoRoute(
+            path: RoutePaths.createTournament,
+            builder: (_, _) => const Scaffold(
+              body: Center(child: Text('fresh-game-setup-route')),
+            ),
+          ),
+        ],
+      );
+      tester.view.physicalSize = const Size(1200, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppProvider>.value(
+          value: app,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('new-game-desktop')));
+      await tester.pumpAndSettle();
+
+      expect(app.eventDraftForCurrentGroup, isNull);
+      expect(find.text('fresh-game-setup-route'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      router.dispose();
+      app.dispose();
+    });
+
     test('new stack/depth fields round-trip and old maps stay compatible', () {
       final preset = _preset(
         'round-trip',
@@ -283,30 +327,32 @@ void main() {
       expect(app.savePreset(_preset('four')), isTrue);
     });
 
-    test('editing a referenced chip set refreshes the preset label and chips', () {
-      final app = _provider();
-      addTearDown(app.dispose);
-      app.saveChipSet('linked', 'Friday chips', _chips);
-      expect(
-        app.savePreset(
-          _preset('linked-preset').copyWith(
-            chipSetName: 'Friday chips',
-            chipSet: _chips,
+    test(
+      'editing a referenced chip set refreshes the preset label and chips',
+      () {
+        final app = _provider();
+        addTearDown(app.dispose);
+        app.saveChipSet('linked', 'Friday chips', _chips);
+        expect(
+          app.savePreset(
+            _preset(
+              'linked-preset',
+            ).copyWith(chipSetName: 'Friday chips', chipSet: _chips),
           ),
-        ),
-        isTrue,
-      );
-      const edited = [
-        ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 1, quantity: 120),
-        ChipColor(color: 'Red', hex: 0xFFC0392B, value: 5, quantity: 80),
-      ];
+          isTrue,
+        );
+        const edited = [
+          ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 1, quantity: 120),
+          ChipColor(color: 'Red', hex: 0xFFC0392B, value: 5, quantity: 80),
+        ];
 
-      app.saveChipSet('linked', 'Friday chips updated', edited);
+        app.saveChipSet('linked', 'Friday chips updated', edited);
 
-      final preset = app.presetById('linked-preset')!;
-      expect(preset.chipSetName, 'Friday chips updated');
-      expect(preset.chipSet, edited);
-    });
+        final preset = app.presetById('linked-preset')!;
+        expect(preset.chipSetName, 'Friday chips updated');
+        expect(preset.chipSet, edited);
+      },
+    );
 
     test('a complete preset seeds StructureBuilder without a second model', () {
       final preset = _preset(
@@ -375,6 +421,47 @@ void main() {
         find.byKey(const Key('opt-buyin')),
       );
       expect(buyIn.initialValue, '44');
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.dispose();
+    });
+
+    testWidgets('group preset overrides profile default for group games', (
+      tester,
+    ) async {
+      final app = _provider();
+      final profile = _preset('profile-default', buyIn: 41);
+      final group = _preset('group-default', buyIn: 63);
+      app.savePreset(profile);
+      app.savePreset(group);
+      app.setDefaultGamePreset(profile.id);
+      app.setGroupDefaultGamePreset(group.id);
+
+      expect(app.currentGroup.defaultGamePresetId, group.id);
+      expect(
+        groupFromMap(groupToMap(app.currentGroup)).defaultGamePresetId,
+        group.id,
+      );
+
+      await _mount(tester, const CreateTournamentScreen(), app: app);
+      expect(
+        tester.widget<CountStepper>(find.byType(CountStepper).first).value,
+        63,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _mount(tester, const QuickStartScreen(), app: app);
+      await tester.ensureVisible(find.text('More options'));
+      await tester.tap(find.text('More options'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('opt-buyin')))
+            .initialValue,
+        '63',
+      );
+
+      app.setGroupDefaultGamePreset(null);
+      expect(app.currentGroup.defaultGamePresetId, isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       app.dispose();
     });
@@ -452,7 +539,10 @@ void main() {
     await tester.tap(find.text('Save preset'));
     await tester.pump();
 
-    expect(find.text('Free accounts can save up to 3 presets.'), findsOneWidget);
+    expect(
+      find.text('Free accounts can save up to 3 presets.'),
+      findsOneWidget,
+    );
     expect(find.text('See Premium'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     app.dispose();

@@ -179,7 +179,7 @@ void main() {
       await screen(tester, app, () async {
         expect(find.textContaining('Only the host'), findsOneWidget);
         expect(find.text('Leave group'), findsNothing);
-        expect(find.text('Save table settings'), findsNothing);
+        expect(find.text('Save group settings'), findsNothing);
         expect(find.text('FP2608'), findsNothing);
         expect(
           find.text("Learn from Friday Poker Club's past games"),
@@ -215,7 +215,8 @@ void main() {
           'History',
           'Members and roles',
           'Import past results',
-          'Table settings',
+          'Default game preset',
+          'Group game settings',
           'Group code',
         ]) {
           await tester.ensureVisible(find.text(label).first);
@@ -319,7 +320,7 @@ void main() {
         // Still the stored value: the stepper edits a draft.
         expect(app.currentGroup.tableSettings.maxPerTable, 9);
 
-        await tap(tester, 'Save table settings');
+        await tap(tester, 'Save group settings');
         expect(app.currentGroup.tableSettings.maxPerTable, 8);
         // Dirty state is gone, so the button reports itself as saved.
         expect(find.text('Saved'), findsOneWidget);
@@ -344,7 +345,7 @@ void main() {
           find.textContaining('Only the group owner can change'),
           findsOneWidget,
         );
-        expect(find.text('Save table settings'), findsNothing);
+        expect(find.text('Save group settings'), findsNothing);
         expect(find.text('6'), findsOneWidget);
       });
     });

@@ -9,6 +9,7 @@ import '../../constants/app_constants.dart';
 import '../../models/app_notification.dart';
 import '../../models/chat_report.dart';
 import '../../models/table_settings.dart';
+import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_alert_banner.dart';
@@ -111,6 +112,15 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
             child: Column(
               children: [
                 _Row(
+                  icon: Icons.tune_outlined,
+                  title: 'Default game preset',
+                  subtitle: _gamePresetSubtitle(app),
+                  onTap: isOwner
+                      ? () => _chooseDefaultGamePreset(context, app)
+                      : null,
+                ),
+                const _Divider(),
+                _Row(
                   icon: Icons.style_outlined,
                   title: 'Default chip set',
                   subtitle: _chipSetSubtitle(app),
@@ -201,6 +211,78 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     // rather than pretending the group has no default.
     return name ?? 'A chip set from your account';
   }
+
+  String _gamePresetSubtitle(AppProvider app) {
+    final id = app.currentGroup.defaultGamePresetId;
+    if (id == null || id.isEmpty) {
+      return 'Follows profile: ${app.defaultGamePreset.name}';
+    }
+    return app.presetById(id)?.name ?? 'Preset unavailable on this account';
+  }
+
+  void _chooseDefaultGamePreset(BuildContext context, AppProvider app) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.card,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Group default preset', style: _cardTitle),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Start from your profile default, or choose a saved preset '
+                'for this group only.',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              ListTile(
+                title: const Text('Use profile default'),
+                subtitle: Text(app.defaultGamePreset.name),
+                trailing: app.currentGroup.defaultGamePresetId == null
+                    ? Icon(Icons.check, color: AppColors.primary)
+                    : null,
+                onTap: () {
+                  app.setGroupDefaultGamePreset(null);
+                  Navigator.pop(sheetContext);
+                },
+              ),
+              for (final preset in app.presets)
+                ListTile(
+                  title: Text(preset.name),
+                  subtitle: Text(
+                    '${preset.targetDepthBB ?? 100} BB · '
+                    '${preset.levelDurationMins ?? preset.pace?.levelMinutes ?? 20} min levels',
+                  ),
+                  trailing: app.currentGroup.defaultGamePresetId == preset.id
+                      ? Icon(Icons.check, color: AppColors.primary)
+                      : null,
+                  onTap: () {
+                    app.setGroupDefaultGamePreset(preset.id);
+                    Navigator.pop(sheetContext);
+                  },
+                ),
+              const SizedBox(height: AppSpacing.sm),
+              AppButton(
+                variant: AppButtonVariant.secondary,
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  context.push(RoutePaths.presets);
+                },
+                child: const Text('Create or edit presets'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// §B9 table settings: the count that triggers a split and whether seating
@@ -237,7 +319,7 @@ class _TableSettingsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Table settings', style: _cardTitle),
+          Text('Group game settings', style: _cardTitle),
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Every tournament in this group starts from these. A single game '
@@ -296,7 +378,7 @@ class _TableSettingsCard extends StatelessWidget {
             const AppAlertBanner(
               type: AppAlertType.info,
               message:
-                  'Only the group owner can change the table settings. '
+                  'Only the group owner can change the group game settings. '
                   'Hand over ownership from Members to take this on.',
             )
           else
@@ -305,12 +387,12 @@ class _TableSettingsCard extends StatelessWidget {
               size: AppButtonSize.lg,
               variant: AppButtonVariant.secondary,
               onPressed: dirty ? onSave : null,
-              child: Text(dirty ? 'Save table settings' : 'Saved'),
+              child: Text(dirty ? 'Save group settings' : 'Saved'),
             ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'The default in Settings only pre-fills a new group. Changing it '
-            'here changes this group alone.',
+            'Profile defaults pre-fill new groups. Changes here apply only '
+            'to this group and can still be overridden for one game.',
             style: AppTypography.bodyXs.copyWith(
               color: AppColors.mutedForeground,
             ),

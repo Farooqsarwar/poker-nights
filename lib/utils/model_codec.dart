@@ -1073,8 +1073,7 @@ Map<String, dynamic> tournamentPresetToMap(TournamentPreset p) => {
   if (p.lockedExpectedPlayers != null)
     'lockedExpectedPlayers': p.lockedExpectedPlayers,
   if (p.expectedRebuys != null) 'expectedRebuys': p.expectedRebuys,
-      if (p.expectedRebuyRate != null)
-        'expectedRebuyRate': p.expectedRebuyRate,
+  if (p.expectedRebuyRate != null) 'expectedRebuyRate': p.expectedRebuyRate,
   if (p.expectedReEntries != null) 'expectedReEntries': p.expectedReEntries,
   if (p.expectedAddOns != null) 'expectedAddOns': p.expectedAddOns,
   if (p.forecastRebuyRate != null) 'forecastRebuyRate': p.forecastRebuyRate,
@@ -1216,6 +1215,8 @@ Map<String, dynamic> groupToMap(Group g) => {
   'tableSettings': tableSettingsToMap(g.tableSettings),
   'learningOptOut': g.learningOptOut,
   if (g.defaultChipSetId != null) 'defaultChipSetId': g.defaultChipSetId,
+  if (g.defaultGamePresetId != null)
+    'defaultGamePresetId': g.defaultGamePresetId,
 };
 
 Group groupFromMap(Map<String, dynamic> m) => Group(
@@ -1245,4 +1246,5 @@ Group groupFromMap(Map<String, dynamic> m) => Group(
           Map<String, dynamic>.from(m['tableSettings'] as Map),
         ),
   defaultChipSetId: m['defaultChipSetId'] as String?,
+  defaultGamePresetId: m['defaultGamePresetId'] as String?,
 );

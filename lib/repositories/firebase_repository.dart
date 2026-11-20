@@ -170,7 +170,8 @@ class GameResultRow {
   };
 
   static GameResultRow fromMap(String id, Map<String, dynamic> m) {
-    final explicit = (m['hasExplicitBuyIns'] as bool?) ?? m.containsKey('buyInsPaid');
+    final explicit =
+        (m['hasExplicitBuyIns'] as bool?) ?? m.containsKey('buyInsPaid');
     return GameResultRow(
       gameId: m['gameId'] as String? ?? id,
       groupId: (m['groupId'] as String?) ?? '',
@@ -330,6 +331,7 @@ class FirebaseRepository {
       return false;
     }
   }
+
   bool get isSignedInAsGuest => currentUser?.isAnonymous ?? false;
 
   Future<fa.UserCredential> signUp({
@@ -413,7 +415,8 @@ class FirebaseRepository {
   Future<fa.UserCredential?> signInWithGoogle() async {
     if (kIsWeb) {
       return await _auth.signInWithPopup(
-        fa.GoogleAuthProvider()..setCustomParameters({'prompt': 'select_account'}),
+        fa.GoogleAuthProvider()
+          ..setCustomParameters({'prompt': 'select_account'}),
       );
     }
     // Clear any stored token first so there's no leftover session.
@@ -450,7 +453,8 @@ class FirebaseRepository {
     }
     if (kIsWeb) {
       return await user.linkWithPopup(
-        fa.GoogleAuthProvider()..setCustomParameters({'prompt': 'select_account'}),
+        fa.GoogleAuthProvider()
+          ..setCustomParameters({'prompt': 'select_account'}),
       );
     }
     try {
@@ -657,10 +661,10 @@ class FirebaseRepository {
         );
       }
       if (emailLower.isNotEmpty) {
-        await _db
-            .collection('emailIndex')
-            .doc(emailIndexKey(emailLower))
-            .set({'uid': uid, 'name': storedName}, SetOptions(merge: true));
+        await _db.collection('emailIndex').doc(emailIndexKey(emailLower)).set({
+          'uid': uid,
+          'name': storedName,
+        }, SetOptions(merge: true));
       }
     }
   }
@@ -775,6 +779,8 @@ class FirebaseRepository {
         'ownerId': group.ownerId,
         'icon': group.icon,
         'tableSettings': tableSettingsToMap(group.tableSettings),
+        if (group.defaultGamePresetId != null)
+          'defaultGamePresetId': group.defaultGamePresetId,
         'createdAt': FieldValue.serverTimestamp(),
       }),
     );
@@ -897,7 +903,13 @@ class FirebaseRepository {
     // against `groups/{gid}.joinCode`. Checking it only here (client-side) let
     // any signed-in user — including an anonymous guest — join any group by id
     // without ever holding the code (19-003, User Flow section 2.3).
-    return joinGroup(gid, user, groupName: name, groupIcon: icon, joinCode: key);
+    return joinGroup(
+      gid,
+      user,
+      groupName: name,
+      groupIcon: icon,
+      joinCode: key,
+    );
   }
 
   /// Idempotent join: safe to call when already a member.
@@ -1024,10 +1036,8 @@ class FirebaseRepository {
         'tableSettings': tableSettingsToMap(settings),
       });
 
-  Future<void> updateGroupLearningOptOut(String gid, bool optOut) => _db
-      .collection('groups')
-      .doc(gid)
-      .update({'learningOptOut': optOut});
+  Future<void> updateGroupLearningOptOut(String gid, bool optOut) =>
+      _db.collection('groups').doc(gid).update({'learningOptOut': optOut});
 
   /// B10: points the group at one of the owner's saved chip sets.
   ///
@@ -1039,9 +1049,14 @@ class FirebaseRepository {
   Future<void> updateGroupDefaultChipSet(String gid, String? id) => _db
       .collection('groups')
       .doc(gid)
-      .update({
-        'defaultChipSetId': id ?? FieldValue.delete(),
-      });
+      .update({'defaultChipSetId': id ?? FieldValue.delete()});
+
+  /// Points the group at one of the owner's saved game presets. Null means
+  /// the group follows the owner's profile default.
+  Future<void> updateGroupDefaultGamePreset(String gid, String? id) => _db
+      .collection('groups')
+      .doc(gid)
+      .update({'defaultGamePresetId': id ?? FieldValue.delete()});
 
   /// B9: retires [oldCode] and issues [newCode] for the same group in one
   /// commit.
@@ -1067,28 +1082,27 @@ class FirebaseRepository {
     required String hostName,
     required int memberCount,
     required int gamesPlayed,
-  }) =>
-      _db.runTransaction<bool>((txn) async {
-        final codes = _db.collection('joinCodes');
-        final next = newCode.toUpperCase();
-        final previous = oldCode.toUpperCase();
-        // Every read first: a transaction may not read after it has written.
-        final clash = await txn.get(codes.doc(next));
-        if (clash.exists) return false;
+  }) => _db.runTransaction<bool>((txn) async {
+    final codes = _db.collection('joinCodes');
+    final next = newCode.toUpperCase();
+    final previous = oldCode.toUpperCase();
+    // Every read first: a transaction may not read after it has written.
+    final clash = await txn.get(codes.doc(next));
+    if (clash.exists) return false;
 
-        txn.update(_db.collection('groups').doc(gid), {'joinCode': next});
-        txn.set(codes.doc(next), {
-          'gid': gid,
-          'kind': 'group',
-          'name': name,
-          'icon': icon,
-          'hostName': hostName,
-          'memberCount': memberCount,
-          'gamesPlayed': gamesPlayed,
-        });
-        if (previous != next) txn.delete(codes.doc(previous));
-        return true;
-      });
+    txn.update(_db.collection('groups').doc(gid), {'joinCode': next});
+    txn.set(codes.doc(next), {
+      'gid': gid,
+      'kind': 'group',
+      'name': name,
+      'icon': icon,
+      'hostName': hostName,
+      'memberCount': memberCount,
+      'gamesPlayed': gamesPlayed,
+    });
+    if (previous != next) txn.delete(codes.doc(previous));
+    return true;
+  });
 
   /// The rows one game leaves behind OUTSIDE `groups/{gid}` — the only two kinds
   /// a recursive group delete cannot reach by walking the group document.
@@ -1259,20 +1273,20 @@ class FirebaseRepository {
 
     // Groups with real history have games with their own subcollections; the
     // list mirrors the nesting in firestore.rules.
-    await addTree(groupRef, 'games', const [
-      'memberViews',
-      'players',
-      'chat',
-      'admin',
-      'meta',
-      'settlements',
-    ], onDoc: (doc) {
-      external.addAll(externalGameRefs(
-        gameId: doc.id,
-        publicCode: codeOf(doc, 'publicCode'),
-        tvCode: codeOf(doc, 'tvCode'),
-      ));
-    });
+    await addTree(
+      groupRef,
+      'games',
+      const ['memberViews', 'players', 'chat', 'admin', 'meta', 'settlements'],
+      onDoc: (doc) {
+        external.addAll(
+          externalGameRefs(
+            gameId: doc.id,
+            publicCode: codeOf(doc, 'publicCode'),
+            tvCode: codeOf(doc, 'tvCode'),
+          ),
+        );
+      },
+    );
     for (final collection in const [
       'members',
       'chat',
@@ -1346,10 +1360,12 @@ class FirebaseRepository {
     // the group's invite code — is one delete rather than the same rule
     // evaluated twice for one document.
     if (external.isNotEmpty) {
-      deletes.addAll(await _existingRefs([
-        for (final ref in external.toSet())
-          _db.collection(ref.collection).doc(ref.id),
-      ]));
+      deletes.addAll(
+        await _existingRefs([
+          for (final ref in external.toSet())
+            _db.collection(ref.collection).doc(ref.id),
+        ]),
+      );
     }
 
     // MUST STAY LAST — see the ordering notes above.
@@ -1515,6 +1531,9 @@ class FirebaseRepository {
                 : tableSettingsFromMap(
                     Map<String, dynamic>.from(meta!['tableSettings'] as Map),
                   ),
+            defaultChipSetId: meta?['defaultChipSetId'] as String?,
+            defaultGamePresetId: meta?['defaultGamePresetId'] as String?,
+            learningOptOut: (meta?['learningOptOut'] as bool?) ?? false,
           ),
         );
       }
@@ -1641,10 +1660,12 @@ class FirebaseRepository {
             final uid = currentUid;
             final isOwner = meta?['ownerId'] == uid;
             final userIsAdmin =
-                isAdmin || isOwner || members.any((m) => m.id == uid && m.isAdmin);
+                isAdmin ||
+                isOwner ||
+                members.any((m) => m.id == uid && m.isAdmin);
             games = [
               for (final d in s.docs)
-                ?tryParseGameDoc(d, scrubPayments: !userIsAdmin)
+                ?tryParseGameDoc(d, scrubPayments: !userIsAdmin),
             ];
             if (userIsAdmin) {
               for (final d in s.docs) {
@@ -1726,8 +1747,7 @@ class FirebaseRepository {
             ChatReport.fromMap(
               d.id,
               d.data(),
-              (d.data()['createdAt'] as Timestamp?)?.toDate() ??
-                  DateTime.now(),
+              (d.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
             ),
         ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
         return list;
@@ -1741,7 +1761,10 @@ class FirebaseRepository {
       _db.collection('groups').doc(gid).collection('importedNights');
 
   /// Host-only (rules). One batch, so a failed import leaves nothing behind.
-  Future<void> saveImportedNights(String gid, List<ImportedNight> nights) async {
+  Future<void> saveImportedNights(
+    String gid,
+    List<ImportedNight> nights,
+  ) async {
     final batch = _db.batch();
     for (final n in nights) {
       batch.set(_importedNightsCol(gid).doc(n.id), n.toMap());
@@ -1810,7 +1833,11 @@ class FirebaseRepository {
   /// require (19-010) in the same batch, so the rule's `getAfter` observes it.
   /// Admin writes (create / close) are not throttled.
   Future<void> savePoll(String gid, Poll poll, {bool asVote = false}) async {
-    final ref = _db.collection('groups').doc(gid).collection('polls').doc(poll.id);
+    final ref = _db
+        .collection('groups')
+        .doc(gid)
+        .collection('polls')
+        .doc(poll.id);
     final uid = currentUid;
     if (!asVote || uid == null) {
       await ref.set(pollToMap(poll));
@@ -1834,7 +1861,11 @@ class FirebaseRepository {
   /// Returns true when this device won the claim. (The claim timestamp is
   /// persisted as an ISO string to match `liveGameToFirestoreDoc`'s
   /// `editorClaimedAt` encoding.)
-  Future<bool> claimGameEditor(String groupId, String gameId, {bool force = false}) {
+  Future<bool> claimGameEditor(
+    String groupId,
+    String gameId, {
+    bool force = false,
+  }) {
     final ref = _db
         .collection('groups')
         .doc(groupId)
@@ -2264,7 +2295,9 @@ class FirebaseRepository {
         listLength: finishOrder.length,
       );
       final myPayments = game.payments
-          .where((pay) => pay.playerId == p.id && pay.status == PaymentStatus.paid)
+          .where(
+            (pay) => pay.playerId == p.id && pay.status == PaymentStatus.paid,
+          )
           .toList();
 
       final rebuyUnit = game.settings.rebuyCost ?? game.settings.buyIn;
@@ -2273,7 +2306,8 @@ class FirebaseRepository {
 
       int buyInsPaid;
       if (game.payments.isEmpty) {
-        buyInsPaid = buyInUnit +
+        buyInsPaid =
+            buyInUnit +
             (p.rebuys * rebuyUnit) +
             (p.reEntries * buyInUnit) +
             (p.hasAddOn ? addOnUnit : 0);
@@ -2296,11 +2330,14 @@ class FirebaseRepository {
         );
 
         final unrecordedRebuys = (p.rebuys - paidRebuysCount).clamp(0, 999);
-        final unrecordedReEntries =
-            (p.reEntries - paidReEntriesCount).clamp(0, 999);
+        final unrecordedReEntries = (p.reEntries - paidReEntriesCount).clamp(
+          0,
+          999,
+        );
         final unrecordedAddOn = (p.hasAddOn && !hasAddOnPayment) ? 1 : 0;
 
-        int unrecordedTotal = (unrecordedRebuys * rebuyUnit) +
+        int unrecordedTotal =
+            (unrecordedRebuys * rebuyUnit) +
             (unrecordedReEntries * buyInUnit) +
             (unrecordedAddOn * addOnUnit);
 
@@ -2316,10 +2353,12 @@ class FirebaseRepository {
         buyInsPaid = paidTotal + unrecordedTotal;
       }
 
-      final prize = game.structure.prizes
-          .where((pr) => pr.place == position)
-          .firstOrNull
-          ?.amount ?? 0;
+      final prize =
+          game.structure.prizes
+              .where((pr) => pr.place == position)
+              .firstOrNull
+              ?.amount ??
+          0;
 
       settlements[p.id] = GameResultRow(
         gameId: game.id,
@@ -2353,8 +2392,11 @@ class FirebaseRepository {
       final addOnDeclinedRaw = docData['addOnDeclined'];
       final playersRaw = docData['players'];
 
-      final gameRef =
-          _db.collection('groups').doc(gid).collection('games').doc(gameId);
+      final gameRef = _db
+          .collection('groups')
+          .doc(gid)
+          .collection('games')
+          .doc(gameId);
       final privateRef = gameRef.collection('admin').doc('privateData');
 
       // Backup unscrubbed private data into admin privateData sidecar
@@ -2378,17 +2420,18 @@ class FirebaseRepository {
       if (playersRaw is Map) {
         backup['players'] = [
           for (final v in playersRaw.values)
-            if (v is Map) Map<String, dynamic>.from(v)
+            if (v is Map) Map<String, dynamic>.from(v),
         ];
       } else if (playersRaw is List) {
         backup['players'] = [
           for (final v in playersRaw)
-            if (v is Map) Map<String, dynamic>.from(v)
+            if (v is Map) Map<String, dynamic>.from(v),
         ];
       }
       if (docData['structure'] is Map &&
           (docData['structure'] as Map).containsKey('organizerAmount')) {
-        backup['organizerAmount'] = (docData['structure'] as Map)['organizerAmount'];
+        backup['organizerAmount'] =
+            (docData['structure'] as Map)['organizerAmount'];
       }
       if (docData['settings'] is Map &&
           (docData['settings'] as Map).containsKey('organizerPct')) {
@@ -2402,14 +2445,17 @@ class FirebaseRepository {
       // Ensure authoritative settlements exist before scrubbing public document
       // financial data. Check groups/{gid}/games/{gameId}/settlements subcollection.
       final legacyGame = liveGameFromFirestoreDoc(docData);
-      final isCompleted = legacyGame.status == LiveGameStatus.completed ||
+      final isCompleted =
+          legacyGame.status == LiveGameStatus.completed ||
           legacyGame.finishOrder.isNotEmpty ||
           docData['endedAt'] != null;
       if (isCompleted) {
         if (legacyGame.finishOrder.isEmpty) {
           // Without finishOrder, authoritative settlements cannot be computed.
           // Abort scrub so financial data is preserved on docData.
-          debugPrint('scrubLegacyGamePayments: completed game $gameId has empty finishOrder, preserving raw document.');
+          debugPrint(
+            'scrubLegacyGamePayments: completed game $gameId has empty finishOrder, preserving raw document.',
+          );
           return;
         }
         final settCol = gameRef.collection('settlements');
@@ -2866,17 +2912,15 @@ class FirebaseRepository {
     AppNotification notification,
   ) {
     final prev = _notifyChain ?? Future<void>.value();
-    final next = prev
-        .catchError((Object _) {})
-        .then((_) async {
-          final last = _lastNotifyAt;
-          if (last != null) {
-            final since = DateTime.now().difference(last);
-            if (since < _notifyGap) await Future<void>.delayed(_notifyGap - since);
-          }
-          _lastNotifyAt = DateTime.now();
-          await _stageGroupNotificationNow(gid, notification);
-        });
+    final next = prev.catchError((Object _) {}).then((_) async {
+      final last = _lastNotifyAt;
+      if (last != null) {
+        final since = DateTime.now().difference(last);
+        if (since < _notifyGap) await Future<void>.delayed(_notifyGap - since);
+      }
+      _lastNotifyAt = DateTime.now();
+      await _stageGroupNotificationNow(gid, notification);
+    });
     _notifyChain = next;
     return next;
   }
@@ -2994,4 +3038,3 @@ class FirebaseRepository {
 /// Debug logger used by repository callers to trace sync behaviour.
 @visibleForTesting
 void logRepo(Object message) => debugPrint('[FirebaseRepository] $message');
-

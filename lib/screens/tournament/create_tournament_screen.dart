@@ -135,8 +135,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       targetDepthBB: TournamentType.normal.depthBB,
       breaks: const [],
     );
-    final seeded = app.defaultGamePreset.applyTo(starter);
-    return app.defaultGamePresetId == null
+    final groupPreset = app.presetById(app.currentGroup.defaultGamePresetId);
+    final preset = groupPreset ?? app.defaultGamePreset;
+    final seeded = preset.applyTo(starter);
+    return groupPreset == null && app.defaultGamePresetId == null
         ? seeded.copyWith(
             chipSet: starter.chipSet,
             chipSetName: starter.chipSetName,
@@ -277,7 +279,11 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       return;
     }
 
-    final running = app.currentGroup.games.where((g) => g.status.isActiveLive).firstOrNull ?? app.currentGame;
+    final running =
+        app.currentGroup.games
+            .where((g) => g.status.isActiveLive)
+            .firstOrNull ??
+        app.currentGame;
     if (running != null && running.status.isActiveLive) {
       final proceed = await _confirmReplace(app, running);
       if (!mounted) return;
@@ -429,8 +435,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
     final type = _typeForSettings(_draft);
     final format = _draft.effectiveFormat;
-    final indicativeStack =
-        _draft.earlyArrivalBonusEnabled ? _indicativeStack : 0;
+    final indicativeStack = _draft.earlyArrivalBonusEnabled
+        ? _indicativeStack
+        : 0;
     final bonusChips = (indicativeStack * _bonusPct / 100).round();
     final currency = Formatters.currencySymbol;
 

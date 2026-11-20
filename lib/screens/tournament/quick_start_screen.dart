@@ -136,11 +136,13 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       locationPrivate: false,
       breaks: const [],
     );
-    final seeded = app.defaultGamePreset.applyTo(base);
+    final groupPreset = app.presetById(app.currentGroup.defaultGamePresetId);
+    final preset = groupPreset ?? app.defaultGamePreset;
+    final seeded = preset.applyTo(base);
     // A deliberately selected game preset is complete, including its chips.
     // With no selection, the starter supplies game rules while the host's
     // existing chip-case default remains the more specific physical choice.
-    return app.defaultGamePresetId == null
+    return groupPreset == null && app.defaultGamePresetId == null
         ? seeded.copyWith(chipSet: base.chipSet, chipSetName: base.chipSetName)
         : seeded;
   }
@@ -199,7 +201,11 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
     // (game, group, guest sign-in) may be created for a night the chips cannot
     // deal.
     if (approved.isBlocked) return;
-    final running = app.currentGroup.games.where((g) => g.status.isActiveLive).firstOrNull ?? app.currentGame;
+    final running =
+        app.currentGroup.games
+            .where((g) => g.status.isActiveLive)
+            .firstOrNull ??
+        app.currentGame;
     if (running != null && running.status.isActiveLive) {
       final proceed = await _confirmReplace(app, running);
       if (!mounted) return;

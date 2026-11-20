@@ -31,7 +31,9 @@ class BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
 
-    final hasCurrentGroup = context.select<AppProvider, bool>((a) => a.hasCurrentGroup);
+    final hasCurrentGroup = context.select<AppProvider, bool>(
+      (a) => a.hasCurrentGroup,
+    );
     final items = <_BottomItem>[
       _BottomItem(
         path: RoutePaths.home,
@@ -45,20 +47,25 @@ class BottomNav extends StatelessWidget {
           label: 'Games',
           icon: Icons.sports_esports_outlined,
           activeColor: AppColors.primary,
+          activePaths: const [RoutePaths.polls],
         ),
         _BottomItem(
           path: RoutePaths.chat,
           label: 'Chat',
           icon: Icons.chat_bubble_outline,
           activeColor: AppColors.primary,
-          badge: context.select<AppProvider, int>((a) => a.unreadGroupChatCount(a.currentGroup.id)),
+          badge: context.select<AppProvider, int>(
+            (a) => a.unreadGroupChatCount(a.currentGroup.id),
+          ),
         ),
         _BottomItem(
           path: RoutePaths.members,
           label: 'Members',
           icon: Icons.person_outline,
           activeColor: AppColors.primary,
-          badge: context.select<AppProvider, int>((a) => a.currentGroup.members.length),
+          badge: context.select<AppProvider, int>(
+            (a) => a.currentGroup.members.length,
+          ),
         ),
         _BottomItem(
           path: '#more',
@@ -68,7 +75,6 @@ class BottomNav extends StatelessWidget {
           // T135: anything reached from Explore or the drawer lights "More"
           // as active, not its own tab. Tools and Standings are two of them.
           activePaths: const [
-            RoutePaths.polls,
             RoutePaths.history,
             RoutePaths.cashGame,
             RoutePaths.tools,
@@ -242,18 +248,6 @@ class BottomNav extends StatelessWidget {
               // menu: nothing empty, a bigger tap target, and the sheet only
               // as tall as it needs to be.
               _MoreRow(
-                icon: Icons.poll_outlined,
-                label: 'Polls',
-                subtitle: 'Vote & plan',
-                count: hasGroup ? app.currentGroup.polls.length : 0,
-                onTap: hasGroup
-                    ? () {
-                        Navigator.of(sheetContext).pop();
-                        context.go(RoutePaths.polls);
-                      }
-                    : null,
-              ),
-              _MoreRow(
                 icon: Icons.history,
                 label: 'History',
                 subtitle: 'Past games',
@@ -314,14 +308,12 @@ class _MoreRow extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.subtitle,
-    this.count,
   });
 
   final IconData icon;
   final String label;
   final String? subtitle;
   final VoidCallback? onTap;
-  final int? count;
 
   @override
   Widget build(BuildContext context) {
@@ -390,10 +382,6 @@ class _MoreRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (count != null && count! > 0) ...[
-                  _CountChip(count: count!),
-                  const SizedBox(width: AppSpacing.sm),
-                ],
                 Icon(
                   Icons.chevron_right,
                   size: 18,
@@ -434,33 +422,9 @@ class _BadgeCount extends StatelessWidget {
         // AppTypography.mono(size: 9), not monoXs.copyWith(fontSize: 9) —
         // copyWith replaces the value AppScale.sp() computed, so the badge
         // would ignore the text-scale floor and stay 9px on every viewport.
-        style: AppTypography.mono(size: 9).copyWith(
-          color: AppColors.primaryForeground,
-        ),
-      ),
-    );
-  }
-}
-
-/// Neutral secondary chip showing a count (e.g. members on the More sheet).
-class _CountChip extends StatelessWidget {
-  const _CountChip({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppColors.muted,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-      ),
-      child: Text(
-        '$count',
-        style: AppTypography.monoSm.copyWith(
-          color: AppColors.mutedForeground,
-        ),
+        style: AppTypography.mono(
+          size: 9,
+        ).copyWith(color: AppColors.primaryForeground),
       ),
     );
   }

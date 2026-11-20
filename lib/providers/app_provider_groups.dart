@@ -66,19 +66,21 @@ extension AppProviderGroups on AppProvider {
         '${g.joinCode}|${g.name}|${g.icon}|$hostName|${g.members.length}|$played';
     if (key == _lastInvitePreviewKey) return;
     _lastInvitePreviewKey = key;
-    unawaited(_repo
-        .updateInvitePreview(
-          g.joinCode,
-          name: g.name,
-          icon: g.icon,
-          hostName: hostName,
-          memberCount: g.members.length,
-          gamesPlayed: played,
-        )
-        .catchError((Object e) {
-      _lastInvitePreviewKey = null;
-      debugPrint('updateInvitePreview failed: $e');
-    }));
+    unawaited(
+      _repo
+          .updateInvitePreview(
+            g.joinCode,
+            name: g.name,
+            icon: g.icon,
+            hostName: hostName,
+            memberCount: g.members.length,
+            gamesPlayed: played,
+          )
+          .catchError((Object e) {
+            _lastInvitePreviewKey = null;
+            debugPrint('updateInvitePreview failed: $e');
+          }),
+    );
   }
 
   /// Id of the selected group — set the instant a group is chosen, even before
@@ -149,6 +151,7 @@ extension AppProviderGroups on AppProvider {
       polls: const [],
       notifications: const [],
       icon: icon,
+      defaultGamePresetId: _defaultGamePresetId,
     );
     try {
       await _repo.createGroup(group, user);
@@ -169,10 +172,13 @@ extension AppProviderGroups on AppProvider {
     if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
-      unawaited(_repo
-          .updateGroupIndex(uid, group.id, pinned: !group.pinned)
-          .catchError((Object e) =>
-              debugPrint('updateGroupIndex(pinned) failed: $e')));
+      unawaited(
+        _repo
+            .updateGroupIndex(uid, group.id, pinned: !group.pinned)
+            .catchError(
+              (Object e) => debugPrint('updateGroupIndex(pinned) failed: $e'),
+            ),
+      );
     }
   }
 
@@ -202,7 +208,8 @@ extension AppProviderGroups on AppProvider {
     if (demoted.isNotEmpty) {
       final promoted = _currentGroup.members.firstWhere((m) => m.id == userId);
       final former = _currentGroup.members.firstWhere(
-          (m) => m.id == demoted.first);
+        (m) => m.id == demoted.first,
+      );
       addAnnouncement(
         '${former.name} is no longer the host — ${promoted.name} is now the group host.',
         true,
@@ -210,15 +217,23 @@ extension AppProviderGroups on AppProvider {
     }
     if (!_disposed) notifyListeners();
     if (_backendUp) {
-      unawaited(_repo
-          .setMemberRole(_currentGroup.id, userId, role.storageValue)
-          .catchError(
-              (Object e) => debugPrint('setMemberRole failed: $e')));
+      unawaited(
+        _repo
+            .setMemberRole(_currentGroup.id, userId, role.storageValue)
+            .catchError((Object e) => debugPrint('setMemberRole failed: $e')),
+      );
       for (final id in demoted) {
-        unawaited(_repo
-            .setMemberRole(_currentGroup.id, id, GroupRole.coHost.storageValue)
-            .catchError(
-                (Object e) => debugPrint('setMemberRole (demote) failed: $e')));
+        unawaited(
+          _repo
+              .setMemberRole(
+                _currentGroup.id,
+                id,
+                GroupRole.coHost.storageValue,
+              )
+              .catchError(
+                (Object e) => debugPrint('setMemberRole (demote) failed: $e'),
+              ),
+        );
       }
     }
   }
@@ -226,7 +241,8 @@ extension AppProviderGroups on AppProvider {
   /// Host or Co-host: adds a registered user directly to the group by
   /// email, without going through an invite link/QR/join code. Returns null
   /// on success, or a friendly error message for the UI.
-  Future<String?> addMemberByEmail(String email) async { // Fixed: use joinGroup
+  Future<String?> addMemberByEmail(String email) async {
+    // Fixed: use joinGroup
     if (!canManageMembers) return 'Only the Host can add members.';
     if (!_backendUp) return 'You are offline.';
     final trimmed = email.trim();
@@ -303,10 +319,13 @@ extension AppProviderGroups on AppProvider {
     _setGroup(_currentGroup.copyWith(tableSettings: settings));
     if (!_disposed) notifyListeners();
     if (_backendUp) {
-      unawaited(_repo
-          .updateGroupTableSettings(_currentGroup.id, settings)
-          .catchError((Object e) =>
-              debugPrint('updateGroupTableSettings failed: $e')));
+      unawaited(
+        _repo
+            .updateGroupTableSettings(_currentGroup.id, settings)
+            .catchError(
+              (Object e) => debugPrint('updateGroupTableSettings failed: $e'),
+            ),
+      );
     }
   }
 
@@ -320,8 +339,7 @@ extension AppProviderGroups on AppProvider {
         _repo
             .updateGroupLearningOptOut(_currentGroup.id, optOut)
             .catchError(
-              (Object e) =>
-                  debugPrint('updateGroupLearningOptOut failed: $e'),
+              (Object e) => debugPrint('updateGroupLearningOptOut failed: $e'),
             ),
       );
     }
@@ -336,16 +354,45 @@ extension AppProviderGroups on AppProvider {
   void setGroupDefaultChipSet(String? id) {
     if (_user?.id != _currentGroup.ownerId) return;
     if (_currentGroup.defaultChipSetId == id) return;
-    _setGroup(_currentGroup.copyWith(
-      defaultChipSetId: id,
-      clearDefaultChipSetId: id == null,
-    ));
+    _setGroup(
+      _currentGroup.copyWith(
+        defaultChipSetId: id,
+        clearDefaultChipSetId: id == null,
+      ),
+    );
     if (!_disposed) notifyListeners();
     if (_backendUp) {
-      unawaited(_repo
-          .updateGroupDefaultChipSet(_currentGroup.id, id)
-          .catchError((Object e) =>
-              debugPrint('setGroupDefaultChipSet failed: $e')));
+      unawaited(
+        _repo
+            .updateGroupDefaultChipSet(_currentGroup.id, id)
+            .catchError(
+              (Object e) => debugPrint('setGroupDefaultChipSet failed: $e'),
+            ),
+      );
+    }
+  }
+
+  /// Owner-only: uses one saved game preset as this group's default. Passing
+  /// null makes the group follow the owner's profile default again.
+  void setGroupDefaultGamePreset(String? id) {
+    if (_user?.id != _currentGroup.ownerId) return;
+    if (id != null && presetById(id) == null) return;
+    if (_currentGroup.defaultGamePresetId == id) return;
+    _setGroup(
+      _currentGroup.copyWith(
+        defaultGamePresetId: id,
+        clearDefaultGamePresetId: id == null,
+      ),
+    );
+    if (!_disposed) notifyListeners();
+    if (_backendUp) {
+      unawaited(
+        _repo
+            .updateGroupDefaultGamePreset(_currentGroup.id, id)
+            .catchError(
+              (Object e) => debugPrint('setGroupDefaultGamePreset failed: $e'),
+            ),
+      );
     }
   }
 
@@ -368,15 +415,15 @@ extension AppProviderGroups on AppProvider {
   void removeMember(String userId) {
     if (_user?.id != _currentGroup.ownerId) return;
     if (userId == _currentGroup.ownerId) return;
-    final members =
-        _currentGroup.members.where((m) => m.id != userId).toList();
+    final members = _currentGroup.members.where((m) => m.id != userId).toList();
     _setGroup(_currentGroup.copyWith(members: members));
     if (!_disposed) notifyListeners();
     if (_backendUp) {
-      unawaited(_repo
-          .deleteMember(_currentGroup.id, userId)
-          .catchError(
-              (Object e) => debugPrint('deleteMember failed: $e')));
+      unawaited(
+        _repo
+            .deleteMember(_currentGroup.id, userId)
+            .catchError((Object e) => debugPrint('deleteMember failed: $e')),
+      );
     }
   }
 
@@ -394,9 +441,7 @@ extension AppProviderGroups on AppProvider {
     if (_backendUp) {
       await _repo
           .transferGroupOwnership(gid, userId, newOwnerId, newOwner.name)
-          .catchError(
-            (Object e) => debugPrint('transferOwnership failed: $e'),
-          );
+          .catchError((Object e) => debugPrint('transferOwnership failed: $e'));
     }
   }
 
@@ -489,10 +534,13 @@ extension AppProviderGroups on AppProvider {
     if (userId == null || userId == _currentGroup.ownerId) return;
     final leftGid = _currentGroup.id;
     if (_backendUp && leftGid.isNotEmpty) {
-      unawaited(_repo
-          .deleteMember(leftGid, userId)
-          .catchError(
-              (Object e) => debugPrint('leaveGroup deleteMember failed: $e')));
+      unawaited(
+        _repo
+            .deleteMember(leftGid, userId)
+            .catchError(
+              (Object e) => debugPrint('leaveGroup deleteMember failed: $e'),
+            ),
+      );
     }
     // Drop the left group locally and switch the hub to another group (or an
     // empty state) straight away, tearing down its now-inaccessible bundle.

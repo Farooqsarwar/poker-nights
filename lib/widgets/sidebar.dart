@@ -38,19 +38,54 @@ class Sidebar extends StatelessWidget {
     final primaryNavItems = [
       _NavSpec(RoutePaths.home, 'Home', Icons.home_outlined, 0, null),
       if (app.hasCurrentGroup && !app.isGuest) ...[
-        _NavSpec(RoutePaths.group, 'Games', Icons.sports_esports_outlined, 0, null),
-        _NavSpec(RoutePaths.chat, 'Chat', Icons.chat_bubble_outline, 0, app.unreadGroupChatCount(group.id)),
-        _NavSpec(RoutePaths.members, 'Members', Icons.groups_outlined, 0, group.members.length),
+        _NavSpec(
+          RoutePaths.group,
+          'Games',
+          Icons.sports_esports_outlined,
+          0,
+          null,
+        ),
+        _NavSpec(
+          RoutePaths.chat,
+          'Chat',
+          Icons.chat_bubble_outline,
+          0,
+          app.unreadGroupChatCount(group.id),
+        ),
+        _NavSpec(
+          RoutePaths.members,
+          'Members',
+          Icons.groups_outlined,
+          0,
+          group.members.length,
+        ),
       ],
     ];
     final secondaryNavItems = [
-      _NavSpec(RoutePaths.standings, 'Standings & Seasons', Icons.leaderboard_outlined, 0, null),
+      _NavSpec(
+        RoutePaths.standings,
+        'Standings & Seasons',
+        Icons.leaderboard_outlined,
+        0,
+        null,
+      ),
       _NavSpec(RoutePaths.presets, 'Presets', Icons.list_alt_outlined, 0, null),
-      _NavSpec(RoutePaths.polls, 'Polls', Icons.poll_outlined, 0, null),
       _NavSpec(RoutePaths.history, 'History', Icons.history, 0, null),
-      _NavSpec(RoutePaths.cashGame, 'Cash Game', Icons.payments_outlined, 0, null),
+      _NavSpec(
+        RoutePaths.cashGame,
+        'Cash Game',
+        Icons.payments_outlined,
+        0,
+        null,
+      ),
       _NavSpec(RoutePaths.tools, 'Public Tools', Icons.build_outlined, 0, null),
-      _NavSpec(RoutePaths.upgrade, 'Premium', Icons.workspace_premium_outlined, 0, null),
+      _NavSpec(
+        RoutePaths.upgrade,
+        'Premium',
+        Icons.workspace_premium_outlined,
+        0,
+        null,
+      ),
       _NavSpec(
         RoutePaths.settings,
         'Settings',
@@ -92,10 +127,7 @@ class Sidebar extends StatelessWidget {
                   ],
                 ),
               ),
-              child: const PokerNightBrand(
-                logoSize: 26,
-                fontSize: 18,
-              ),
+              child: const PokerNightBrand(logoSize: 26, fontSize: 18),
             ),
             // Nav items
             Expanded(
@@ -246,10 +278,7 @@ class Sidebar extends StatelessWidget {
                       child: Row(
                         children: [
                           if (user != null)
-                            AppAvatar(
-                              name: user.name,
-                              size: AppAvatarSize.sm,
-                            ),
+                            AppAvatar(name: user.name, size: AppAvatarSize.sm),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: Column(
@@ -279,7 +308,8 @@ class Sidebar extends StatelessWidget {
                                       app.premiumTier == PremiumTier.premium
                                           ? 'PREMIUM'
                                           : 'FREE',
-                                      tone: app.premiumTier == PremiumTier.premium
+                                      tone:
+                                          app.premiumTier == PremiumTier.premium
                                           ? AppTagTone.primary
                                           : AppTagTone.neutral,
                                     ),
@@ -413,4 +443,3 @@ class _NavTile extends StatelessWidget {
     );
   }
 }
-

@@ -129,7 +129,9 @@ class _SplashScreenState extends State<SplashScreen>
     // If previous game was running and we can resume, do so
     if (app.canResumePreviousGame) {
       if (app.currentGame != null) {
-        context.go(app.isAdmin ? RoutePaths.hostDashboard : RoutePaths.playerLive);
+        context.go(
+          app.isAdmin ? RoutePaths.hostDashboard : RoutePaths.playerLive,
+        );
       } else {
         context.go(RoutePaths.home);
       }
@@ -169,65 +171,65 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         ),
         child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _goNext, // let impatient users skip the splash
-        child: SafeArea(
-          child: SizedBox.expand(
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (BuildContext context, Widget? child) {
-                final double fade =
-                    (_opacityAnimation.value * _exitAnimation.value).clamp(
-                      0.0,
-                      1.0,
-                    );
+          behavior: HitTestBehavior.opaque,
+          onTap: _goNext, // let impatient users skip the splash
+          child: SafeArea(
+            child: SizedBox.expand(
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (BuildContext context, Widget? child) {
+                  final double fade =
+                      (_opacityAnimation.value * _exitAnimation.value).clamp(
+                        0.0,
+                        1.0,
+                      );
 
-                return Stack(
-                  alignment: Alignment.center,
-                  children: <Widget>[
-                    // Soft red bloom behind the card.
-                    Opacity(
-                      opacity:
-                          (0.6 * _glowAnimation.value * _exitAnimation.value)
-                              .clamp(0.0, 1.0),
-                      child: Container(
-                        width: cardSize * 2.2,
-                        height: cardSize * 2.2,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: <Color>[
-                              AppColors.primary.withValues(alpha: 0.20),
-                              Colors.transparent,
-                            ],
-                            stops: const <double>[0.0, 1.0],
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: <Widget>[
+                      // Soft red bloom behind the card.
+                      Opacity(
+                        opacity:
+                            (0.6 * _glowAnimation.value * _exitAnimation.value)
+                                .clamp(0.0, 1.0),
+                        child: Container(
+                          width: cardSize * 2.2,
+                          height: cardSize * 2.2,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              colors: <Color>[
+                                AppColors.primary.withValues(alpha: 0.20),
+                                Colors.transparent,
+                              ],
+                              stops: const <double>[0.0, 1.0],
+                            ),
                           ),
                         ),
                       ),
-                    ),
 
-                    // The flipping card.
-                    Opacity(
-                      opacity: fade,
-                      child: Transform.translate(
-                        offset: Offset(0.0, _liftAnimation.value),
-                        child: Transform.scale(
-                          scale: _scaleAnimation.value,
-                          alignment: Alignment.center,
-                          child: _FlipCard(
-                            size: cardSize,
-                            turns: reduceMotion ? 0.5 : _spinAnimation.value,
+                      // The flipping card.
+                      Opacity(
+                        opacity: fade,
+                        child: Transform.translate(
+                          offset: Offset(0.0, _liftAnimation.value),
+                          child: Transform.scale(
+                            scale: _scaleAnimation.value,
+                            alignment: Alignment.center,
+                            child: _FlipCard(
+                              size: cardSize,
+                              turns: reduceMotion ? 0.5 : _spinAnimation.value,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                );
-              },
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -463,29 +465,25 @@ class _FrontFacePainter extends CustomPainter {
     bracket(rx, by, -1, -1); // bottom-right
   }
 
-  /// Spade silhouette. The control points were least-squares fitted to the
-  /// reference artwork (97.5% area overlap), then mirrored for the right half.
+  /// DECISION: Match the approved logo's symmetric, rounded spade lobes in
+  /// the separately painted splash mark as well as the palette PNG assets.
   Path _spadePath(double w, double h) {
     double x(double v) => v * w;
     double y(double v) => v * h;
 
     return Path()
       ..moveTo(x(0.500), y(0.000))
-      // left shoulder sweeping down to the widest point
-      ..cubicTo(x(0.360), y(0.260), x(0.000), y(0.340), x(0.000), y(0.600))
-      // left lobe
-      ..cubicTo(x(0.040), y(0.770), x(0.200), y(0.800), x(0.245), y(0.815))
-      ..cubicTo(x(0.330), y(0.800), x(0.390), y(0.800), x(0.472), y(0.715))
-      // stem, left side
-      ..cubicTo(x(0.465), y(0.860), x(0.400), y(0.960), x(0.303), y(1.000))
-      ..lineTo(x(0.697), y(1.000))
-      // stem, right side (mirror)
-      ..cubicTo(x(0.600), y(0.960), x(0.535), y(0.860), x(0.528), y(0.715))
-      // right lobe (mirror)
-      ..cubicTo(x(0.610), y(0.800), x(0.670), y(0.800), x(0.755), y(0.815))
-      ..cubicTo(x(0.800), y(0.800), x(0.960), y(0.770), x(1.000), y(0.600))
-      // right shoulder back to the tip (mirror)
-      ..cubicTo(x(1.000), y(0.340), x(0.640), y(0.260), x(0.500), y(0.000))
+      ..cubicTo(x(0.363), y(0.176), x(0.202), y(0.270), x(0.087), y(0.380))
+      ..cubicTo(x(0.030), y(0.433), x(0.000), y(0.490), x(0.000), y(0.556))
+      ..cubicTo(x(0.000), y(0.700), x(0.115), y(0.809), x(0.260), y(0.815))
+      ..cubicTo(x(0.355), y(0.819), x(0.439), y(0.782), x(0.477), y(0.724))
+      ..cubicTo(x(0.479), y(0.826), x(0.421), y(0.938), x(0.304), y(1.000))
+      ..lineTo(x(0.696), y(1.000))
+      ..cubicTo(x(0.579), y(0.938), x(0.521), y(0.826), x(0.523), y(0.724))
+      ..cubicTo(x(0.561), y(0.782), x(0.645), y(0.819), x(0.740), y(0.815))
+      ..cubicTo(x(0.885), y(0.809), x(1.000), y(0.700), x(1.000), y(0.556))
+      ..cubicTo(x(1.000), y(0.490), x(0.970), y(0.433), x(0.913), y(0.380))
+      ..cubicTo(x(0.798), y(0.270), x(0.637), y(0.176), x(0.500), y(0.000))
       ..close();
   }
 

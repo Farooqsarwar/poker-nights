@@ -576,6 +576,16 @@ class _StackStepState extends State<_StackStep> {
                     color: AppColors.mutedForeground,
                   ),
                 ),
+              ] else if (!c.syntheticBank && c.chipSet.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'If your chips have no printed numbers, their saved values '
+                  'were estimated. Check them before starting.',
+                  key: const Key('stack-check-estimated-values'),
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
               ],
               const SizedBox(height: AppSpacing.sm),
               Text(

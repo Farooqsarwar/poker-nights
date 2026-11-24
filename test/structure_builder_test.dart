@@ -336,6 +336,25 @@ void main() {
       await unmount(t);
     });
 
+    testWidgets('saved chip values still prompt a check for unnumbered chips',
+        (t) async {
+      final c = _ctl(chips: _homeSet, players: 8);
+      await t.binding.setSurfaceSize(const Size(800, 4800));
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StructureBuilder(
+              controller: c, confirmLabel: 'Go', onConfirm: (_) {}),
+          ),
+        ),
+      ));
+
+      await tapKey(t, 'builder-next');
+      expect(find.byKey(const Key('stack-check-estimated-values')), findsOneWidget);
+      expect(find.textContaining('values were estimated'), findsOneWidget);
+      await unmount(t);
+    });
+
     test('the controller depth maps tournament types and the custom stepper', () {
       final c = _ctl();
       expect(c.depthBB, 100);
@@ -754,6 +773,9 @@ void main() {
           : 0;
       await tapKey(t, 'approve-stack');
       expect(app.currentGame, isNull, reason: 'nothing is created before confirm');
+      await tapKey(t, 'edit-level-1');
+      await t.enterText(find.byKey(const Key('edit-mins-1')), '3');
+      await tapKey(t, 'save-level-1');
       await tapKey(t, 'builder-confirm');
       await t.pump(const Duration(milliseconds: 500));
       final game = app.currentGame;
@@ -762,6 +784,8 @@ void main() {
       expect(game.structure.startingStack, forced,
           reason: 'the stack the host approved, not a regenerated one');
       expect(game.structureConfirmed, isTrue);
+      expect(game.structure.levels.first.durationMins, 3);
+      expect(game.currentSecondsRemaining(), lessThanOrEqualTo(180));
       await unmount(t, app);
     });
   });

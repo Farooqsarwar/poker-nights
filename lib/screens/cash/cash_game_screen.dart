@@ -699,16 +699,24 @@ class _CashGameScreenState extends State<CashGameScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Chip value (D1): per session, never saved on the chip set.
+          // Chip-to-money conversion (D1): per session, never saved on the chip set.
           Text(
-            'Chip value',
+            'Chip number to money',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
               fontWeight: FontWeight.w500,
             ),
           ),
+          const SizedBox(height: 4),
+          Text(
+            'Multiply the number on a chip by this rate to get its cash value. '
+            'Leave it at 1 when chip numbers match money amounts.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
           const SizedBox(height: 10),
-          _buildBuyInField(controller: _chipValue, prefix: '1 chip ='),
+          _buildBuyInField(controller: _chipValue, prefix: 'Rate'),
           const SizedBox(height: 6),
           _buildChipValueExample(symbol),
           const SizedBox(height: 12),
@@ -932,7 +940,8 @@ class _CashGameScreenState extends State<CashGameScreen> {
         : buy.toString();
 
     final example =
-        'Example: At 1 chip = $sym$unitStr, a 25 chip is $sym$chip25Str; buy-in $sym$buyStr = $chipsCount chips.';
+        'Example: At a $unitStr rate, a chip marked 25 counts as $sym$chip25Str. '
+        'A $sym$buyStr buy-in gives $chipsCount in chip value.';
     return Text(
       example,
       style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),

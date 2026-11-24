@@ -174,8 +174,10 @@ void main() {
         child: const CashGameScreen(),
       );
 
-      // Check dynamic live example text exists
-      expect(find.textContaining('Example: At 1 chip ='), findsOneWidget);
+      // The conversion explains why the cash amount and chip numbers can differ.
+      expect(find.text('Chip number to money'), findsOneWidget);
+      expect(find.textContaining('Leave it at 1 when chip numbers match'), findsOneWidget);
+      expect(find.textContaining('a chip marked 25 counts as'), findsOneWidget);
 
       await unmount(tester, app, router);
     });

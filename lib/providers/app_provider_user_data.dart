@@ -27,7 +27,7 @@ extension AppProviderUserData on AppProvider {
     _groupsSub = _repo
         .groupsIndexStream(uid)
         .listen(
-          (rows) {
+          (rows) async {
             // Rebuild from the lightweight index, but keep the already-loaded rich
             // bundle for the selected group (its members/games) so the sidebar count
             // doesn't flip back to 0 on every index re-delivery — apply the index's
@@ -51,8 +51,9 @@ extension AppProviderUserData on AppProvider {
             // Mirror every group's notification outbox into this user's inbox
             // (free-plan fan-out — replaces the Cloud Function).
             _syncGroupOutboxSubs();
-            // First group after sign-in is auto-selected (pinned first, then
-            // alphabetical — same ordering the sidebar uses).
+            // Restore this account's last selected group before falling back
+            // to the sidebar order. A reload must not make a live game appear
+            // to vanish just because another group sorts first.
             if (_currentGroupId == null && rows.isNotEmpty) {
               final sorted = [...rows]
                 ..sort(
@@ -60,7 +61,23 @@ extension AppProviderUserData on AppProvider {
                       a.name.toLowerCase().compareTo(b.name.toLowerCase()),
                 );
               sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-              _selectGroup(sorted.first.groupId);
+              String? preferredId;
+              try {
+                final saved = await Localstore.instance
+                    .collection('app')
+                    .doc('selected_group_$uid')
+                    .get();
+                preferredId = saved?['groupId'] as String?;
+              } catch (e) {
+                debugPrint('Could not restore selected group: $e');
+              }
+              if (_repo.currentUid != uid) return;
+              if (_currentGroupId == null) {
+                final selected = sorted.any((r) => r.groupId == preferredId)
+                    ? preferredId!
+                    : sorted.first.groupId;
+                _selectGroup(selected);
+              }
             }
             // The index has loaded; if it picked a group, chain readiness to that
             // group's bundle so callers land on a populated dashboard.
@@ -465,6 +482,19 @@ extension AppProviderUserData on AppProvider {
   void _selectGroup(String gid) {
     if (_currentGroupId == gid && _bundleSub != null) return;
     _currentGroupId = gid;
+    final uid = _repo.currentUid;
+    if (uid != null) {
+      // DECISION: Group choice is device-local and account-scoped. Persisting
+      // it across reloads keeps the same live group in view without changing
+      // another device's current dashboard.
+      unawaited(
+        Localstore.instance
+            .collection('app')
+            .doc('selected_group_$uid')
+            .set({'groupId': gid})
+            .catchError((Object e) => debugPrint('Could not save selected group: $e')),
+      );
+    }
     _bundleSub?.cancel();
     _cashSub?.cancel();
     _cashSub = null;

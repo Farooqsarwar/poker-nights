@@ -111,14 +111,17 @@ async function openEventStructureBuilder(page: Page): Promise<void> {
     await tap(page, 'Create structure', { exact: false, timeout: 10_000 });
     return;
   }
-  const tries = ['+ New game', '＋ New game', 'New game', 'Create tournament'];
+  const tries = ['New game', '+ New game', '＋ New game', 'Create tournament'];
+  let formOpened = false;
   for (const t of tries) {
-    if (await hasText(page, t)) {
-      await tap(page, t, { exact: false, timeout: 8_000 });
+    try {
+      await tap(page, t, { exact: t === 'New game', timeout: 8_000 });
+      await expectText(page, 'New tournament', 20_000);
+      formOpened = true;
       break;
-    }
+    } catch { /* Try the next visible create entry. */ }
   }
-  await expectText(page, 'New tournament', 20_000);
+  if (!formOpened) throw new Error('M4: could not open the new tournament form');
   if (await hasText(page, 'Rebuy')) {
     await tap(page, 'Rebuy', { exact: true });
   }
@@ -132,6 +135,9 @@ async function openEventStructureBuilder(page: Page): Promise<void> {
     await page.keyboard.insertText('QA Event 20p');
   }
   await tap(page, 'Post', { exact: true, timeout: 10_000 });
+  if (await hasText(page, 'End it and start')) {
+    await tap(page, 'End it and start', { exact: false });
+  }
   await expectText(page, 'Create structure', 20_000);
   await tap(page, 'Create structure', { exact: false, timeout: 10_000 });
 }

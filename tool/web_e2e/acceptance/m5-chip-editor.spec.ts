@@ -96,10 +96,19 @@ async function firstControl(
  * (tapping the number itself) and cancelling out.
  */
 async function readCount(page: Page, minTop: number): Promise<number | null> {
-  const t = await appText(page);
-  const m = t.match(/How many\s+Decrease\s+(\d+)\s+Increase/i) ?? t.match(/Decrease\s+(\d+)\s+Increase/i);
-  if (m) return Number(m[1]);
-  return null;
+  return page.evaluate((top) => {
+    let first: { top: number; count: number } | null = null;
+    for (const el of Array.from(document.querySelectorAll('flt-semantics'))) {
+      const text = ((el as HTMLElement).innerText ?? '').replace(/\s+/g, ' ').trim();
+      const match = text.match(/Decrease\s+(\d+)\s+Increase/i);
+      const rect = (el as HTMLElement).getBoundingClientRect();
+      if (!match || rect.width < 8 || rect.top < top) continue;
+      if (first === null || rect.top < first.top) {
+        first = { top: rect.top, count: Number(match[1]) };
+      }
+    }
+    return first?.count ?? null;
+  }, minTop);
 }
 
 test('M5 steps 1-4: hold +, ×25 step, typed 80 answered, custom Teal', async () => {

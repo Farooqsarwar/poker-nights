@@ -155,7 +155,7 @@ const spokenSoFar = async (page: Page): Promise<string[]> => {
   return Array.from(new Set([...spokenHistory, ...pageSpoken]));
 };
 
-/** Starts a quick game whose level 1 runs two minutes (the doc's speed-up). */
+/** Starts a quick game whose level 1 runs the shortest valid three minutes. */
 async function startWatchableGame(page: Page): Promise<void> {
   await openHome(page);
   await selectTestClub(page);
@@ -168,10 +168,11 @@ async function startWatchableGame(page: Page): Promise<void> {
   await expectText(page, 'minute levels', 20_000);
   await scrollUntilVisible(page, 'Edit level 1');
   await tap(page, 'Edit level 1', { exact: true });
-  await typeInto(page, 'Minutes', '2');
+  await typeInto(page, 'Minutes', '3');
   await tap(page, 'Save', { exact: true });
   await page.waitForTimeout(800);
-  console.log("m1: level 1 shortened to 2 minutes (the document's speed-up)");
+  await expectText(page, '25 / 50 · 3 min', 10_000);
+  console.log('m1: level 1 shortened to the valid 3-minute minimum');
   await tap(page, 'Start the clock', { exact: false });
   for (let i = 0; i < 10; i++) {
     if (await hasText(page, 'End it and start')) {
@@ -292,6 +293,9 @@ test('m2: the current-group chip and the brand lockup', async () => {
     await ensureAccount(page, 'A');
     await openHome(page);
     await selectTestClub(page);
+    await openHome(page);
+    await expectText(page, 'Switch group, Test Club', 30_000);
+    console.log('m2: selected Test Club survives a fresh Home load');
     if (await hasText(page, 'GROUP CODE')) {
       await tap(page, 'Home', { exact: true, timeout: 10_000 });
       await page.waitForTimeout(1_200);

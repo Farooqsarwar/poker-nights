@@ -320,6 +320,9 @@ test('M2: short-form post, B RSVPs Going, host builds the structure', async () =
 
     // Post — without a chip set or a structure question.
     await tap(a.page, 'Post', { exact: true, role: 'button' });
+    if (await hasText(a.page, 'End it and start')) {
+      await tap(a.page, 'End it and start', { exact: false });
+    }
     await expectText(a.page, 'Create structure', 60_000);
     console.log('M2: event posted; host is on the event page');
     await screenshot(a.page, 'm2-a-posted');

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/group.dart';
 import 'package:poker_night/models/live_game.dart';
@@ -99,6 +102,33 @@ void main() {
 
   setUp(() => RecoveryService.enabled = false);
   tearDown(() => RecoveryService.enabled = true);
+
+  test('clock speech waits for the preceding utterance to finish', () async {
+    const channel = MethodChannel('flutter_tts');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final firstFinished = Completer<void>();
+    final spoken = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'speak') {
+        spoken.add(call.arguments as String);
+        if (spoken.length == 1) await firstFinished.future;
+      }
+      return 1;
+    });
+    try {
+      final first = VoiceService.instance.speak('5');
+      final second = VoiceService.instance.speak('4');
+      await pumpEventQueue(times: 10);
+      expect(spoken, ['5']);
+      firstFinished.complete();
+      await Future.wait([first, second]);
+      expect(spoken, ['5', '4']);
+    } finally {
+      if (!firstFinished.isCompleted) firstFinished.complete();
+      messenger.setMockMethodCallHandler(channel, null);
+    }
+  });
 
   group('canonical voice copy', () {
     test('level change includes named blinds, optional ante and duration', () {

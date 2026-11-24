@@ -169,26 +169,21 @@ async function startWatchableGame(page: Page): Promise<void> {
   await expectText(page, '25 / 50 · 3 min', 10_000);
   console.log('m1: level 1 shortened to the valid 3-minute minimum');
   await tap(page, 'Start the clock', { exact: false });
-  for (let i = 0; i < 10; i++) {
+  const deadline = Date.now() + 120_000;
+  let openedClock = false;
+  while (Date.now() < deadline) {
     if (await hasText(page, 'End it and start')) {
       await tap(page, 'End it and start', { exact: false });
-      await page.waitForTimeout(1_200);
-      break;
+      continue;
     }
-    await page.waitForTimeout(700);
-  }
-  const startedAt = Date.now();
-  const deadline = startedAt + 120_000;
-  while (Date.now() < deadline) {
     if (await hasText(page, 'Open the clock')) {
       await tap(page, 'Open the clock', { exact: false });
-      break;
-    }
-    if ((await hasText(page, 'Level 1')) || (await hasText(page, 'Your game is live'))) {
+      openedClock = true;
       break;
     }
     await page.waitForTimeout(700);
   }
+  if (!openedClock) throw new Error('m1: the new game never reached its join-code clock');
   await page.waitForTimeout(1_500);
 }
 
@@ -223,11 +218,6 @@ test('m1: voice announcements toggle and the live clock runs', async () => {
     // proxy for the document's "the voice says …" expectations).
     await stubSpeech(page);
     await startWatchableGame(page);
-    await openHome(page);
-    await selectTestClub(page);
-    await expectText(page, 'LIVE', 90_000);
-    await tap(page, 'Open dashboard', { exact: false, timeout: 30_000 });
-    await page.waitForTimeout(2_500);
     const voiceRow = await readTextMatch(page, /Voice (on|muted)|Audio Master/);
     console.log(`m1: dashboard voice row = ${voiceRow ?? '(not found)'}`);
     const first = await countdowns(page);
@@ -265,9 +255,11 @@ test('m1: voice announcements toggle and the live clock runs', async () => {
     console.log(`m1 step 3: spoken countdown = ${JSON.stringify(countdownCalls)}`);
     console.log(`m1 step 3: new-level utterance = ${levelCall ? JSON.stringify(levelCall) : '(none captured)'}`);
     console.log(`m1 voice capture (last 6): ${JSON.stringify(spokenAll.slice(-6))}`);
-    await expectText(page, 'LEVEL 2', 30_000);
     await screenshot(page, 'm1-voice-level-end');
     if (!minuteCall) throw new Error('m1: no one-minute voice warning was captured');
+    if (![5, 4, 3, 2, 1].every((n) => countdownCalls.includes(String(n)))) {
+      throw new Error(`m1: countdown voice missed numbers: ${JSON.stringify(countdownCalls)}`);
+    }
     if (!levelCall) throw new Error('m1: Level 2 advanced but its voice announcement was not captured');
   } finally {
     await app.close();

@@ -11,6 +11,7 @@ class VoiceService {
 
   FlutterTts? _tts;
   bool _initialised = false;
+  Future<void> _speechTail = Future<void>.value();
 
   Future<void> _ensureInit() async {
     if (_initialised) return;
@@ -223,18 +224,26 @@ class VoiceService {
   }
 
   /// Speak [text] in English. No-op if TTS could not be initialised or device is not leader.
-  Future<void> speak(String text) async {
-    if (!shouldAnnounce) return;
-    if (text.trim().isEmpty) return;
-    await _ensureInit();
-    final tts = _tts;
-    if (tts == null) return;
-    try {
-      await tts.stop();
-      await tts.speak(text);
-    } catch (e) {
-      if (kDebugMode) debugPrint('VoiceService speak failed: $e');
-    }
+  Future<void> speak(String text) {
+    if (!shouldAnnounce) return Future<void>.value();
+    if (text.trim().isEmpty) return Future<void>.value();
+    // DECISION: Queue short clock calls through completion. flutter_tts web
+    // accepts a new utterance only after its prior onEnd has set stopped;
+    // stop() followed immediately by speak() dropped alternating countdown
+    // numbers and the new-level call on the live clock.
+    final next = _speechTail.then((_) async {
+      if (!shouldAnnounce) return;
+      await _ensureInit();
+      final tts = _tts;
+      if (tts == null) return;
+      try {
+        await tts.speak(text);
+      } catch (e) {
+        if (kDebugMode) debugPrint('VoiceService speak failed: $e');
+      }
+    });
+    _speechTail = next;
+    return next;
   }
 
   Future<void> setVolume(double volume) async {

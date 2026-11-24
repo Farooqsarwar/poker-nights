@@ -136,6 +136,36 @@ int _roundUnit(TournamentStructure s) {
 }
 
 void main() {
+  test('pinned opening keeps every following blind payable', () {
+    const params = TournamentParams(
+      players: 4,
+      durationHours: 4,
+      buyIn: 20,
+      chipSet: _base25,
+      rebuys: false,
+      rebuysCloseLevel: 0,
+      addOn: false,
+      anteEnabled: true,
+      anteAfterLevel: 6,
+      koEnabled: false,
+      koAmount: 0,
+      organizerPct: 0,
+      levelDurationMins: 20,
+      pace: PaceMode.regular,
+    );
+    final base = TournamentEngine.generate(params);
+    final first = base.levels.first;
+    final result = TournamentEngine.recalculate(params, [
+      PinnedLevel(levelNum: 1, sb: first.sb, bb: first.bb),
+    ]);
+
+    expect(result.levels.first.bb, first.bb);
+    for (final level in result.levels) {
+      expect(level.sb % 25, 0, reason: 'L${level.level} small blind');
+      expect(level.bb % 25, 0, reason: 'L${level.level} big blind');
+    }
+  });
+
   test('WP1 engine invariants across the grid', () {
     final counts = <String, int>{
       'sbGeBb': 0,

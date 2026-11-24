@@ -4010,10 +4010,14 @@ class TournamentEngine {
                   .toDouble(),
       ];
       final tailCmin = cminOfLevel.sublist(tailStart);
+      final firstCmin = math.max(1, tailCmin.first);
+      // DECISION: The first unpinned blind after a pin must advance by a
+      // payable chip unit. Advancing by one produced 25/51 with 25-value chips.
+      final firstPayableBB = (lastPin.bb ~/ firstCmin + 1) * firstCmin;
       final snapped = dpSnapLadder(
         raw: tailRaw,
         cminOfLevel: tailCmin,
-        pinnedFirst: math.max(seededFirst, lastPin.bb + 1),
+        pinnedFirst: math.max(seededFirst, firstPayableBB),
       );
       for (var s = 0; s < tailLen; s++) {
         resultBB[tailStart + s] = snapped[s];

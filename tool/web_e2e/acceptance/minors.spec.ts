@@ -150,11 +150,6 @@ async function stubSpeech(page: Page): Promise<void> {
   await page.evaluate(init);
 }
 
-const spokenSoFar = async (page: Page): Promise<string[]> => {
-  const pageSpoken = await page.evaluate(() => (window as unknown as { __spoken?: string[] }).__spoken ?? []).catch(() => []);
-  return Array.from(new Set([...spokenHistory, ...pageSpoken]));
-};
-
 /** Starts a quick game whose level 1 runs the shortest valid three minutes. */
 async function startWatchableGame(page: Page): Promise<void> {
   await openHome(page);
@@ -251,17 +246,12 @@ test('m1: voice announcements toggle and the live clock runs', async () => {
     // seconds, then the announcement at the new level.
     let minuteCall = false;
     let levelCall = '';
-    const lastFive: string[] = [];
     const voiceDeadline = Date.now() + 210_000;
     while (Date.now() < voiceDeadline) {
-      const now = await countdowns(page);
-      const low = now.filter((t) => {
-        const [m, s] = t.split(':').map(Number);
-        return m === 0 && s <= 8;
-      });
-      for (const t of low) if (!lastFive.includes(t)) lastFive.push(t);
-      await page.waitForTimeout(low.length ? 450 : 1_200);
-      const spoken = await spokenSoFar(page);
+      await page.waitForTimeout(1_000);
+      // The exposed speech callback records in Node. Repeated page.evaluate()
+      // calls during a Flutter level transition can stall the browser runner.
+      const spoken = [...spokenHistory];
       if (!minuteCall && spoken.some((s) => /one minute left/i.test(s))) minuteCall = true;
       const levelTwo = spoken.find((s) => /Level (2|two)/i.test(s));
       if (levelTwo) {
@@ -269,18 +259,16 @@ test('m1: voice announcements toggle and the live clock runs', async () => {
         break;
       }
     }
-    const spokenAll = await spokenSoFar(page);
+    const spokenAll = [...spokenHistory];
+    const countdownCalls = spokenAll.filter((s) => /^[1-5]$/.test(s));
     console.log(`m1 step 1: the 1:00 call was spoken = ${minuteCall}`);
-    console.log(`m1 step 3: last-seconds readings = ${JSON.stringify(lastFive)}`);
+    console.log(`m1 step 3: spoken countdown = ${JSON.stringify(countdownCalls)}`);
     console.log(`m1 step 3: new-level utterance = ${levelCall ? JSON.stringify(levelCall) : '(none captured)'}`);
     console.log(`m1 voice capture (last 6): ${JSON.stringify(spokenAll.slice(-6))}`);
-    if (!minuteCall) console.log('m1 FINDING step 1: no "one minute left" utterance was captured');
-    if (!levelCall) {
-      console.log(
-        `m1 FINDING step 3: no new-level utterance was captured. Screen: ${(await appText(page)).replace(/\s+/g, ' ').slice(0, 200)}`,
-      );
-    }
+    await expectText(page, 'LEVEL 2', 30_000);
     await screenshot(page, 'm1-voice-level-end');
+    if (!minuteCall) throw new Error('m1: no one-minute voice warning was captured');
+    if (!levelCall) throw new Error('m1: Level 2 advanced but its voice announcement was not captured');
   } finally {
     await app.close();
   }
